@@ -1,0 +1,15 @@
+[package]
+name = "riot-tantivy"
+version = "0.1.0"
+authors = ["Damir Jelić <poljar@termina.org.uk>"]
+edition = "2018"
+license = "Apache 2"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+
+tantivy = "*"
+tempdir = "*"
+diesel = { version = "*", features = ["sqlite", "chrono"] }
