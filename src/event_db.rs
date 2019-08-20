@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use rusqlite::{Connection, Result, NO_PARAMS};
 use std::path::Path;
 use tempdir::TempDir;
-use rusqlite::{Connection, Result, NO_PARAMS};
 
 #[derive(Debug, PartialEq, Default)]
 pub(crate) struct Event {
@@ -26,7 +26,13 @@ pub(crate) struct Event {
 }
 
 impl Event {
-    pub(crate) fn new(event_id: &str, sender: &str, server_ts: i64, room_id: &str, source: &str) -> Event {
+    pub(crate) fn new(
+        event_id: &str,
+        sender: &str,
+        server_ts: i64,
+        room_id: &str,
+        source: &str,
+    ) -> Event {
         Event {
             event_id: event_id.to_string(),
             sender: sender.to_string(),
@@ -39,20 +45,20 @@ impl Event {
 
 pub(crate) struct Profile {
     pub(crate) display_name: String,
-    pub(crate) avatar_url: String
+    pub(crate) avatar_url: String,
 }
 
 impl Profile {
     pub(crate) fn new(display_name: &str, avatar_url: &str) -> Profile {
         Profile {
             display_name: display_name.to_string(),
-            avatar_url: avatar_url.to_string()
+            avatar_url: avatar_url.to_string(),
         }
     }
 }
 
 pub(crate) struct EventDb {
-    connection: Connection
+    connection: Connection,
 }
 
 impl EventDb {
@@ -81,7 +87,7 @@ impl EventDb {
                 avatar_url TEXT,
                 UNIQUE(user_id,display_name,avatar_url)
             )",
-            NO_PARAMS
+            NO_PARAMS,
         )?;
 
         conn.execute(
@@ -96,45 +102,53 @@ impl EventDb {
                 FOREIGN KEY (profile_id) REFERENCES profile (id),
                 UNIQUE(event_id, room_id, sender, profile_id)
             )",
-            NO_PARAMS
+            NO_PARAMS,
         )?;
 
         conn.execute(
             "CREATE INDEX event_profile_id ON events (profile_id)",
-            NO_PARAMS
+            NO_PARAMS,
         )?;
 
         Ok(())
-
     }
 
     pub(crate) fn save_profile(&self, user_id: &str, profile: &Profile) -> Result<i64> {
-        self.connection.execute("
+        self.connection.execute(
+            "
             INSERT OR IGNORE INTO profiles (
                 user_id, display_name, avatar_url
             ) VALUES(?1, ?2, ?3)",
-            &[user_id, &profile.display_name, &profile.avatar_url]
+            &[user_id, &profile.display_name, &profile.avatar_url],
         )?;
 
-        let profile_id = self.connection.query_row("
+        let profile_id = self.connection.query_row(
+            "
             SELECT id FROM profiles WHERE (
                 user_id=?1
                 and display_name=?2
                 and avatar_url=?3)",
             &[user_id, &profile.display_name, &profile.avatar_url],
-            |row| row.get(0)
+            |row| row.get(0),
         )?;
 
         Ok(profile_id)
     }
 
     pub(crate) fn save_event_helper(&self, event: &Event, profile_id: i64) -> Result<()> {
-        self.connection.execute("
+        self.connection.execute(
+            "
             INSERT OR IGNORE INTO events (
                 event_id, sender, server_ts, room_id, source, profile_id
             ) VALUES(?1, ?2, ?3, ?4, ?5, ?6)",
-            &[&event.event_id, &event.sender, &event.server_ts.to_string(), &event.room_id,
-              &event.source, &profile_id.to_string()]
+            &[
+                &event.event_id,
+                &event.sender,
+                &event.server_ts.to_string(),
+                &event.room_id,
+                &event.source,
+                &profile_id.to_string(),
+            ],
         )?;
 
         Ok(())
@@ -153,34 +167,35 @@ impl EventDb {
 
     pub(crate) fn load_events(&self, event_ids: &[&str]) -> Result<Vec<Event>> {
         let event_num = event_ids.len();
-        let parameter_str = std::iter::repeat(", ?").take(event_num - 1).collect::<String>();
+        let parameter_str = std::iter::repeat(", ?")
+            .take(event_num - 1)
+            .collect::<String>();
 
         let mut stmt = self.connection.prepare(&format!(
             "SELECT event_id, sender, server_ts, room_id, source, profile_id
              FROM events WHERE event_id IN (?{})
-             ", &parameter_str))?;
-        let db_events = stmt
-            .query_map(event_ids, |row|
-                Ok(
-                    (
-                        Event {
-                            event_id: row.get(0)?,
-                            sender: row.get(1)?,
-                            server_ts: row.get(2)?,
-                            room_id: row.get(3)?,
-                            source: row.get(4)?,
-                        },
-                        row.get(5)?,
-                    )
-                )
-            )?;
+             ",
+            &parameter_str
+        ))?;
+        let db_events = stmt.query_map(event_ids, |row| {
+            Ok((
+                Event {
+                    event_id: row.get(0)?,
+                    sender: row.get(1)?,
+                    server_ts: row.get(2)?,
+                    room_id: row.get(3)?,
+                    source: row.get(4)?,
+                },
+                row.get(5)?,
+            ))
+        })?;
 
         let mut events = Vec::new();
 
         for row in db_events {
             let (e, p_id): (Event, i64) = row?;
             events.push(e);
-        };
+        }
 
         Ok(events)
     }
@@ -261,7 +276,9 @@ fn load_event() {
     let profile = Profile::new("Alice", "");
 
     db.save_event(&EVENT, &profile).unwrap();
-    let events = db.load_events(&["$15163622445EBvZJ:localhost", "$FAKE"]).unwrap();
+    let events = db
+        .load_events(&["$15163622445EBvZJ:localhost", "$FAKE"])
+        .unwrap();
     println!("{:?}", events);
 
     assert_eq!(*EVENT, events[0])
