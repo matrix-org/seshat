@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use rusqlite::{Connection, Result, NO_PARAMS};
+use r2d2::PooledConnection;
+use r2d2_sqlite::SqliteConnectionManager;
+use rusqlite::{Connection, NO_PARAMS};
 use std::path::Path;
+use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
 use std::thread::JoinHandle;
-use std::sync::mpsc::{channel, Sender, Receiver};
-use r2d2_sqlite::SqliteConnectionManager;
-use r2d2::PooledConnection;
 use tempdir::TempDir;
 
 #[derive(Debug, PartialEq, Default)]
@@ -33,7 +33,27 @@ pub(crate) struct Event {
 enum ThreadMessage {
     Event(Event),
     Write,
-    ShutDown
+    ShutDown,
+}
+
+#[derive(Debug)]
+pub enum Error {
+    PoolError(r2d2::Error),
+    DatabaseError(rusqlite::Error),
+}
+
+pub type Result<T> = std::result::Result<T, Error>;
+
+impl From<r2d2::Error> for Error {
+    fn from(err: r2d2::Error) -> Self {
+        Error::PoolError(err)
+    }
+}
+
+impl From<rusqlite::Error> for Error {
+    fn from(err: rusqlite::Error) -> Self {
+        Error::DatabaseError(err)
+    }
 }
 
 impl Event {
@@ -70,42 +90,48 @@ impl Profile {
 
 pub(crate) struct Database {
     connection: PooledConnection<SqliteConnectionManager>,
+    pool: r2d2::Pool<SqliteConnectionManager>,
     write_thread: JoinHandle<()>,
-    tx: Sender<ThreadMessage>
+    tx: Sender<ThreadMessage>,
 }
 
 impl Database {
     pub(crate) fn new<P: AsRef<Path>>(path: P, db_name: &str) -> Result<Database> {
         let db_path = path.as_ref().join(db_name);
         let manager = SqliteConnectionManager::file(db_path);
-        let pool = r2d2::Pool::new(manager).unwrap();
+        let pool = r2d2::Pool::new(manager)?;
 
-        let connection = pool.get().unwrap();
+        let connection = pool.get()?;
 
         Database::create_tables(&connection)?;
 
-        let (t_handle, tx) = Database::spawn_writer(pool.get().unwrap());
+        let (t_handle, tx) = Database::spawn_writer(pool.get()?);
 
-        Ok(Database { connection, write_thread: t_handle, tx })
+        Ok(Database {
+            connection,
+            pool,
+            write_thread: t_handle,
+            tx,
+        })
     }
 
-    fn spawn_writer(connection: PooledConnection<SqliteConnectionManager>) -> (JoinHandle<()>, Sender<ThreadMessage>)  {
+    fn spawn_writer(
+        connection: PooledConnection<SqliteConnectionManager>,
+    ) -> (JoinHandle<()>, Sender<ThreadMessage>) {
         let (tx, rx): (_, Receiver<ThreadMessage>) = channel();
 
-        let t_handle = thread::spawn(move|| {
-            loop {
-                let mut events: Vec<Event> = Vec::new();
-                let message = rx.recv();
+        let t_handle = thread::spawn(move || loop {
+            let mut events: Vec<Event> = Vec::new();
+            let message = rx.recv();
 
-                match message {
-                    Ok(m) => match m {
-                        ThreadMessage::Event(e) => events.push(e),
-                        ThreadMessage::ShutDown => return,
-                        ThreadMessage::Write => continue,
-                    },
-                    Err(_e) => return
-                };
-            }
+            match message {
+                Ok(m) => match m {
+                    ThreadMessage::Event(e) => events.push(e),
+                    ThreadMessage::ShutDown => return,
+                    ThreadMessage::Write => continue,
+                },
+                Err(_e) => return,
+            };
         });
 
         (t_handle, tx)
@@ -113,13 +139,18 @@ impl Database {
 
     pub(crate) fn new_memory_db() -> Result<Database> {
         let manager = SqliteConnectionManager::memory();
-        let pool = r2d2::Pool::new(manager).unwrap();
+        let pool = r2d2::Pool::new(manager)?;
 
-        let connection = pool.get().unwrap();
+        let connection = pool.get()?;
         Database::create_tables(&connection)?;
-        let (t_handle, tx) = Database::spawn_writer(pool.get().unwrap());
+        let (t_handle, tx) = Database::spawn_writer(pool.get()?);
 
-        Ok(Database { connection, write_thread: t_handle, tx })
+        Ok(Database {
+            connection,
+            pool,
+            write_thread: t_handle,
+            tx,
+        })
     }
 
     fn create_tables(conn: &Connection) -> Result<()> {
@@ -157,7 +188,11 @@ impl Database {
         Ok(())
     }
 
-    pub(crate) fn save_profile(connection: &PooledConnection<SqliteConnectionManager>, user_id: &str, profile: &Profile) -> Result<i64> {
+    pub(crate) fn save_profile(
+        connection: &PooledConnection<SqliteConnectionManager>,
+        user_id: &str,
+        profile: &Profile,
+    ) -> Result<i64> {
         connection.execute(
             "
             INSERT OR IGNORE INTO profiles (
@@ -179,7 +214,11 @@ impl Database {
         Ok(profile_id)
     }
 
-    pub(crate) fn save_event_helper(connection: &PooledConnection<SqliteConnectionManager>, event: &Event, profile_id: i64) -> Result<()> {
+    pub(crate) fn save_event_helper(
+        connection: &PooledConnection<SqliteConnectionManager>,
+        event: &Event,
+        profile_id: i64,
+    ) -> Result<()> {
         connection.execute(
             "
             INSERT OR IGNORE INTO events (
@@ -209,7 +248,7 @@ impl Database {
         false
     }
 
-    pub(crate) fn load_events(&self, event_ids: &[&str]) -> Result<Vec<Event>> {
+    pub(crate) fn load_events(&self, event_ids: &[&str]) -> rusqlite::Result<Vec<Event>> {
         let event_num = event_ids.len();
         let parameter_str = std::iter::repeat(", ?")
             .take(event_num - 1)
