@@ -15,6 +15,5 @@
 #[macro_use]
 extern crate lazy_static;
 
-
-mod event_db;
+mod database;
 mod index;
