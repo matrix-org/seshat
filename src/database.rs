@@ -57,23 +57,23 @@ impl Profile {
     }
 }
 
-pub(crate) struct EventDb {
+pub(crate) struct Database {
     connection: Connection,
 }
 
-impl EventDb {
-    pub(crate) fn new<P: AsRef<Path>>(path: P, db_name: &str) -> Result<EventDb> {
+impl Database {
+    pub(crate) fn new<P: AsRef<Path>>(path: P, db_name: &str) -> Result<Database> {
         let db_path = path.as_ref().join(db_name);
         let connection = Connection::open(db_path)?;
-        EventDb::create_tables(&connection)?;
+        Database::create_tables(&connection)?;
 
-        Ok(EventDb { connection })
+        Ok(Database { connection })
     }
 
-    pub(crate) fn new_memory_db() -> Result<EventDb> {
+    pub(crate) fn new_memory_db() -> Result<Database> {
         let connection = Connection::open_in_memory()?;
-        EventDb::create_tables(&connection)?;
-        Ok(EventDb { connection })
+        Database::create_tables(&connection)?;
+        Ok(Database { connection })
     }
 
     fn create_tables(conn: &Connection) -> Result<()> {
@@ -225,12 +225,12 @@ lazy_static! {
 #[test]
 fn create_event_db() {
     let tmpdir = TempDir::new("matrix-search").unwrap();
-    let _db = EventDb::new(tmpdir, "events.db").unwrap();
+    let _db = Database::new(tmpdir, "events.db").unwrap();
 }
 
 #[test]
 fn store_profile() {
-    let db = EventDb::new_memory_db().unwrap();
+    let db = Database::new_memory_db().unwrap();
 
     let profile = Profile::new("Alice", "");
 
@@ -248,7 +248,7 @@ fn store_profile() {
 
 #[test]
 fn store_event() {
-    let db = EventDb::new_memory_db().unwrap();
+    let db = Database::new_memory_db().unwrap();
     let profile = Profile::new("Alice", "");
     let id = db.save_profile("@alice.example.org", &profile).unwrap();
 
@@ -257,14 +257,14 @@ fn store_event() {
 
 #[test]
 fn store_event_and_profile() {
-    let db = EventDb::new_memory_db().unwrap();
+    let db = Database::new_memory_db().unwrap();
     let profile = Profile::new("Alice", "");
     db.save_event(&EVENT, &profile).unwrap();
 }
 
 #[test]
 fn load_event() {
-    let db = EventDb::new_memory_db().unwrap();
+    let db = Database::new_memory_db().unwrap();
     let profile = Profile::new("Alice", "");
 
     db.save_event(&EVENT, &profile).unwrap();
