@@ -14,6 +14,11 @@
 
 use rusqlite::{Connection, Result, NO_PARAMS};
 use std::path::Path;
+use std::thread;
+use std::thread::JoinHandle;
+use std::sync::mpsc::{channel, Sender, Receiver};
+use r2d2_sqlite::SqliteConnectionManager;
+use r2d2::PooledConnection;
 use tempdir::TempDir;
 
 #[derive(Debug, PartialEq, Default)]
@@ -23,6 +28,12 @@ pub(crate) struct Event {
     pub(crate) server_ts: i64,
     pub(crate) room_id: String,
     pub(crate) source: String,
+}
+
+enum ThreadMessage {
+    Event(Event),
+    Write,
+    ShutDown
 }
 
 impl Event {
@@ -58,22 +69,57 @@ impl Profile {
 }
 
 pub(crate) struct Database {
-    connection: Connection,
+    connection: PooledConnection<SqliteConnectionManager>,
+    write_thread: JoinHandle<()>,
+    tx: Sender<ThreadMessage>
 }
 
 impl Database {
     pub(crate) fn new<P: AsRef<Path>>(path: P, db_name: &str) -> Result<Database> {
         let db_path = path.as_ref().join(db_name);
-        let connection = Connection::open(db_path)?;
+        let manager = SqliteConnectionManager::file(db_path);
+        let pool = r2d2::Pool::new(manager).unwrap();
+
+        let connection = pool.get().unwrap();
+
         Database::create_tables(&connection)?;
 
-        Ok(Database { connection })
+        let (t_handle, tx) = Database::spawn_writer(pool.get().unwrap());
+
+        Ok(Database { connection, write_thread: t_handle, tx })
+    }
+
+    fn spawn_writer(connection: PooledConnection<SqliteConnectionManager>) -> (JoinHandle<()>, Sender<ThreadMessage>)  {
+        let (tx, rx): (_, Receiver<ThreadMessage>) = channel();
+
+        let t_handle = thread::spawn(move|| {
+            loop {
+                let mut events: Vec<Event> = Vec::new();
+                let message = rx.recv();
+
+                match message {
+                    Ok(m) => match m {
+                        ThreadMessage::Event(e) => events.push(e),
+                        ThreadMessage::ShutDown => return,
+                        ThreadMessage::Write => continue,
+                    },
+                    Err(_e) => return
+                };
+            }
+        });
+
+        (t_handle, tx)
     }
 
     pub(crate) fn new_memory_db() -> Result<Database> {
-        let connection = Connection::open_in_memory()?;
+        let manager = SqliteConnectionManager::memory();
+        let pool = r2d2::Pool::new(manager).unwrap();
+
+        let connection = pool.get().unwrap();
         Database::create_tables(&connection)?;
-        Ok(Database { connection })
+        let (t_handle, tx) = Database::spawn_writer(pool.get().unwrap());
+
+        Ok(Database { connection, write_thread: t_handle, tx })
     }
 
     fn create_tables(conn: &Connection) -> Result<()> {
@@ -111,8 +157,8 @@ impl Database {
         Ok(())
     }
 
-    pub(crate) fn save_profile(&self, user_id: &str, profile: &Profile) -> Result<i64> {
-        self.connection.execute(
+    pub(crate) fn save_profile(connection: &PooledConnection<SqliteConnectionManager>, user_id: &str, profile: &Profile) -> Result<i64> {
+        connection.execute(
             "
             INSERT OR IGNORE INTO profiles (
                 user_id, display_name, avatar_url
@@ -120,7 +166,7 @@ impl Database {
             &[user_id, &profile.display_name, &profile.avatar_url],
         )?;
 
-        let profile_id = self.connection.query_row(
+        let profile_id = connection.query_row(
             "
             SELECT id FROM profiles WHERE (
                 user_id=?1
@@ -133,8 +179,8 @@ impl Database {
         Ok(profile_id)
     }
 
-    pub(crate) fn save_event_helper(&self, event: &Event, profile_id: i64) -> Result<()> {
-        self.connection.execute(
+    pub(crate) fn save_event_helper(connection: &PooledConnection<SqliteConnectionManager>, event: &Event, profile_id: i64) -> Result<()> {
+        connection.execute(
             "
             INSERT OR IGNORE INTO events (
                 event_id, sender, server_ts, room_id, source, profile_id
@@ -153,8 +199,8 @@ impl Database {
     }
 
     pub(crate) fn save_event(&self, event: &Event, profile: &Profile) -> Result<()> {
-        let profile_id = self.save_profile(&event.sender, profile)?;
-        self.save_event_helper(event, profile_id)?;
+        let profile_id = Database::save_profile(&self.connection, &event.sender, profile)?;
+        Database::save_event_helper(&self.connection, event, profile_id)?;
 
         Ok(())
     }
@@ -199,7 +245,7 @@ impl Database {
     }
 }
 
-static EVENT_SOURCE: &'static str = "{
+static EVENT_SOURCE: &str = "{
     content: {
         body: Test message, msgtype: m.text
     },
@@ -234,15 +280,15 @@ fn store_profile() {
 
     let profile = Profile::new("Alice", "");
 
-    let id = db.save_profile("@alice.example.org", &profile);
+    let id = Database::save_profile(&db.connection, "@alice.example.org", &profile);
     assert_eq!(id.unwrap(), 1);
 
-    let id = db.save_profile("@alice.example.org", &profile);
+    let id = Database::save_profile(&db.connection, "@alice.example.org", &profile);
     assert_eq!(id.unwrap(), 1);
 
     let profile_new = Profile::new("Alice", "mxc://some_url");
 
-    let id = db.save_profile("@alice.example.org", &profile_new);
+    let id = Database::save_profile(&db.connection, "@alice.example.org", &profile_new);
     assert_eq!(id.unwrap(), 2);
 }
 
@@ -250,9 +296,9 @@ fn store_profile() {
 fn store_event() {
     let db = Database::new_memory_db().unwrap();
     let profile = Profile::new("Alice", "");
-    let id = db.save_profile("@alice.example.org", &profile).unwrap();
+    let id = Database::save_profile(&db.connection, "@alice.example.org", &profile).unwrap();
 
-    db.save_event_helper(&EVENT, id).unwrap();
+    Database::save_event_helper(&db.connection, &EVENT, id).unwrap();
 }
 
 #[test]

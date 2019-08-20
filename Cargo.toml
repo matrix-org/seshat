@@ -13,4 +13,6 @@ crate-type = ["cdylib"]
 tantivy = "*"
 tempdir = "*"
 rusqlite = "*"
+r2d2_sqlite = "*"
+r2d2 = "*"
 lazy_static = "*"
