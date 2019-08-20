@@ -64,9 +64,7 @@ pub(crate) struct EventDb {
 impl EventDb {
     pub(crate) fn new<P: AsRef<Path>>(path: P, db_name: &str) -> Result<EventDb> {
         let db_path = path.as_ref().join(db_name);
-        // TODO enable file based databases
-        // let connection = Connection::open(db_path)?;
-        let connection = Connection::open_in_memory()?;
+        let connection = Connection::open(db_path)?;
         EventDb::create_tables(&connection)?;
 
         Ok(EventDb { connection })
@@ -227,13 +225,12 @@ lazy_static! {
 #[test]
 fn create_event_db() {
     let tmpdir = TempDir::new("matrix-search").unwrap();
-    let db = EventDb::new(tmpdir, "events.db").unwrap();
+    let _db = EventDb::new(tmpdir, "events.db").unwrap();
 }
 
 #[test]
 fn store_profile() {
-    let tmpdir = TempDir::new("matrix-search").unwrap();
-    let db = EventDb::new(tmpdir, "events.db").unwrap();
+    let db = EventDb::new_memory_db().unwrap();
 
     let profile = Profile::new("Alice", "");
 
@@ -251,8 +248,7 @@ fn store_profile() {
 
 #[test]
 fn store_event() {
-    let tmpdir = TempDir::new("matrix-search").unwrap();
-    let db = EventDb::new(tmpdir, "events.db").unwrap();
+    let db = EventDb::new_memory_db().unwrap();
     let profile = Profile::new("Alice", "");
     let id = db.save_profile("@alice.example.org", &profile).unwrap();
 
@@ -261,25 +257,20 @@ fn store_event() {
 
 #[test]
 fn store_event_and_profile() {
-    let tmpdir = TempDir::new("matrix-search").unwrap();
-    let db = EventDb::new(tmpdir, "events.db").unwrap();
-
+    let db = EventDb::new_memory_db().unwrap();
     let profile = Profile::new("Alice", "");
-
     db.save_event(&EVENT, &profile).unwrap();
 }
 
 #[test]
 fn load_event() {
-    let tmpdir = TempDir::new("matrix-search").unwrap();
-    let db = EventDb::new(tmpdir, "events.db").unwrap();
+    let db = EventDb::new_memory_db().unwrap();
     let profile = Profile::new("Alice", "");
 
     db.save_event(&EVENT, &profile).unwrap();
     let events = db
         .load_events(&["$15163622445EBvZJ:localhost", "$FAKE"])
         .unwrap();
-    println!("{:?}", events);
 
     assert_eq!(*EVENT, events[0])
 }
