@@ -1,5 +1,5 @@
 [package]
-name = "riot-tantivy"
+name = "matrix-search"
 version = "0.1.0"
 authors = ["Damir Jelić <poljar@termina.org.uk>"]
 edition = "2018"
@@ -12,4 +12,5 @@ crate-type = ["cdylib"]
 
 tantivy = "*"
 tempdir = "*"
-diesel = { version = "*", features = ["sqlite", "chrono"] }
+rusqlite = "*"
+lazy_static = "*"

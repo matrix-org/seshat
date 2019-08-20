@@ -12,9 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#[macro_use]
+extern crate lazy_static;
+
 use std::path::Path;
 use tantivy as tv;
 use tempdir::TempDir;
+
+mod event_db;
+
+use self::event_db::EventDb;
 
 pub struct Index {
     index: tv::Index,
