@@ -18,12 +18,30 @@ use tempfile::TempDir;
 
 pub struct Index {
     index: tv::Index,
-    writer: tv::IndexWriter,
     reader: tv::IndexReader,
     body_field: tv::schema::Field,
     topic_field: tv::schema::Field,
     name_field: tv::schema::Field,
     source_field: tv::schema::Field,
+}
+
+pub struct Writer {
+    pub(crate) inner: tv::IndexWriter,
+    pub(crate) body_field: tv::schema::Field,
+    pub(crate) source_field: tv::schema::Field,
+}
+
+impl Writer {
+    pub fn commit(&mut self) {
+        self.inner.commit();
+    }
+
+    pub fn add_event(&mut self, body: &str, source: &str) {
+        let mut doc = tv::Document::default();
+        doc.add_text(self.body_field, body);
+        doc.add_text(self.source_field, source);
+        self.inner.add_document(doc);
+    }
 }
 
 impl Index {
@@ -41,24 +59,16 @@ impl Index {
 
         let index = tv::Index::open_or_create(index_dir, schema)?;
         let writer = index.writer(50_000_000)?;
-        let reader = index
-            .reader_builder()
-            .reload_policy(tv::ReloadPolicy::OnCommit)
-            .try_into()?;
+        let reader = index.reader()?;
 
         Ok(Index {
             index,
-            writer,
             reader,
             body_field,
             topic_field,
             name_field,
             source_field,
         })
-    }
-
-    pub fn commit(&mut self) {
-        self.writer.commit().unwrap();
     }
 
     pub fn search(&self, term: &str) -> Vec<(f32, String)> {
@@ -99,14 +109,12 @@ impl Index {
         docs
     }
 
-    pub fn add_event(&mut self, body: &str, source: &str) {
-        // TODO we should only pass stuff to a queue for a thread to consume
-        // here.
-        let mut doc = tv::Document::default();
-        doc.add_text(self.body_field, body);
-        doc.add_text(self.source_field, source);
-
-        self.writer.add_document(doc);
+    pub fn get_writer(&mut self) -> Result<Writer, tv::Error> {
+        Ok(Writer{
+            inner: self.index.writer(50_000_000)?,
+            body_field: self.body_field.clone(),
+            source_field: self.source_field.clone()
+        })
     }
 }
 
@@ -128,9 +136,11 @@ fn add_an_event() {
             age: 43289803095
         }";
 
-    index.add_event("Test message", source);
-    index.commit();
-    index.commit();
+    let mut writer = index.get_writer().unwrap();
+
+    writer.add_event("Test message", source);
+    writer.commit();
+    writer.commit();
 
     let result = index.search("Test");
 
