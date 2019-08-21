@@ -16,12 +16,14 @@ use r2d2::PooledConnection;
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::{Connection, NO_PARAMS};
 use std::path::Path;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 use std::thread::JoinHandle;
 use tempfile::tempdir;
 
-#[derive(Debug, PartialEq, Default)]
+#[derive(Debug, PartialEq, Default, Clone)]
 pub(crate) struct Event {
     pub(crate) event_id: String,
     pub(crate) sender: String,
@@ -31,7 +33,7 @@ pub(crate) struct Event {
 }
 
 enum ThreadMessage {
-    Event(Event),
+    Event((Event, Profile)),
     Write,
     ShutDown,
 }
@@ -93,6 +95,8 @@ pub(crate) struct Database {
     pool: r2d2::Pool<SqliteConnectionManager>,
     write_thread: JoinHandle<()>,
     tx: Sender<ThreadMessage>,
+    condvar: Arc<(Mutex<AtomicUsize>, Condvar)>,
+    last_opstamp: usize,
 }
 
 impl Database {
@@ -105,36 +109,69 @@ impl Database {
 
         Database::create_tables(&connection)?;
 
-        let (t_handle, tx) = Database::spawn_writer(pool.get()?);
+        let (t_handle, tx, condvar) = Database::spawn_writer(pool.get()?);
 
         Ok(Database {
             connection,
             pool,
             write_thread: t_handle,
             tx,
+            condvar,
+            last_opstamp: 0,
         })
     }
 
     fn spawn_writer(
         connection: PooledConnection<SqliteConnectionManager>,
-    ) -> (JoinHandle<()>, Sender<ThreadMessage>) {
+    ) -> (
+        JoinHandle<()>,
+        Sender<ThreadMessage>,
+        Arc<(Mutex<AtomicUsize>, Condvar)>,
+    ) {
         let (tx, rx): (_, Receiver<ThreadMessage>) = channel();
 
-        let t_handle = thread::spawn(move || loop {
-            let mut events: Vec<Event> = Vec::new();
-            let message = rx.recv();
+        let pair = Arc::new((Mutex::new(AtomicUsize::new(0)), Condvar::new()));
+        let pair2 = pair.clone();
 
-            match message {
-                Ok(m) => match m {
-                    ThreadMessage::Event(e) => events.push(e),
-                    ThreadMessage::ShutDown => return,
-                    ThreadMessage::Write => continue,
-                },
-                Err(_e) => return,
-            };
+        let t_handle = thread::spawn(move || loop {
+            let mut events: Vec<(Event, Profile)> = Vec::new();
+            let &(ref lock, ref cvar) = &*pair;
+
+            loop {
+                let message = rx.recv();
+                let opstamp = lock.lock().unwrap();
+
+                match message {
+                    Ok(m) => match m {
+                        ThreadMessage::Event(e) => events.push(e),
+                        ThreadMessage::Write => {
+                            // Write the events
+                            // TODO all of this should be a single sqlite transaction
+                            for (e, p) in &events {
+                                // TODO check if the event was already stored
+                                // TODO index the event here as well
+                                Database::save_event(&connection, e, p).unwrap()
+                            }
+                            // Clear the event queue.
+                            events.clear();
+
+                            // Notify that we are done with the write.
+                            opstamp.fetch_add(1, Ordering::SeqCst);
+                            cvar.notify_one();
+                        }
+                        ThreadMessage::ShutDown => return,
+                    },
+                    Err(_e) => return,
+                };
+            }
         });
 
-        (t_handle, tx)
+        (t_handle, tx, pair2)
+    }
+
+    pub fn add_event(&self, event: Event, profile: Profile) {
+        let message = ThreadMessage::Event((event, profile));
+        self.tx.send(message).unwrap();
     }
 
     pub(crate) fn new_memory_db() -> Result<Database> {
@@ -143,14 +180,29 @@ impl Database {
 
         let connection = pool.get()?;
         Database::create_tables(&connection)?;
-        let (t_handle, tx) = Database::spawn_writer(pool.get()?);
+        let (t_handle, tx, condvar) = Database::spawn_writer(pool.get()?);
 
         Ok(Database {
             connection,
             pool,
             write_thread: t_handle,
             tx,
+            condvar,
+            last_opstamp: 0,
         })
+    }
+
+    fn commit(&mut self) -> usize {
+        self.tx.send(ThreadMessage::Write).unwrap();
+
+        let &(ref lock, ref cvar) = &*self.condvar;
+        let mut opstamp = lock.lock().unwrap();
+        while *opstamp.get_mut() == self.last_opstamp {
+            opstamp = cvar.wait(opstamp).unwrap();
+        }
+
+        self.last_opstamp = *opstamp.get_mut();
+        self.last_opstamp
     }
 
     fn create_tables(conn: &Connection) -> Result<()> {
@@ -237,9 +289,13 @@ impl Database {
         Ok(())
     }
 
-    pub(crate) fn save_event(&self, event: &Event, profile: &Profile) -> Result<()> {
-        let profile_id = Database::save_profile(&self.connection, &event.sender, profile)?;
-        Database::save_event_helper(&self.connection, event, profile_id)?;
+    pub(crate) fn save_event(
+        connection: &PooledConnection<SqliteConnectionManager>,
+        event: &Event,
+        profile: &Profile,
+    ) -> Result<()> {
+        let profile_id = Database::save_profile(connection, &event.sender, profile)?;
+        Database::save_event_helper(connection, event, profile_id)?;
 
         Ok(())
     }
@@ -344,7 +400,7 @@ fn store_event() {
 fn store_event_and_profile() {
     let db = Database::new_memory_db().unwrap();
     let profile = Profile::new("Alice", "");
-    db.save_event(&EVENT, &profile).unwrap();
+    Database::save_event(&db.connection, &EVENT, &profile).unwrap();
 }
 
 #[test]
@@ -352,7 +408,32 @@ fn load_event() {
     let db = Database::new_memory_db().unwrap();
     let profile = Profile::new("Alice", "");
 
-    db.save_event(&EVENT, &profile).unwrap();
+    Database::save_event(&db.connection, &EVENT, &profile).unwrap();
+    let events = db
+        .load_events(&["$15163622445EBvZJ:localhost", "$FAKE"])
+        .unwrap();
+
+    assert_eq!(*EVENT, events[0])
+}
+
+#[test]
+fn commit_a_write() {
+    let mut db = Database::new_memory_db().unwrap();
+    let opstamp = db.commit();
+    assert_eq!(opstamp, 1);
+    let opstamp = db.commit();
+    assert_eq!(opstamp, 2);
+}
+
+#[test]
+fn save_the_event_multithreaded() {
+    let tmpdir = tempdir().unwrap();
+    let mut db = Database::new(&tmpdir, "events.db").unwrap();
+    let profile = Profile::new("Alice", "");
+
+    db.add_event(EVENT.clone(), profile);
+    db.commit();
+
     let events = db
         .load_events(&["$15163622445EBvZJ:localhost", "$FAKE"])
         .unwrap();
