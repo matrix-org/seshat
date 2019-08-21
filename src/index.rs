@@ -14,6 +14,8 @@
 
 use std::path::Path;
 use tantivy as tv;
+
+#[cfg(test)]
 use tempfile::TempDir;
 
 pub struct Index {
