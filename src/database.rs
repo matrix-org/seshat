@@ -312,37 +312,30 @@ impl Database {
         false
     }
 
-    pub(crate) fn load_events(&self, event_ids: &[&str]) -> rusqlite::Result<Vec<Event>> {
+    pub(crate) fn load_events(&self, event_ids: &[&str]) -> rusqlite::Result<Vec<(String, i64)>> {
         let event_num = event_ids.len();
         let parameter_str = std::iter::repeat(", ?")
             .take(event_num - 1)
             .collect::<String>();
 
         let mut stmt = self.connection.prepare(&format!(
-            "SELECT event_id, sender, server_ts, room_id, source, profile_id
+            "SELECT source, profile_id
              FROM events WHERE event_id IN (?{})
              ",
             &parameter_str
         ))?;
         let db_events = stmt.query_map(event_ids, |row| {
             Ok((
-                Event {
-                    body: "".to_owned(),
-                    event_id: row.get(0)?,
-                    sender: row.get(1)?,
-                    server_ts: row.get(2)?,
-                    room_id: row.get(3)?,
-                    source: row.get(4)?,
-                },
-                row.get(5)?,
+                row.get(0)?,
+                row.get(1)?,
             ))
         })?;
 
         let mut events = Vec::new();
 
         for row in db_events {
-            let (e, _p_id): (Event, i64) = row?;
-            events.push(e);
+            let (e, p_id): (String, i64) = row?;
+            events.push((e, p_id));
         }
 
         Ok(events)
@@ -431,7 +424,7 @@ fn load_event() {
         .load_events(&["$15163622445EBvZJ:localhost", "$FAKE"])
         .unwrap();
 
-    assert_eq!(*EVENT.source, events[0].source)
+    assert_eq!(*EVENT.source, events[0].0)
 }
 
 #[test]
@@ -457,7 +450,7 @@ fn save_the_event_multithreaded() {
         .load_events(&["$15163622445EBvZJ:localhost", "$FAKE"])
         .unwrap();
 
-    assert_eq!(*EVENT.source, events[0].source)
+    assert_eq!(*EVENT.source, events[0].0)
 }
 
 #[test]
