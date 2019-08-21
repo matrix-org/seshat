@@ -21,9 +21,12 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 use std::thread::JoinHandle;
-use tempfile::tempdir;
-use crate::index::{Index, Writer};
 use tantivy;
+
+#[cfg(test)]
+use tempfile::tempdir;
+
+use crate::index::{Index, Writer};
 
 #[derive(Debug, PartialEq, Default, Clone)]
 pub struct Event {
@@ -346,6 +349,7 @@ impl Database {
     }
 }
 
+#[cfg(test)]
 static EVENT_SOURCE: &str = "{
     content: {
         body: Test message, msgtype: m.text
@@ -359,6 +363,7 @@ static EVENT_SOURCE: &str = "{
     age: 43289803095
 }";
 
+#[cfg(test)]
 lazy_static! {
     static ref EVENT: Event = Event::new(
         "Test message",

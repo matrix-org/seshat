@@ -11,8 +11,10 @@ crate-type = ["cdylib"]
 [dependencies]
 
 tantivy = "*"
-tempfile = "*"
 rusqlite = "*"
 r2d2_sqlite = "*"
 r2d2 = "*"
+
+[dev-dependencies]
+tempfile = "*"
 lazy_static = "*"
