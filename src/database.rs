@@ -22,9 +22,12 @@ use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 use std::thread::JoinHandle;
 use tempfile::tempdir;
+use crate::index::{Index, Writer};
+use tantivy;
 
 #[derive(Debug, PartialEq, Default, Clone)]
-pub(crate) struct Event {
+pub struct Event {
+    pub(crate) body: String,
     pub(crate) event_id: String,
     pub(crate) sender: String,
     pub(crate) server_ts: i64,
@@ -35,13 +38,13 @@ pub(crate) struct Event {
 enum ThreadMessage {
     Event((Event, Profile)),
     Write,
-    ShutDown,
 }
 
 #[derive(Debug)]
 pub enum Error {
     PoolError(r2d2::Error),
     DatabaseError(rusqlite::Error),
+    IndexError(tantivy::Error)
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -58,8 +61,16 @@ impl From<rusqlite::Error> for Error {
     }
 }
 
+impl From<tantivy::Error> for Error {
+    fn from(err: tantivy::Error) -> Self {
+        Error::IndexError(err)
+    }
+}
+
+
 impl Event {
-    pub(crate) fn new(
+    pub fn new(
+        body: &str,
         event_id: &str,
         sender: &str,
         server_ts: i64,
@@ -67,6 +78,7 @@ impl Event {
         source: &str,
     ) -> Event {
         Event {
+            body: body.to_string(),
             event_id: event_id.to_string(),
             sender: sender.to_string(),
             server_ts,
@@ -76,13 +88,13 @@ impl Event {
     }
 }
 
-pub(crate) struct Profile {
+pub struct Profile {
     pub(crate) display_name: String,
     pub(crate) avatar_url: String,
 }
 
 impl Profile {
-    pub(crate) fn new(display_name: &str, avatar_url: &str) -> Profile {
+    pub fn new(display_name: &str, avatar_url: &str) -> Profile {
         Profile {
             display_name: display_name.to_string(),
             avatar_url: avatar_url.to_string(),
@@ -90,39 +102,48 @@ impl Profile {
     }
 }
 
-pub(crate) struct Database {
+pub struct Database {
     connection: PooledConnection<SqliteConnectionManager>,
-    pool: r2d2::Pool<SqliteConnectionManager>,
-    write_thread: JoinHandle<()>,
+    _pool: r2d2::Pool<SqliteConnectionManager>,
+    _write_thread: JoinHandle<()>,
     tx: Sender<ThreadMessage>,
     condvar: Arc<(Mutex<AtomicUsize>, Condvar)>,
     last_opstamp: usize,
+    index: Index,
 }
 
 impl Database {
-    pub(crate) fn new<P: AsRef<Path>>(path: P, db_name: &str) -> Result<Database> {
+    pub fn new<P: AsRef<Path>>(path: P, db_name: &str) -> Result<Database> {
         let db_path = path.as_ref().join(db_name);
-        let manager = SqliteConnectionManager::file(db_path);
+        let manager = SqliteConnectionManager::file(&db_path);
         let pool = r2d2::Pool::new(manager)?;
 
         let connection = pool.get()?;
 
         Database::create_tables(&connection)?;
 
-        let (t_handle, tx, condvar) = Database::spawn_writer(pool.get()?);
+        let index = Database::create_index(&path)?;
+        let writer = index.get_writer()?;
+        let (t_handle, tx, condvar) = Database::spawn_writer(pool.get()?, writer);
 
         Ok(Database {
             connection,
-            pool,
-            write_thread: t_handle,
+            _pool: pool,
+            _write_thread: t_handle,
             tx,
             condvar,
             last_opstamp: 0,
+            index
         })
+    }
+
+    fn create_index<P: AsRef<Path>>(path: &P) -> Result<Index> {
+        Ok(Index::new(path)?)
     }
 
     fn spawn_writer(
         connection: PooledConnection<SqliteConnectionManager>,
+        mut index_writer: Writer
     ) -> (
         JoinHandle<()>,
         Sender<ThreadMessage>,
@@ -149,17 +170,18 @@ impl Database {
                             // TODO all of this should be a single sqlite transaction
                             for (e, p) in &events {
                                 // TODO check if the event was already stored
-                                // TODO index the event here as well
-                                Database::save_event(&connection, e, p).unwrap()
+                                Database::save_event(&connection, e, p).unwrap();
+                                index_writer.add_event(&e.body, &e.event_id);
                             }
                             // Clear the event queue.
                             events.clear();
+                            // TODO remove the unwrap.
+                            index_writer.commit().unwrap();
 
                             // Notify that we are done with the write.
                             opstamp.fetch_add(1, Ordering::SeqCst);
                             cvar.notify_one();
                         }
-                        ThreadMessage::ShutDown => return,
                     },
                     Err(_e) => return,
                 };
@@ -174,25 +196,7 @@ impl Database {
         self.tx.send(message).unwrap();
     }
 
-    pub(crate) fn new_memory_db() -> Result<Database> {
-        let manager = SqliteConnectionManager::memory();
-        let pool = r2d2::Pool::new(manager)?;
-
-        let connection = pool.get()?;
-        Database::create_tables(&connection)?;
-        let (t_handle, tx, condvar) = Database::spawn_writer(pool.get()?);
-
-        Ok(Database {
-            connection,
-            pool,
-            write_thread: t_handle,
-            tx,
-            condvar,
-            last_opstamp: 0,
-        })
-    }
-
-    fn commit(&mut self) -> usize {
+    pub fn commit(&mut self) -> usize {
         self.tx.send(ThreadMessage::Write).unwrap();
 
         let &(ref lock, ref cvar) = &*self.condvar;
@@ -203,6 +207,10 @@ impl Database {
 
         self.last_opstamp = *opstamp.get_mut();
         self.last_opstamp
+    }
+
+    pub fn commit_no_wait(&mut self) {
+        self.tx.send(ThreadMessage::Write).unwrap();
     }
 
     fn create_tables(conn: &Connection) -> Result<()> {
@@ -227,7 +235,7 @@ impl Database {
                 source TEXT NOT NULL,
                 profile_id INTEGER NOT NULL,
                 FOREIGN KEY (profile_id) REFERENCES profile (id),
-                UNIQUE(event_id, room_id, sender, profile_id)
+                UNIQUE(event_id, room_id)
             )",
             NO_PARAMS,
         )?;
@@ -319,6 +327,7 @@ impl Database {
         let db_events = stmt.query_map(event_ids, |row| {
             Ok((
                 Event {
+                    body: "".to_owned(),
                     event_id: row.get(0)?,
                     sender: row.get(1)?,
                     server_ts: row.get(2)?,
@@ -332,11 +341,15 @@ impl Database {
         let mut events = Vec::new();
 
         for row in db_events {
-            let (e, p_id): (Event, i64) = row?;
+            let (e, _p_id): (Event, i64) = row?;
             events.push(e);
         }
 
         Ok(events)
+    }
+
+    pub fn search(&self, term: &str) -> Vec<(f32, String)> {
+        self.index.search(term)
     }
 }
 
@@ -355,9 +368,10 @@ static EVENT_SOURCE: &str = "{
 
 lazy_static! {
     static ref EVENT: Event = Event::new(
+        "Test message",
         "$15163622445EBvZJ:localhost",
         "@example2:localhost",
-        1516362244026,
+        151636_2244026,
         "!test_room:localhost",
         EVENT_SOURCE
     );
@@ -371,7 +385,8 @@ fn create_event_db() {
 
 #[test]
 fn store_profile() {
-    let db = Database::new_memory_db().unwrap();
+    let tmpdir = tempdir().unwrap();
+    let db = Database::new(&tmpdir, "events.db").unwrap();
 
     let profile = Profile::new("Alice", "");
 
@@ -389,7 +404,8 @@ fn store_profile() {
 
 #[test]
 fn store_event() {
-    let db = Database::new_memory_db().unwrap();
+    let tmpdir = tempdir().unwrap();
+    let db = Database::new(&tmpdir, "events.db").unwrap();
     let profile = Profile::new("Alice", "");
     let id = Database::save_profile(&db.connection, "@alice.example.org", &profile).unwrap();
 
@@ -398,14 +414,16 @@ fn store_event() {
 
 #[test]
 fn store_event_and_profile() {
-    let db = Database::new_memory_db().unwrap();
+    let tmpdir = tempdir().unwrap();
+    let db = Database::new(&tmpdir, "events.db").unwrap();
     let profile = Profile::new("Alice", "");
     Database::save_event(&db.connection, &EVENT, &profile).unwrap();
 }
 
 #[test]
 fn load_event() {
-    let db = Database::new_memory_db().unwrap();
+    let tmpdir = tempdir().unwrap();
+    let db = Database::new(&tmpdir, "events.db").unwrap();
     let profile = Profile::new("Alice", "");
 
     Database::save_event(&db.connection, &EVENT, &profile).unwrap();
@@ -413,12 +431,13 @@ fn load_event() {
         .load_events(&["$15163622445EBvZJ:localhost", "$FAKE"])
         .unwrap();
 
-    assert_eq!(*EVENT, events[0])
+    assert_eq!(*EVENT.source, events[0].source)
 }
 
 #[test]
 fn commit_a_write() {
-    let mut db = Database::new_memory_db().unwrap();
+    let tmpdir = tempdir().unwrap();
+    let mut db = Database::new(&tmpdir, "events.db").unwrap();
     let opstamp = db.commit();
     assert_eq!(opstamp, 1);
     let opstamp = db.commit();
@@ -438,5 +457,21 @@ fn save_the_event_multithreaded() {
         .load_events(&["$15163622445EBvZJ:localhost", "$FAKE"])
         .unwrap();
 
-    assert_eq!(*EVENT, events[0])
+    assert_eq!(*EVENT.source, events[0].source)
+}
+
+#[test]
+fn save_and_search() {
+    let tmpdir = tempdir().unwrap();
+    let mut db = Database::new(&tmpdir, "events.db").unwrap();
+    let profile = Profile::new("Alice", "");
+
+    let event_id = "$15163622445EBvZJ:localhost";
+
+    db.add_event(EVENT.clone(), profile);
+    db.commit();
+    db.commit();
+
+    let result = db.search("Test");
+    assert_eq!(result[0].1, event_id);
 }

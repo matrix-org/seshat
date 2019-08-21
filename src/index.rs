@@ -59,7 +59,6 @@ impl Index {
         let index_dir = tv::directory::MmapDirectory::open(path)?;
 
         let index = tv::Index::open_or_create(index_dir, schema)?;
-        let writer = index.writer(50_000_000)?;
         let reader = index.reader()?;
 
         Ok(Index {

@@ -17,3 +17,5 @@ extern crate lazy_static;
 
 mod database;
 mod index;
+
+pub use database::Database;
