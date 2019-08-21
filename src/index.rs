@@ -22,24 +22,25 @@ pub struct Index {
     body_field: tv::schema::Field,
     topic_field: tv::schema::Field,
     name_field: tv::schema::Field,
-    source_field: tv::schema::Field,
+    event_id_field: tv::schema::Field,
 }
 
 pub struct Writer {
     pub(crate) inner: tv::IndexWriter,
     pub(crate) body_field: tv::schema::Field,
-    pub(crate) source_field: tv::schema::Field,
+    pub(crate) event_id_field: tv::schema::Field,
 }
 
 impl Writer {
-    pub fn commit(&mut self) {
-        self.inner.commit();
+    pub fn commit(&mut self) -> Result<(), tv::Error> {
+        self.inner.commit()?;
+        Ok(())
     }
 
-    pub fn add_event(&mut self, body: &str, source: &str) {
+    pub fn add_event(&mut self, body: &str, event_id: &str) {
         let mut doc = tv::Document::default();
         doc.add_text(self.body_field, body);
-        doc.add_text(self.source_field, source);
+        doc.add_text(self.event_id_field, event_id);
         self.inner.add_document(doc);
     }
 }
@@ -51,7 +52,7 @@ impl Index {
         let body_field = schemabuilder.add_text_field("body", tv::schema::TEXT);
         let topic_field = schemabuilder.add_text_field("topic", tv::schema::TEXT);
         let name_field = schemabuilder.add_text_field("name", tv::schema::TEXT);
-        let source_field = schemabuilder.add_text_field("source", tv::schema::STORED);
+        let event_id_field = schemabuilder.add_text_field("event_id", tv::schema::STORED);
 
         let schema = schemabuilder.build();
 
@@ -67,7 +68,7 @@ impl Index {
             body_field,
             topic_field,
             name_field,
-            source_field,
+            event_id_field,
         })
     }
 
@@ -98,22 +99,22 @@ impl Index {
                 Err(_e) => continue,
             };
 
-            let source: String = match doc.get_first(self.source_field) {
+            let event_id: String = match doc.get_first(self.event_id_field) {
                 Some(s) => s.text().unwrap().to_owned(),
                 None => continue,
             };
 
-            docs.push((score, source));
+            docs.push((score, event_id));
         }
 
         docs
     }
 
-    pub fn get_writer(&mut self) -> Result<Writer, tv::Error> {
+    pub fn get_writer(&self) -> Result<Writer, tv::Error> {
         Ok(Writer{
             inner: self.index.writer(50_000_000)?,
-            body_field: self.body_field.clone(),
-            source_field: self.source_field.clone()
+            body_field: self.body_field,
+            event_id_field: self.event_id_field
         })
     }
 }
@@ -121,29 +122,17 @@ impl Index {
 #[test]
 fn add_an_event() {
     let tmpdir = TempDir::new().unwrap();
-    let mut index = Index::new(&tmpdir).unwrap();
+    let index = Index::new(&tmpdir).unwrap();
 
-    let source = "{
-            content: {
-                body: Test message, msgtype: m.text
-            },
-            event_id: $15163622445EBvZJ:localhost,
-            origin_server_ts: 1516362244026,
-            sender: @example2:localhost,
-            type: m.room.message,
-            unsigned: {age: 43289803095},
-            user_id: @example2:localhost,
-            age: 43289803095
-        }";
-
+    let event_id = "$15163622445EBvZJ:localhost";
     let mut writer = index.get_writer().unwrap();
 
-    writer.add_event("Test message", source);
-    writer.commit();
-    writer.commit();
+    writer.add_event("Test message", &event_id);
+    writer.commit().unwrap();
+    writer.commit().unwrap();
 
     let result = index.search("Test");
 
     assert_eq!(result.len(), 1);
-    assert_eq!(result[0].1, source);
+    assert_eq!(result[0].1, event_id)
 }
