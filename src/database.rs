@@ -19,7 +19,7 @@ use std::path::Path;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
 use std::thread::JoinHandle;
-use tempdir::TempDir;
+use tempfile::tempdir;
 
 #[derive(Debug, PartialEq, Default)]
 pub(crate) struct Event {
@@ -309,7 +309,7 @@ lazy_static! {
 
 #[test]
 fn create_event_db() {
-    let tmpdir = TempDir::new("matrix-search").unwrap();
+    let tmpdir = tempdir().unwrap();
     let _db = Database::new(tmpdir, "events.db").unwrap();
 }
 

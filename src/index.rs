@@ -14,7 +14,7 @@
 
 use std::path::Path;
 use tantivy as tv;
-use tempdir::TempDir;
+use tempfile::TempDir;
 
 pub struct Index {
     index: tv::Index,
@@ -112,7 +112,7 @@ impl Index {
 
 #[test]
 fn add_an_event() {
-    let tmpdir = TempDir::new("matrix-search").unwrap();
+    let tmpdir = TempDir::new().unwrap();
     let mut index = Index::new(&tmpdir).unwrap();
 
     let source = "{
