@@ -315,8 +315,8 @@ impl Database {
         false
     }
 
-    pub(crate) fn load_events(&self, event_ids: &[&str]) -> rusqlite::Result<Vec<(String, i64)>> {
-        let event_num = event_ids.len();
+    pub(crate) fn load_events(&self, search_result: &[(f32, String)]) -> rusqlite::Result<Vec<(f32, String, i64)>> {
+        let event_num = search_result.len();
         let parameter_str = std::iter::repeat(", ?")
             .take(event_num - 1)
             .collect::<String>();
@@ -327,6 +327,7 @@ impl Database {
              ",
             &parameter_str
         ))?;
+        let (scores, event_ids): (Vec<f32>, Vec<String>) = search_result.iter().cloned().unzip();
         let db_events = stmt.query_map(event_ids, |row| {
             Ok((
                 row.get(0)?,
@@ -335,17 +336,22 @@ impl Database {
         })?;
 
         let mut events = Vec::new();
+        let i = 0;
 
         for row in db_events {
             let (e, p_id): (String, i64) = row?;
-            events.push((e, p_id));
+            events.push((scores[i], e, p_id));
         }
 
         Ok(events)
     }
 
-    pub fn search(&self, term: &str) -> Vec<(f32, String)> {
-        self.index.search(term)
+    pub fn search(&self, term: &str) -> Vec<(f32, String, i64)> {
+        let search_result = self.index.search(term);
+        match self.load_events(&search_result) {
+            Ok(result) => result,
+            Err(_e) => vec!()
+        }
     }
 }
 
@@ -426,10 +432,10 @@ fn load_event() {
 
     Database::save_event(&db.connection, &EVENT, &profile).unwrap();
     let events = db
-        .load_events(&["$15163622445EBvZJ:localhost", "$FAKE"])
+        .load_events(&[(1.0, "$15163622445EBvZJ:localhost".to_string()), (0.3, "$FAKE".to_string())])
         .unwrap();
 
-    assert_eq!(*EVENT.source, events[0].0)
+    assert_eq!(*EVENT.source, events[0].1)
 }
 
 #[test]
@@ -452,10 +458,10 @@ fn save_the_event_multithreaded() {
     db.commit();
 
     let events = db
-        .load_events(&["$15163622445EBvZJ:localhost", "$FAKE"])
+        .load_events(&[(1.0, "$15163622445EBvZJ:localhost".to_string()), (0.3, "$FAKE".to_string())])
         .unwrap();
 
-    assert_eq!(*EVENT.source, events[0].0)
+    assert_eq!(*EVENT.source, events[0].1)
 }
 
 #[test]
@@ -464,12 +470,10 @@ fn save_and_search() {
     let mut db = Database::new(&tmpdir, "events.db").unwrap();
     let profile = Profile::new("Alice", "");
 
-    let event_id = "$15163622445EBvZJ:localhost";
-
     db.add_event(EVENT.clone(), profile);
     db.commit();
     db.commit();
 
     let result = db.search("Test");
-    assert_eq!(result[0].1, event_id);
+    assert_eq!(result[0].1, EVENT.source);
 }
