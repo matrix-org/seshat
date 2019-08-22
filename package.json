@@ -8,7 +8,12 @@
   "dependencies": {
     "neon-cli": "^0.2.0"
   },
+  "devDependencies": {
+    "chai": "*",
+    "mocha": "*"
+  },
   "scripts": {
-    "install": "neon build"
+    "install": "neon build",
+    "test": "mocha"
   }
 }
