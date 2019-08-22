@@ -4,6 +4,7 @@ version = "0.1.0"
 authors = ["Damir Jelić <poljar@termina.org.uk>"]
 edition = "2018"
 license = "Apache-2.0"
+description = "A matrix message logger with full text search support"
 
 [lib]
 crate-type = ["cdylib"]
