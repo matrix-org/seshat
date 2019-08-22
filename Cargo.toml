@@ -10,11 +10,11 @@ description = "A matrix message logger with full text search support"
 crate-type = ["cdylib"]
 
 [dependencies]
-tantivy = "*"
-rusqlite = "*"
-r2d2_sqlite = "*"
-r2d2 = "*"
+tantivy = "0.10"
+rusqlite = "0.20"
+r2d2_sqlite = "0.12"
+r2d2 = "0.8"
 
 [dev-dependencies]
-tempfile = "*"
-lazy_static = "*"
+tempfile = "3.1"
+lazy_static = "1.3"
