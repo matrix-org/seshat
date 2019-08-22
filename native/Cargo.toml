@@ -15,4 +15,6 @@ neon-build = "0.2.0"
 
 [dependencies]
 neon = "0.2.0"
+neon-serde = "*"
+serde_json = "*"
 seshat = { path = "../../../matrix-search/seshat" }
