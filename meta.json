@@ -1,0 +1,47 @@
+{
+  "segments": [],
+  "schema": [
+    {
+      "name": "body",
+      "type": "text",
+      "options": {
+        "indexing": {
+          "record": "position",
+          "tokenizer": "default"
+        },
+        "stored": false
+      }
+    },
+    {
+      "name": "topic",
+      "type": "text",
+      "options": {
+        "indexing": {
+          "record": "position",
+          "tokenizer": "default"
+        },
+        "stored": false
+      }
+    },
+    {
+      "name": "name",
+      "type": "text",
+      "options": {
+        "indexing": {
+          "record": "position",
+          "tokenizer": "default"
+        },
+        "stored": false
+      }
+    },
+    {
+      "name": "event_id",
+      "type": "text",
+      "options": {
+        "indexing": null,
+        "stored": true
+      }
+    }
+  ],
+  "opstamp": 0
+}

@@ -1,0 +1,18 @@
+[package]
+name = "seshat-node"
+version = "0.1.0"
+authors = ["Damir Jelić <poljar@termina.org.uk>"]
+license = "Apache-2.0"
+build = "build.rs"
+exclude = ["artifacts.json", "index.node"]
+
+[lib]
+name = "seshat_node"
+crate-type = ["dylib"]
+
+[build-dependencies]
+neon-build = "0.2.0"
+
+[dependencies]
+neon = "0.2.0"
+seshat = { path = "../../../matrix-search/seshat" }
