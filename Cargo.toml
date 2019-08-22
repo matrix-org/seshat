@@ -1,15 +1,14 @@
 [package]
-name = "matrix-search"
+name = "seshat"
 version = "0.1.0"
 authors = ["Damir Jelić <poljar@termina.org.uk>"]
 edition = "2018"
-license = "Apache 2"
+license = "Apache-2.0"
 
 [lib]
 crate-type = ["cdylib"]
 
 [dependencies]
-
 tantivy = "*"
 rusqlite = "*"
 r2d2_sqlite = "*"
