@@ -5,6 +5,7 @@ authors = ["Damir Jelić <poljar@termina.org.uk>"]
 license = "Apache-2.0"
 build = "build.rs"
 exclude = ["artifacts.json", "index.node"]
+edition = "2018"
 
 [lib]
 name = "seshat_node"

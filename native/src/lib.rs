@@ -1,10 +1,9 @@
 #[macro_use]
 extern crate neon;
-extern crate neon_serde;
-extern crate serde_json;
-extern crate seshat;
 
 use neon::prelude::*;
+use neon_serde;
+use serde_json;
 use seshat::{Database, Event, Profile};
 
 pub struct SeshatDatabase(Database);
