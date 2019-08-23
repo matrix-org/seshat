@@ -161,32 +161,28 @@ impl Database {
             let mut events: Vec<(Event, Profile)> = Vec::new();
             let &(ref lock, ref cvar) = &*pair;
 
-            loop {
-                let message = rx.recv();
+            while let Ok(message) = rx.recv() {
                 let opstamp = lock.lock().unwrap();
 
                 match message {
-                    Ok(m) => match m {
-                        ThreadMessage::Event(e) => events.push(e),
-                        ThreadMessage::Write => {
-                            // Write the events
-                            // TODO all of this should be a single sqlite transaction
-                            for (e, p) in &events {
-                                // TODO check if the event was already stored
-                                Database::save_event(&connection, e, p).unwrap();
-                                index_writer.add_event(&e.body, &e.event_id);
-                            }
-                            // Clear the event queue.
-                            events.clear();
-                            // TODO remove the unwrap.
-                            index_writer.commit().unwrap();
-
-                            // Notify that we are done with the write.
-                            opstamp.fetch_add(1, Ordering::SeqCst);
-                            cvar.notify_one();
+                    ThreadMessage::Event(e) => events.push(e),
+                    ThreadMessage::Write => {
+                        // Write the events
+                        // TODO all of this should be a single sqlite transaction
+                        for (e, p) in &events {
+                            // TODO check if the event was already stored
+                            Database::save_event(&connection, e, p).unwrap();
+                            index_writer.add_event(&e.body, &e.event_id);
                         }
-                    },
-                    Err(_e) => return,
+                        // Clear the event queue.
+                        events.clear();
+                        // TODO remove the unwrap.
+                        index_writer.commit().unwrap();
+
+                        // Notify that we are done with the write.
+                        opstamp.fetch_add(1, Ordering::SeqCst);
+                        cvar.notify_one();
+                    }
                 };
             }
         });
