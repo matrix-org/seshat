@@ -29,51 +29,10 @@ declare_types! {
 
         method add_event(mut cx) {
             let event = cx.argument::<JsObject>(0)?;
+            let event = parse_event(&mut cx, *event)?;
 
-            let sender: String = event
-                .get(&mut cx, "sender")?
-                .downcast::<JsString>()
-                .or_else(|_| cx.throw_type_error("Event doesn't contain a valid sender"))?
-                .value();
-
-            let event_id: String = event
-                .get(&mut cx, "event_id")?
-                .downcast::<JsString>()
-                .or_else(|_| cx.throw_type_error("Event doesn't contain a valid event id"))?
-                .value();
-
-            let server_timestamp: i64 = event
-                .get(&mut cx, "origin_server_ts")?
-                .downcast::<JsNumber>()
-                .or_else(|_| cx.throw_type_error("Event doesn't contain a valid timestamp"))?
-                .value() as i64;
-
-            let room_id: String = event
-                .get(&mut cx, "room_id")?
-                .downcast::<JsString>()
-                .or_else(|_| cx.throw_type_error("Event doesn't contain a valid room id"))?
-                .value();
-
-            let content = event
-                .get(&mut cx, "content")?
-                .downcast::<JsObject>()
-                .or_else(|_| cx.throw_type_error("Event doesn't contain any content"))?;
-
-            let event_value = event.as_value(&mut cx);
-            let event_source: serde_json::Value = neon_serde::from_value(&mut cx, event_value)?;
-            let event_source: String = serde_json::to_string(&event_source)
-                .or_else(|e| cx.throw_type_error(format!("Cannot serialize event {}", e)))?;
-
-            let event = Event {
-                body: "Test message".to_string(),
-                event_id,
-                sender,
-                server_ts: server_timestamp,
-                room_id,
-                source: event_source
-            };
-
-            let profile = Profile::new("@alice", "");
+            let profile = cx.argument::<JsObject>(1)?;
+            let profile = parse_profile(&mut cx, *profile)?;
 
             let this = cx.this();
 
@@ -103,6 +62,70 @@ declare_types! {
             Ok(cx.undefined().upcast())
         }
     }
+}
+
+fn parse_event(cx: &mut CallContext<Seshat>, event: JsObject) -> Result<Event, neon::result::Throw> {
+    let sender: String = event
+                .get(&mut *cx, "sender")?
+                .downcast::<JsString>()
+                .or_else(|_| cx.throw_type_error("Event doesn't contain a valid sender"))?
+                .value();
+
+    let event_id: String = event
+        .get(&mut *cx, "event_id")?
+        .downcast::<JsString>()
+        .or_else(|_| cx.throw_type_error("Event doesn't contain a valid event id"))?
+        .value();
+
+    let server_timestamp: i64 = event
+        .get(&mut *cx, "origin_server_ts")?
+        .downcast::<JsNumber>()
+        .or_else(|_| cx.throw_type_error("Event doesn't contain a valid timestamp"))?
+        .value() as i64;
+
+    let room_id: String = event
+        .get(&mut *cx, "room_id")?
+        .downcast::<JsString>()
+        .or_else(|_| cx.throw_type_error("Event doesn't contain a valid room id"))?
+        .value();
+
+    let content = event
+        .get(&mut *cx, "content")?
+        .downcast::<JsObject>()
+        .or_else(|_| cx.throw_type_error("Event doesn't contain any content"))?;
+
+    let event_value = event.as_value(&mut *cx);
+    let event_source: serde_json::Value = neon_serde::from_value(&mut *cx, event_value)?;
+    let event_source: String = serde_json::to_string(&event_source)
+        .or_else(|e| cx.throw_type_error(format!("Cannot serialize event {}", e)))?;
+
+    Ok(Event {
+        body: "Test message".to_string(),
+        event_id,
+        sender,
+        server_ts: server_timestamp,
+        room_id,
+        source: event_source
+    })
+}
+
+fn parse_profile(cx: &mut CallContext<Seshat>, profile: JsObject) -> Result<Profile, neon::result::Throw> {
+    let display_name: String = profile
+        .get(&mut *cx, "display_name")?
+        .downcast::<JsString>()
+        .or_else(|_| cx.throw_type_error("Event doesn't contain a valid event id"))?
+        .value();
+
+    let avatar_url: String = profile
+        .get(&mut *cx, "avatar_url")?
+        .downcast::<JsString>()
+        .or_else(|_| cx.throw_type_error("Profile doesn't contain a valid avatar url"))?
+        .value();
+
+    Ok(Profile {
+        display_name,
+        avatar_url
+    })
 }
 
 register_module!(mut cx, {
