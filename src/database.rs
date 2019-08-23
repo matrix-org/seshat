@@ -14,7 +14,7 @@
 
 use r2d2::PooledConnection;
 use r2d2_sqlite::SqliteConnectionManager;
-use rusqlite::{Connection, NO_PARAMS};
+use rusqlite::{Connection, NO_PARAMS, ToSql};
 use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{channel, Receiver, Sender};
@@ -92,15 +92,15 @@ impl Event {
 }
 
 pub struct Profile {
-    pub(crate) display_name: String,
-    pub(crate) avatar_url: String,
+    pub display_name: Option<String>,
+    pub avatar_url: Option<String>,
 }
 
 impl Profile {
     pub fn new(display_name: &str, avatar_url: &str) -> Profile {
         Profile {
-            display_name: display_name.to_string(),
-            avatar_url: avatar_url.to_string(),
+            display_name: Some(display_name.to_string()),
+            avatar_url: Some(avatar_url.to_string()),
         }
     }
 }
@@ -252,12 +252,13 @@ impl Database {
         user_id: &str,
         profile: &Profile,
     ) -> Result<i64> {
+        let user_id = user_id.to_owned();
         connection.execute(
             "
             INSERT OR IGNORE INTO profiles (
                 user_id, display_name, avatar_url
             ) VALUES(?1, ?2, ?3)",
-            &[user_id, &profile.display_name, &profile.avatar_url],
+            &[&user_id as &dyn ToSql, &profile.display_name, &profile.avatar_url],
         )?;
 
         let profile_id = connection.query_row(
@@ -266,7 +267,7 @@ impl Database {
                 user_id=?1
                 and display_name=?2
                 and avatar_url=?3)",
-            &[user_id, &profile.display_name, &profile.avatar_url],
+            &[&user_id as &dyn ToSql, &profile.display_name, &profile.avatar_url],
             |row| row.get(0),
         )?;
 
