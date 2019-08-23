@@ -261,12 +261,12 @@ impl Database {
             &[&user_id as &dyn ToSql, &profile.display_name, &profile.avatar_url],
         )?;
 
-        let profile_id = connection.query_row(
+        let profile_id: i64 = connection.query_row(
             "
             SELECT id FROM profiles WHERE (
                 user_id=?1
-                and display_name=?2
-                and avatar_url=?3)",
+                and (display_name is null or display_name=?2)
+                and (avatar_url is null or avatar_url=?3))",
             &[&user_id as &dyn ToSql, &profile.display_name, &profile.avatar_url],
             |row| row.get(0),
         )?;
@@ -401,6 +401,16 @@ fn store_profile() {
 
     let id = Database::save_profile(&db.connection, "@alice.example.org", &profile_new);
     assert_eq!(id.unwrap(), 2);
+}
+
+#[test]
+fn store_empty_profile() {
+    let tmpdir = tempdir().unwrap();
+    let db = Database::new(&tmpdir).unwrap();
+
+    let profile = Profile { display_name: None, avatar_url: None };
+    let id = Database::save_profile(&db.connection, "@alice.example.org", &profile);
+    assert_eq!(id.unwrap(), 1);
 }
 
 #[test]
