@@ -160,13 +160,20 @@ fn parse_event(
         .downcast::<JsObject>()
         .or_else(|_| cx.throw_type_error("Event doesn't contain any content"))?;
 
+    // TODO allow the name or topic to be stored as well.
+    let body: String = content
+        .get(&mut *cx, "body")?
+        .downcast::<JsString>()
+        .or_else(|_| cx.throw_type_error("Event doesn't contain a valid body"))?
+        .value();
+
     let event_value = event.as_value(&mut *cx);
     let event_source: serde_json::Value = neon_serde::from_value(&mut *cx, event_value)?;
     let event_source: String = serde_json::to_string(&event_source)
         .or_else(|e| cx.throw_type_error(format!("Cannot serialize event {}", e)))?;
 
     Ok(Event {
-        body: "Test message".to_string(),
+        body,
         event_id,
         sender,
         server_ts: server_timestamp,
