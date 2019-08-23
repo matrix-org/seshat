@@ -14,6 +14,8 @@
 
 #[macro_use]
 extern crate neon;
+use std::sync::atomic::{AtomicUsize};
+use std::sync::{Arc, Condvar, Mutex};
 
 use neon::prelude::*;
 use neon_serde;
@@ -21,6 +23,25 @@ use serde_json;
 use seshat::{Database, Event, Profile};
 
 pub struct SeshatDatabase(Database);
+
+struct CommitTask {
+    last_opstamp: usize,
+    cvar: Arc<(Mutex<AtomicUsize>, Condvar)>
+}
+
+impl Task for CommitTask {
+    type Output = usize;
+    type Error = String;
+    type JsEvent = JsNumber;
+
+    fn perform(&self) -> Result<Self::Output, Self::Error> {
+        Ok(Database::wait_for_commit(self.last_opstamp, &self.cvar))
+    }
+
+    fn complete(self, mut cx: TaskContext, result: Result<Self::Output, Self::Error>) -> JsResult<Self::JsEvent> {
+        Ok(cx.number(result.unwrap() as f64))
+    }
+}
 
 declare_types! {
     pub class Seshat for SeshatDatabase {
@@ -58,6 +79,22 @@ declare_types! {
                 let db = &this.borrow(&guard).0;
                 db.add_event(event, profile);
             }
+
+            Ok(cx.undefined().upcast())
+        }
+
+        method commit_async(mut cx) {
+            let f = cx.argument::<JsFunction>(0)?;
+            let mut this = cx.this();
+
+            let (last_opstamp, cvar) = {
+                let guard = cx.lock();
+                let db = &mut this.borrow_mut(&guard).0;
+                db.commit_get_cvar()
+            };
+
+            let task = CommitTask { last_opstamp, cvar };
+            task.schedule(f);
 
             Ok(cx.undefined().upcast())
         }
