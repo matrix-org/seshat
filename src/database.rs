@@ -116,8 +116,8 @@ pub struct Database {
 }
 
 impl Database {
-    pub fn new<P: AsRef<Path>>(path: P, db_name: &str) -> Result<Database> {
-        let db_path = path.as_ref().join(db_name);
+    pub fn new<P: AsRef<Path>>(path: P) -> Result<Database> {
+        let db_path = path.as_ref().join("events.db");
         let manager = SqliteConnectionManager::file(&db_path);
         let pool = r2d2::Pool::new(manager)?;
 
@@ -384,13 +384,13 @@ lazy_static! {
 #[test]
 fn create_event_db() {
     let tmpdir = tempdir().unwrap();
-    let _db = Database::new(tmpdir, "events.db").unwrap();
+    let _db = Database::new(tmpdir).unwrap();
 }
 
 #[test]
 fn store_profile() {
     let tmpdir = tempdir().unwrap();
-    let db = Database::new(&tmpdir, "events.db").unwrap();
+    let db = Database::new(&tmpdir).unwrap();
 
     let profile = Profile::new("Alice", "");
 
@@ -409,7 +409,7 @@ fn store_profile() {
 #[test]
 fn store_event() {
     let tmpdir = tempdir().unwrap();
-    let db = Database::new(&tmpdir, "events.db").unwrap();
+    let db = Database::new(&tmpdir).unwrap();
     let profile = Profile::new("Alice", "");
     let id = Database::save_profile(&db.connection, "@alice.example.org", &profile).unwrap();
 
@@ -419,7 +419,7 @@ fn store_event() {
 #[test]
 fn store_event_and_profile() {
     let tmpdir = tempdir().unwrap();
-    let db = Database::new(&tmpdir, "events.db").unwrap();
+    let db = Database::new(&tmpdir).unwrap();
     let profile = Profile::new("Alice", "");
     Database::save_event(&db.connection, &EVENT, &profile).unwrap();
 }
@@ -427,7 +427,7 @@ fn store_event_and_profile() {
 #[test]
 fn load_event() {
     let tmpdir = tempdir().unwrap();
-    let db = Database::new(&tmpdir, "events.db").unwrap();
+    let db = Database::new(&tmpdir).unwrap();
     let profile = Profile::new("Alice", "");
 
     Database::save_event(&db.connection, &EVENT, &profile).unwrap();
@@ -441,7 +441,7 @@ fn load_event() {
 #[test]
 fn commit_a_write() {
     let tmpdir = tempdir().unwrap();
-    let mut db = Database::new(&tmpdir, "events.db").unwrap();
+    let mut db = Database::new(&tmpdir).unwrap();
     let opstamp = db.commit();
     assert_eq!(opstamp, 1);
     let opstamp = db.commit();
@@ -451,7 +451,7 @@ fn commit_a_write() {
 #[test]
 fn save_the_event_multithreaded() {
     let tmpdir = tempdir().unwrap();
-    let mut db = Database::new(&tmpdir, "events.db").unwrap();
+    let mut db = Database::new(&tmpdir).unwrap();
     let profile = Profile::new("Alice", "");
 
     db.add_event(EVENT.clone(), profile);
@@ -467,7 +467,7 @@ fn save_the_event_multithreaded() {
 #[test]
 fn save_and_search() {
     let tmpdir = tempdir().unwrap();
-    let mut db = Database::new(&tmpdir, "events.db").unwrap();
+    let mut db = Database::new(&tmpdir).unwrap();
     let profile = Profile::new("Alice", "");
 
     db.add_event(EVENT.clone(), profile);
