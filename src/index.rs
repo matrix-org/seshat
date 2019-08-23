@@ -112,10 +112,10 @@ impl Index {
     }
 
     pub fn get_writer(&self) -> Result<Writer, tv::Error> {
-        Ok(Writer{
+        Ok(Writer {
             inner: self.index.writer(50_000_000)?,
             body_field: self.body_field,
-            event_id_field: self.event_id_field
+            event_id_field: self.event_id_field,
         })
     }
 }

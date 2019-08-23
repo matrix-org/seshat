@@ -14,7 +14,7 @@
 
 use r2d2::PooledConnection;
 use r2d2_sqlite::SqliteConnectionManager;
-use rusqlite::{Connection, NO_PARAMS, ToSql};
+use rusqlite::{Connection, ToSql, NO_PARAMS};
 use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{channel, Receiver, Sender};
@@ -47,7 +47,7 @@ enum ThreadMessage {
 pub enum Error {
     PoolError(r2d2::Error),
     DatabaseError(rusqlite::Error),
-    IndexError(tantivy::Error)
+    IndexError(tantivy::Error),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -69,7 +69,6 @@ impl From<tantivy::Error> for Error {
         Error::IndexError(err)
     }
 }
-
 
 impl Event {
     pub fn new(
@@ -136,7 +135,7 @@ impl Database {
             tx,
             condvar,
             last_opstamp: 0,
-            index
+            index,
         })
     }
 
@@ -146,7 +145,7 @@ impl Database {
 
     fn spawn_writer(
         connection: PooledConnection<SqliteConnectionManager>,
-        mut index_writer: Writer
+        mut index_writer: Writer,
     ) -> (
         JoinHandle<()>,
         Sender<ThreadMessage>,
@@ -167,7 +166,6 @@ impl Database {
 
                 match message {
                     Ok(m) => {
-
                         match m {
                             ThreadMessage::Event(e) => events.push(e),
                             ThreadMessage::Write => {
@@ -189,7 +187,7 @@ impl Database {
                                 cvar.notify_all();
                             }
                         };
-                    },
+                    }
                     Err(_e) => return,
                 };
             }
@@ -218,7 +216,10 @@ impl Database {
         (self.last_opstamp, self.condvar.clone())
     }
 
-    pub fn wait_for_commit(last_opstamp: usize, condvar: &Arc<(Mutex<AtomicUsize>, Condvar)>) -> usize {
+    pub fn wait_for_commit(
+        last_opstamp: usize,
+        condvar: &Arc<(Mutex<AtomicUsize>, Condvar)>,
+    ) -> usize {
         let (ref lock, ref cvar) = **condvar;
         let mut opstamp = lock.lock().unwrap();
 
@@ -275,7 +276,11 @@ impl Database {
             INSERT OR IGNORE INTO profiles (
                 user_id, display_name, avatar_url
             ) VALUES(?1, ?2, ?3)",
-            &[&user_id as &dyn ToSql, &profile.display_name, &profile.avatar_url],
+            &[
+                &user_id as &dyn ToSql,
+                &profile.display_name,
+                &profile.avatar_url,
+            ],
         )?;
 
         let profile_id: i64 = connection.query_row(
@@ -284,7 +289,11 @@ impl Database {
                 user_id=?1
                 and (display_name is null or display_name=?2)
                 and (avatar_url is null or avatar_url=?3))",
-            &[&user_id as &dyn ToSql, &profile.display_name, &profile.avatar_url],
+            &[
+                &user_id as &dyn ToSql,
+                &profile.display_name,
+                &profile.avatar_url,
+            ],
             |row| row.get(0),
         )?;
 
@@ -329,7 +338,10 @@ impl Database {
         false
     }
 
-    pub(crate) fn load_events(&self, search_result: &[(f32, String)]) -> rusqlite::Result<Vec<(f32, String, i64)>> {
+    pub(crate) fn load_events(
+        &self,
+        search_result: &[(f32, String)],
+    ) -> rusqlite::Result<Vec<(f32, String, i64)>> {
         let event_num = search_result.len();
         let parameter_str = std::iter::repeat(", ?")
             .take(event_num - 1)
@@ -342,12 +354,7 @@ impl Database {
             &parameter_str
         ))?;
         let (scores, event_ids): (Vec<f32>, Vec<String>) = search_result.iter().cloned().unzip();
-        let db_events = stmt.query_map(event_ids, |row| {
-            Ok((
-                row.get(0)?,
-                row.get(1)?,
-            ))
-        })?;
+        let db_events = stmt.query_map(event_ids, |row| Ok((row.get(0)?, row.get(1)?)))?;
 
         let mut events = Vec::new();
         let i = 0;
@@ -364,7 +371,7 @@ impl Database {
         let search_result = self.index.search(term);
         match self.load_events(&search_result) {
             Ok(result) => result,
-            Err(_e) => vec!()
+            Err(_e) => vec![],
         }
     }
 }
@@ -425,7 +432,10 @@ fn store_empty_profile() {
     let tmpdir = tempdir().unwrap();
     let db = Database::new(&tmpdir).unwrap();
 
-    let profile = Profile { display_name: None, avatar_url: None };
+    let profile = Profile {
+        display_name: None,
+        avatar_url: None,
+    };
     let id = Database::save_profile(&db.connection, "@alice.example.org", &profile);
     assert_eq!(id.unwrap(), 1);
 }
@@ -456,7 +466,10 @@ fn load_event() {
 
     Database::save_event(&db.connection, &EVENT, &profile).unwrap();
     let events = db
-        .load_events(&[(1.0, "$15163622445EBvZJ:localhost".to_string()), (0.3, "$FAKE".to_string())])
+        .load_events(&[
+            (1.0, "$15163622445EBvZJ:localhost".to_string()),
+            (0.3, "$FAKE".to_string()),
+        ])
         .unwrap();
 
     assert_eq!(*EVENT.source, events[0].1)
@@ -482,7 +495,10 @@ fn save_the_event_multithreaded() {
     db.commit();
 
     let events = db
-        .load_events(&[(1.0, "$15163622445EBvZJ:localhost".to_string()), (0.3, "$FAKE".to_string())])
+        .load_events(&[
+            (1.0, "$15163622445EBvZJ:localhost".to_string()),
+            (0.3, "$FAKE".to_string()),
+        ])
         .unwrap();
 
     assert_eq!(*EVENT.source, events[0].1)
