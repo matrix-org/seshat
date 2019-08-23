@@ -204,20 +204,29 @@ impl Database {
     }
 
     pub fn commit(&mut self) -> usize {
-        self.tx.send(ThreadMessage::Write).unwrap();
-
-        let &(ref lock, ref cvar) = &*self.condvar;
-        let mut opstamp = lock.lock().unwrap();
-        while *opstamp.get_mut() == self.last_opstamp {
-            opstamp = cvar.wait(opstamp).unwrap();
-        }
-
-        self.last_opstamp = *opstamp.get_mut();
+        let (last_opstamp, cvar) = self.commit_get_cvar();
+        self.last_opstamp = Database::wait_for_commit(last_opstamp, &cvar);
         self.last_opstamp
     }
 
     pub fn commit_no_wait(&mut self) {
         self.tx.send(ThreadMessage::Write).unwrap();
+    }
+
+    pub fn commit_get_cvar(&mut self) -> (usize, Arc<(Mutex<AtomicUsize>, Condvar)>) {
+        self.tx.send(ThreadMessage::Write).unwrap();
+        (self.last_opstamp, self.condvar.clone())
+    }
+
+    pub fn wait_for_commit(last_opstamp: usize, condvar: &Arc<(Mutex<AtomicUsize>, Condvar)>) -> usize {
+        let (ref lock, ref cvar) = **condvar;
+        let mut opstamp = lock.lock().unwrap();
+
+        while *opstamp.get_mut() == last_opstamp {
+            opstamp = cvar.wait(opstamp).unwrap();
+        }
+
+        *opstamp.get_mut()
     }
 
     fn create_tables(conn: &Connection) -> Result<()> {
