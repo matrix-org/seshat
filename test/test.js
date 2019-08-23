@@ -43,6 +43,10 @@ describe('Database', function() {
       db.add_event(matrixEvent, matrixProfile);
   });
 
+  it('should allow the addition of an event without a profile.', function() {
+      db.add_event(matrixEvent);
+  });
+
   it('should throw an error when adding events with missing fields.', function() {
     delete matrixEvent.content;
     expect(() => db.add_event(matrixEvent, matrixProfile)).to.throw("Event doesn't contain any content");
