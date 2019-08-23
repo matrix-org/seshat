@@ -14,7 +14,7 @@
 
 #[macro_use]
 extern crate neon;
-use std::sync::atomic::{AtomicUsize};
+use std::sync::atomic::AtomicUsize;
 use std::sync::{Arc, Condvar, Mutex};
 
 use neon::prelude::*;
@@ -26,7 +26,7 @@ pub struct SeshatDatabase(Database);
 
 struct CommitTask {
     last_opstamp: usize,
-    cvar: Arc<(Mutex<AtomicUsize>, Condvar)>
+    cvar: Arc<(Mutex<AtomicUsize>, Condvar)>,
 }
 
 impl Task for CommitTask {
@@ -38,7 +38,11 @@ impl Task for CommitTask {
         Ok(Database::wait_for_commit(self.last_opstamp, &self.cvar))
     }
 
-    fn complete(self, mut cx: TaskContext, result: Result<Self::Output, Self::Error>) -> JsResult<Self::JsEvent> {
+    fn complete(
+        self,
+        mut cx: TaskContext,
+        result: Result<Self::Output, Self::Error>,
+    ) -> JsResult<Self::JsEvent> {
         Ok(cx.number(result.unwrap() as f64))
     }
 }
