@@ -63,20 +63,29 @@ declare_types! {
         }
 
         method commit(mut cx) {
-            let wait: bool = cx.argument::<JsBoolean>(0)?.value();
+            let wait: bool = match cx.argument_opt(0) {
+                Some(w) => w.downcast::<JsBoolean>().or_throw(&mut cx)?.value(),
+                None => false,
+            };
+
             let mut this = cx.this();
 
-            {
+            let ret = {
                 let guard = cx.lock();
                 let db = &mut this.borrow_mut(&guard).0;
 
                 if wait {
-                    db.commit();
+                    Some(db.commit())
                 } else {
                     db.commit_no_wait();
+                    None
                 }
+            };
+
+            match ret {
+                Some(r) => Ok(cx.number(r as f64).upcast()),
+                None => Ok(cx.undefined().upcast())
             }
-            Ok(cx.undefined().upcast())
         }
     }
 }
