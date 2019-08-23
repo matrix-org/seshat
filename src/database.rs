@@ -30,12 +30,12 @@ use crate::index::{Index, Writer};
 
 #[derive(Debug, PartialEq, Default, Clone)]
 pub struct Event {
-    pub(crate) body: String,
-    pub(crate) event_id: String,
-    pub(crate) sender: String,
-    pub(crate) server_ts: i64,
-    pub(crate) room_id: String,
-    pub(crate) source: String,
+    pub body: String,
+    pub event_id: String,
+    pub sender: String,
+    pub server_ts: i64,
+    pub room_id: String,
+    pub source: String,
 }
 
 enum ThreadMessage {
