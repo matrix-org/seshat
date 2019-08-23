@@ -240,7 +240,7 @@ impl Database {
         )?;
 
         conn.execute(
-            "CREATE INDEX event_profile_id ON events (profile_id)",
+            "CREATE INDEX IF NOT EXISTS event_profile_id ON events (profile_id)",
             NO_PARAMS,
         )?;
 
