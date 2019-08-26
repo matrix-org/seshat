@@ -22,3 +22,4 @@ mod index;
 pub use database::Database;
 pub use database::Event;
 pub use database::Profile;
+pub use database::Searcher;

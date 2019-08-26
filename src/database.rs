@@ -26,7 +26,7 @@ use tantivy;
 #[cfg(test)]
 use tempfile::tempdir;
 
-use crate::index::{Index, Writer};
+use crate::index::{Index, Writer, IndexSearcher};
 
 #[derive(Debug, PartialEq, Default, Clone)]
 pub struct Event {
@@ -104,8 +104,30 @@ impl Profile {
     }
 }
 
+pub struct Searcher {
+    inner: IndexSearcher,
+    database: Arc<PooledConnection<SqliteConnectionManager>>,
+}
+
+impl Searcher {
+    pub fn search(&self, term: &str) -> Vec<(f32, String, i64)> {
+        let search_result = self.inner.search(term);
+
+        if search_result.is_empty() {
+            return vec![]
+        }
+
+        match Database::load_events(&self.database, &search_result) {
+            Ok(result) => result,
+            Err(_e) => vec![],
+        }
+    }
+}
+
+unsafe impl Send for Searcher {}
+
 pub struct Database {
-    connection: PooledConnection<SqliteConnectionManager>,
+    connection: Arc<PooledConnection<SqliteConnectionManager>>,
     _pool: r2d2::Pool<SqliteConnectionManager>,
     _write_thread: JoinHandle<()>,
     tx: Sender<ThreadMessage>,
@@ -120,7 +142,7 @@ impl Database {
         let manager = SqliteConnectionManager::file(&db_path);
         let pool = r2d2::Pool::new(manager)?;
 
-        let connection = pool.get()?;
+        let connection = Arc::new(pool.get()?);
 
         Database::create_tables(&connection)?;
 
@@ -339,15 +361,19 @@ impl Database {
     }
 
     pub(crate) fn load_events(
-        &self,
+        connection: &PooledConnection<SqliteConnectionManager>,
         search_result: &[(f32, String)],
     ) -> rusqlite::Result<Vec<(f32, String, i64)>> {
+        if search_result.is_empty() {
+            return Ok(vec![]);
+        }
+
         let event_num = search_result.len();
         let parameter_str = std::iter::repeat(", ?")
             .take(event_num - 1)
             .collect::<String>();
 
-        let mut stmt = self.connection.prepare(&format!(
+        let mut stmt = connection.prepare(&format!(
             "SELECT source, profile_id
              FROM events WHERE event_id IN (?{})
              ",
@@ -368,11 +394,13 @@ impl Database {
     }
 
     pub fn search(&self, term: &str) -> Vec<(f32, String, i64)> {
-        let search_result = self.index.search(term);
-        match self.load_events(&search_result) {
-            Ok(result) => result,
-            Err(_e) => vec![],
-        }
+        let searcher = self.get_searcher();
+        searcher.search(term)
+    }
+
+    pub fn get_searcher(&self) -> Searcher {
+        let index_searcher = self.index.get_searcher();
+        Searcher { inner: index_searcher, database: self.connection.clone() }
     }
 }
 
@@ -465,8 +493,7 @@ fn load_event() {
     let profile = Profile::new("Alice", "");
 
     Database::save_event(&db.connection, &EVENT, &profile).unwrap();
-    let events = db
-        .load_events(&[
+    let events = Database::load_events(&db.connection, &[
             (1.0, "$15163622445EBvZJ:localhost".to_string()),
             (0.3, "$FAKE".to_string()),
         ])
@@ -494,8 +521,7 @@ fn save_the_event_multithreaded() {
     db.add_event(EVENT.clone(), profile);
     db.commit();
 
-    let events = db
-        .load_events(&[
+    let events = Database::load_events(&db.connection, &[
             (1.0, "$15163622445EBvZJ:localhost".to_string()),
             (0.3, "$FAKE".to_string()),
         ])
@@ -515,5 +541,6 @@ fn save_and_search() {
     db.commit();
 
     let result = db.search("Test");
+    assert!(!result.is_empty());
     assert_eq!(result[0].1, EVENT.source);
 }
