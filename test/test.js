@@ -1,54 +1,54 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const expect = require('chai').expect
+const expect = require('chai').expect;
 const assert = require('assert');
 
 const Seshat = require('../');
 
-var matrixEvent = {
-  event_id: "$15163622445EBvZJ:localhost",
-  room_id: "!TESTROOM",
-  sender: "@alice:example.org",
+const matrixEvent = {
+  event_id: '$15163622445EBvZJ:localhost',
+  room_id: '!TESTROOM',
+  sender: '@alice:example.org',
   content: {
-    body: "Test message",
+    body: 'Test message',
   },
   origin_server_ts: 1516362244026,
 };
 
-var matrixProfile = {
-  display_name: "Alice (from wonderland)",
-  avatar_url: "",
-}
+const matrixProfile = {
+  display_name: 'Alice (from wonderland)',
+  avatar_url: '',
+};
 
-var matrixProfileOnlyDisplayName =  {
-  display_name: "Alice (from wonderland)",
-}
+const matrixProfileOnlyDisplayName = {
+  display_name: 'Alice (from wonderland)',
+};
 
-var badEvent = {
-  event_id: "$15163622445EBvZJ:localhost",
-  room_id: "!TESTROOM",
-  sender: "@alice:example.org",
+const badEvent = {
+  event_id: '$15163622445EBvZJ:localhost',
+  room_id: '!TESTROOM',
+  sender: '@alice:example.org',
   content: {
-    body: "Test message",
+    body: 'Test message',
   },
-  origin_server_ts: "1516362244026",
+  origin_server_ts: '1516362244026',
 };
 
 function create_db() {
-  var tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'seshat-'));
-  var db = new Seshat(tempDir);
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'seshat-'));
+  const db = new Seshat(tempDir);
 
-  return db
+  return db;
 }
 
 describe('Database', function() {
   it('should be created succesfully.', function() {
-    var tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'seshat-'));
-    var db = new Seshat(tempDir);
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'seshat-'));
+    const db = new Seshat(tempDir);
   });
 
-  var db = create_db()
+  const db = create_db();
 
   it('should allow the addition of events.', function() {
     db.add_event(matrixEvent, matrixProfile);
@@ -63,19 +63,19 @@ describe('Database', function() {
   });
 
   it('should allow events to be commited', function() {
-    var db = create_db()
-    var ret = db.commit(true)
-    assert.equal(ret, 1)
+    const db = create_db();
+    var ret = db.commit(true);
+    assert.equal(ret, 1);
 
-    var ret = db.commit(false)
-    assert.equal(ret, undefined)
+    var ret = db.commit(false);
+    assert.equal(ret, undefined);
 
-    var ret = db.commit()
-    assert.equal(ret, undefined)
+    var ret = db.commit();
+    assert.equal(ret, undefined);
   });
 
   it('should allow events to be commited asynchronously', function(done) {
-    var db = create_db()
+    const db = create_db();
 
     db.commit_async(function(err, value) {
       if (err) done(err);
@@ -83,34 +83,75 @@ describe('Database', function() {
         assert.equal(value, 1);
         done();
       }
-    })
+    });
   });
 
   it('should allow events to be commited using a promise', async function() {
-    var db = create_db()
-    var opstamp = await db.commit_promise();
+    const db = create_db();
+    const opstamp = await db.commit_promise();
     assert.equal(opstamp, 1);
   });
 
+  it('should return a search result for the stored event', async function() {
+    const db = create_db();
+    db.add_event(matrixEvent);
+
+    const opstamp = await db.commit_promise();
+    assert.equal(opstamp, 1);
+    await db.commit_promise();
+    db.reload();
+
+    const result = db.search('Test');
+    assert.notEqual(Object.entries(result).length, 0);
+  });
+
+  it('should return a search result for the stored event', async function() {
+    const db = create_db();
+    db.add_event(matrixEvent);
+
+    const opstamp = await db.commit_promise();
+    assert.equal(opstamp, 1);
+    await db.commit_promise();
+    db.reload();
+
+    const results = db.search('Test');
+    assert.notEqual(Object.entries(results).length, 0);
+    assert.deepEqual(results[0].result, matrixEvent);
+  });
+
+  it('should return a search result for the stored event using promises', async function() {
+    const db = create_db();
+    db.add_event(matrixEvent);
+
+    const opstamp = await db.commit_promise();
+    assert.equal(opstamp, 1);
+    await db.commit_promise();
+    await db.commit_promise();
+
+    const results = await db.search_promise('Test');
+    assert.notEqual(Object.entries(results).length, 0);
+    assert.deepEqual(results[0].result, matrixEvent);
+  });
+
+
   it('should throw an error when adding events with missing fields.', function() {
     delete matrixEvent.content;
-    expect(() => db.add_event(matrixEvent, matrixProfile)).to.throw("Event doesn't contain any content");
+    expect(() => db.add_event(matrixEvent, matrixProfile)).to.throw('Event doesn\'t contain any content');
 
     delete matrixEvent.room_id;
-    expect(() => db.add_event(matrixEvent, matrixProfile)).to.throw("Event doesn't contain a valid room id");
+    expect(() => db.add_event(matrixEvent, matrixProfile)).to.throw('Event doesn\'t contain a valid room id');
 
     delete matrixEvent.origin_server_ts;
-    expect(() => db.add_event(matrixEvent, matrixProfile)).to.throw("Event doesn't contain a valid timestamp");
+    expect(() => db.add_event(matrixEvent, matrixProfile)).to.throw('Event doesn\'t contain a valid timestamp');
 
     delete matrixEvent.event_id;
-    expect(() => db.add_event(matrixEvent, matrixProfile)).to.throw("Event doesn't contain a valid event id");
+    expect(() => db.add_event(matrixEvent, matrixProfile)).to.throw('Event doesn\'t contain a valid event id');
 
     delete matrixEvent.sender;
-    expect(() => db.add_event(matrixEvent, matrixProfile)).to.throw("Event doesn't contain a valid sender");
+    expect(() => db.add_event(matrixEvent, matrixProfile)).to.throw('Event doesn\'t contain a valid sender');
   });
 
   it('should throw an error when adding events with fields that don\'t typecheck.', function() {
-    expect(() => db.add_event(badEvent, matrixProfile)).to.throw("Event doesn't contain a valid timestamp");
+    expect(() => db.add_event(badEvent, matrixProfile)).to.throw('Event doesn\'t contain a valid timestamp');
   });
-
 });

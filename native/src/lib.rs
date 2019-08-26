@@ -20,7 +20,7 @@ use std::sync::{Arc, Condvar, Mutex};
 use neon::prelude::*;
 use neon_serde;
 use serde_json;
-use seshat::{Database, Event, Profile};
+use seshat::{Database, Event, Profile, Searcher};
 
 pub struct SeshatDatabase(Database);
 
@@ -46,6 +46,39 @@ impl Task for CommitTask {
         Ok(cx.number(result.unwrap() as f64))
     }
 }
+
+struct SearchTask {
+    inner: Searcher,
+    term: String
+}
+
+impl Task for SearchTask {
+    type Output = Vec<(f32, String, i64)>;
+    type Error = String;
+    type JsEvent = JsValue;
+
+    fn perform(&self) -> Result<Self::Output, Self::Error> {
+        Ok(self.inner.search(&self.term))
+    }
+
+    fn complete(
+        self,
+        mut cx: TaskContext,
+        result: Result<Self::Output, Self::Error>,
+    ) -> JsResult<Self::JsEvent> {
+        let ret = result.unwrap();
+        let results = JsArray::new(&mut cx, ret.len() as u32);
+
+        for (i, element) in ret.iter().enumerate() {
+            let object = search_result_to_js(&mut cx, element);
+            results.set(&mut cx, i as u32, object).unwrap();
+        }
+
+        Ok(results.upcast())
+
+    }
+}
+
 
 declare_types! {
     pub class Seshat for SeshatDatabase {
@@ -146,7 +179,61 @@ declare_types! {
                 None => Ok(cx.undefined().upcast())
             }
         }
+
+        method search(mut cx) {
+            let term: String = cx.argument::<JsString>(0)?.value();
+
+            let mut this = cx.this();
+
+            let ret = {
+                let guard = cx.lock();
+                let db = &mut this.borrow_mut(&guard).0;
+                db.search(&term)
+            };
+
+			let results = JsArray::new(&mut cx, ret.len() as u32);
+
+            for (i, element) in ret.iter().enumerate() {
+                let object = search_result_to_js(&mut cx, element);
+                results.set(&mut cx, i as u32, object).unwrap();
+            }
+
+            Ok(results.upcast())
+        }
+
+        method search_async(mut cx) {
+            let term: String = cx.argument::<JsString>(0)?.value();
+            let f = cx.argument::<JsFunction>(1)?;
+            let mut this = cx.this();
+
+            let searcher = {
+                let guard = cx.lock();
+                let db = &mut this.borrow_mut(&guard).0;
+                db.get_searcher()
+            };
+
+            let task = SearchTask { inner: searcher, term };
+            task.schedule(f);
+
+            Ok(cx.undefined().upcast())
+        }
     }
+}
+
+fn search_result_to_js<'a, C: Context<'a>>(cx: &mut C, element: &(f32, String, i64)) -> Handle<'a, JsObject> {
+    let (score, source, _) = &*element;
+
+    let rank = cx.number(f64::from(*score));
+
+    let source: serde_json::Value = serde_json::from_str(&source).unwrap();
+    let source = neon_serde::to_value(&mut *cx, &source).unwrap();
+
+    let object = JsObject::new(&mut *cx);
+
+    object.set(&mut *cx, "rank", rank).unwrap();
+    object.set(&mut *cx, "result", source).unwrap();
+
+    object
 }
 
 fn parse_event(
