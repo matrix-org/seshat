@@ -47,6 +47,49 @@ impl Writer {
     }
 }
 
+pub struct IndexSearcher {
+    pub(crate) inner: tv::LeasedItem<tv::Searcher>,
+    pub(crate) body_field: tv::schema::Field,
+    pub(crate) topic_field: tv::schema::Field,
+    pub(crate) name_field: tv::schema::Field,
+    pub(crate) event_id_field: tv::schema::Field,
+    pub(crate) query_parser: tv::query::QueryParser
+}
+
+impl IndexSearcher {
+    pub fn search(&self, term: &str) -> Vec<(f32, String)> {
+        // TODO this should be in a separate struct so we can run the search in
+        // a separate thread/task in node.
+        let query = match self.query_parser.parse_query(term) {
+            Ok(q) => q,
+            Err(_e) => panic!("WHAAAAT")
+        };
+
+        let result = match self.inner.search(&query, &tv::collector::TopDocs::with_limit(10)) {
+            Ok(result) => result,
+            Err(_e) => panic!("ERRRO FOR RESULT")
+        };
+
+        let mut docs = Vec::new();
+
+        for (score, docaddress) in result {
+            let doc = match self.inner.doc(docaddress) {
+                Ok(d) => d,
+                Err(_e) => continue,
+            };
+
+            let event_id: String = match doc.get_first(self.event_id_field) {
+                Some(s) => s.text().unwrap().to_owned(),
+                None => continue,
+            };
+
+            docs.push((score, event_id));
+        }
+
+        docs
+    }
+}
+
 impl Index {
     pub fn new<P: AsRef<Path>>(path: P) -> Result<Index, tv::Error> {
         let mut schemabuilder = tv::schema::Schema::builder();
@@ -73,42 +116,22 @@ impl Index {
         })
     }
 
-    pub fn search(&self, term: &str) -> Vec<(f32, String)> {
-        // TODO this should be in a separate struct so we can run the search in
-        // a separate thread/task in node.
+    pub fn get_searcher(&self) -> IndexSearcher {
         let searcher = self.reader.searcher();
         let query_parser = tv::query::QueryParser::for_index(
             &self.index,
             vec![self.body_field, self.topic_field, self.name_field],
         );
 
-        let query = match query_parser.parse_query(term) {
-            Ok(q) => q,
-            Err(_e) => return vec![],
-        };
-
-        let result = match searcher.search(&query, &tv::collector::TopDocs::with_limit(10)) {
-            Ok(result) => result,
-            Err(_e) => return vec![],
-        };
-
-        let mut docs = Vec::new();
-
-        for (score, docaddress) in result {
-            let doc = match searcher.doc(docaddress) {
-                Ok(d) => d,
-                Err(_e) => continue,
-            };
-
-            let event_id: String = match doc.get_first(self.event_id_field) {
-                Some(s) => s.text().unwrap().to_owned(),
-                None => continue,
-            };
-
-            docs.push((score, event_id));
+        IndexSearcher {
+            inner: searcher,
+            query_parser,
+            body_field: self.body_field,
+            event_id_field: self.event_id_field,
+            topic_field: self.topic_field,
+            name_field: self.name_field,
         }
 
-        docs
     }
 
     pub fn get_writer(&self) -> Result<Writer, tv::Error> {
@@ -132,7 +155,8 @@ fn add_an_event() {
     writer.commit().unwrap();
     writer.commit().unwrap();
 
-    let result = index.search("Test");
+    let searcher = index.get_searcher();
+    let result = searcher.search("Test");
 
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].1, event_id)

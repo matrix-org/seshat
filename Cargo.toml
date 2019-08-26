@@ -7,7 +7,7 @@ license = "Apache-2.0"
 description = "A matrix message logger with full text search support"
 
 [dependencies]
-tantivy = "0.10"
+tantivy = { git = "https://github.com/tantivy-search/tantivy" }
 rusqlite = "0.20"
 r2d2_sqlite = "0.12"
 r2d2 = "0.8"
