@@ -131,7 +131,10 @@ impl Index {
             topic_field: self.topic_field,
             name_field: self.name_field,
         }
+    }
 
+    pub fn reload(&self) -> Result<(), tv::Error> {
+        self.reader.reload()
     }
 
     pub fn get_writer(&self) -> Result<Writer, tv::Error> {
@@ -153,7 +156,7 @@ fn add_an_event() {
 
     writer.add_event("Test message", &event_id);
     writer.commit().unwrap();
-    writer.commit().unwrap();
+    index.reload().unwrap();
 
     let searcher = index.get_searcher();
     let result = searcher.search("Test");
