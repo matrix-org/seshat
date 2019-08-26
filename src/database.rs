@@ -229,6 +229,11 @@ impl Database {
         self.last_opstamp
     }
 
+    pub fn reload(&mut self) -> Result<()> {
+        self.index.reload()?;
+        Ok(())
+    }
+
     pub fn commit_no_wait(&mut self) {
         self.tx.send(ThreadMessage::Write).unwrap();
     }
@@ -520,6 +525,7 @@ fn save_the_event_multithreaded() {
 
     db.add_event(EVENT.clone(), profile);
     db.commit();
+    db.reload().unwrap();
 
     let events = Database::load_events(&db.connection, &[
             (1.0, "$15163622445EBvZJ:localhost".to_string()),
@@ -537,8 +543,10 @@ fn save_and_search() {
     let profile = Profile::new("Alice", "");
 
     db.add_event(EVENT.clone(), profile);
-    db.commit();
-    db.commit();
+    let opstamp = db.commit();
+    db.reload().unwrap();
+
+    assert_eq!(opstamp, 1);
 
     let result = db.search("Test");
     assert!(!result.is_empty());
