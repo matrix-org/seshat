@@ -103,6 +103,24 @@ declare_types! {
             Ok(cx.undefined().upcast())
         }
 
+        method reload(mut cx) {
+            let mut this = cx.this();
+
+            let ret = {
+                let guard = cx.lock();
+                let db = &mut this.borrow_mut(&guard).0;
+                db.reload()
+            };
+
+            match ret {
+                Ok(()) => Ok(cx.undefined().upcast()),
+                Err(e) => {
+                    let message = format!("Error opening the database: {:?}", e);
+                    panic!(message)
+                }
+            }
+        }
+
         method commit(mut cx) {
             let wait: bool = match cx.argument_opt(0) {
                 Some(w) => w.downcast::<JsBoolean>().or_throw(&mut cx)?.value(),
