@@ -64,13 +64,13 @@ describe('Database', function() {
 
   it('should allow events to be commited', function() {
     const db = createDb();
-    let ret = db.commit(true);
+    let ret = db.commitSync(true);
     assert.equal(ret, 1);
 
-    ret = db.commit(false);
+    ret = db.commitSync(false);
     assert.equal(ret, undefined);
 
-    ret = db.commit();
+    ret = db.commitSync();
     assert.equal(ret, undefined);
   });
 
@@ -88,7 +88,7 @@ describe('Database', function() {
 
   it('should allow events to be commited using a promise', async function() {
     const db = createDb();
-    const opstamp = await db.commitPromise();
+    const opstamp = await db.commit();
     assert.equal(opstamp, 1);
   });
 
@@ -96,25 +96,12 @@ describe('Database', function() {
     const db = createDb();
     db.addEvent(matrixEvent);
 
-    const opstamp = await db.commitPromise();
+    const opstamp = await db.commit();
     assert.equal(opstamp, 1);
-    await db.commitPromise();
+    await db.commit();
     db.reload();
 
-    const result = db.search('Test');
-    assert.notEqual(Object.entries(result).length, 0);
-  });
-
-  it('should return a search result for the stored event', async function() {
-    const db = createDb();
-    db.addEvent(matrixEvent);
-
-    const opstamp = await db.commitPromise();
-    assert.equal(opstamp, 1);
-    await db.commitPromise();
-    db.reload();
-
-    const results = db.search('Test');
+    const results = db.searchSync('Test');
     assert.notEqual(Object.entries(results).length, 0);
     assert.deepEqual(results[0].result, matrixEvent);
   });
@@ -123,12 +110,12 @@ describe('Database', function() {
     const db = createDb();
     db.addEvent(matrixEvent);
 
-    const opstamp = await db.commitPromise();
+    const opstamp = await db.commit();
     assert.equal(opstamp, 1);
-    await db.commitPromise();
-    await db.commitPromise();
+    await db.commit();
+    await db.commit();
 
-    const results = await db.searchPromise('Test');
+    const results = await db.search('Test');
     assert.notEqual(Object.entries(results).length, 0);
     assert.deepEqual(results[0].result, matrixEvent);
   });

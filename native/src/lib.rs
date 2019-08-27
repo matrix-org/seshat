@@ -154,7 +154,7 @@ declare_types! {
             }
         }
 
-        method commit(mut cx) {
+        method commitSync(mut cx) {
             let wait: bool = match cx.argument_opt(0) {
                 Some(w) => w.downcast::<JsBoolean>().or_throw(&mut cx)?.value(),
                 None => false,
@@ -180,7 +180,7 @@ declare_types! {
             }
         }
 
-        method search(mut cx) {
+        method searchSync(mut cx) {
             let term: String = cx.argument::<JsString>(0)?.value();
 
             let mut this = cx.this();
