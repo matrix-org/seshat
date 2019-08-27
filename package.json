@@ -17,6 +17,7 @@
   },
   "scripts": {
     "install": "neon build",
-    "test": "mocha"
+    "test": "mocha",
+    "lint": "eslint lib/index.js"
   }
 }
