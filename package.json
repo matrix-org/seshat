@@ -9,10 +9,11 @@
     "neon-cli": "^0.3.0"
   },
   "devDependencies": {
-    "chai": "*",
+    "jsdoc": "^3.6.3",
+    "chai": "^4.2.0",
+    "mocha": "^6.2.0",
     "eslint": "^6.2.2",
-    "eslint-config-google": "^0.13.0",
-    "mocha": "*"
+    "eslint-config-google": "^0.13.0"
   },
   "scripts": {
     "install": "neon build",
