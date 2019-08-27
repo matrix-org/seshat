@@ -98,7 +98,7 @@ declare_types! {
            )
         }
 
-        method add_event(mut cx) {
+        method addEvent(mut cx) {
             let event = cx.argument::<JsObject>(0)?;
             let event = parse_event(&mut cx, *event)?;
 
@@ -120,7 +120,7 @@ declare_types! {
             Ok(cx.undefined().upcast())
         }
 
-        method commit_async(mut cx) {
+        method commitAsync(mut cx) {
             let f = cx.argument::<JsFunction>(0)?;
             let mut this = cx.this();
 
@@ -201,7 +201,7 @@ declare_types! {
             Ok(results.upcast())
         }
 
-        method search_async(mut cx) {
+        method searchAsync(mut cx) {
             let term: String = cx.argument::<JsString>(0)?.value();
             let f = cx.argument::<JsFunction>(1)?;
             let mut this = cx.this();
