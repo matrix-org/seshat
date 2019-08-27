@@ -49,7 +49,7 @@ impl Task for CommitTask {
 
 struct SearchTask {
     inner: Searcher,
-    term: String
+    term: String,
 }
 
 impl Task for SearchTask {
@@ -75,10 +75,8 @@ impl Task for SearchTask {
         }
 
         Ok(results.upcast())
-
     }
 }
-
 
 declare_types! {
     pub class Seshat for SeshatDatabase {
@@ -191,7 +189,7 @@ declare_types! {
                 db.search(&term)
             };
 
-			let results = JsArray::new(&mut cx, ret.len() as u32);
+            let results = JsArray::new(&mut cx, ret.len() as u32);
 
             for (i, element) in ret.iter().enumerate() {
                 let object = search_result_to_js(&mut cx, element);
@@ -220,7 +218,10 @@ declare_types! {
     }
 }
 
-fn search_result_to_js<'a, C: Context<'a>>(cx: &mut C, element: &(f32, String, i64)) -> Handle<'a, JsObject> {
+fn search_result_to_js<'a, C: Context<'a>>(
+    cx: &mut C,
+    element: &(f32, String, i64),
+) -> Handle<'a, JsObject> {
     let (score, source, _) = &*element;
 
     let rank = cx.number(f64::from(*score));
