@@ -28,13 +28,23 @@ use tempfile::tempdir;
 
 use crate::index::{Index, Writer, IndexSearcher};
 
+/// Struct representing a Matrix event that should be added to the database.
 #[derive(Debug, PartialEq, Default, Clone)]
 pub struct Event {
+    /// The textual representation of a message, this part of the event will be
+    /// indexed.
     pub body: String,
+    /// The unique identifier of this event.
     pub event_id: String,
+    /// The MXID of the user who sent this event.
     pub sender: String,
+    /// Timestamp in milliseconds on the originating homeserver when this event
+    /// was sent.
     pub server_ts: i64,
+    /// The ID of the room associated with this event.
     pub room_id: String,
+    /// The serialized json string of the event. This string will be returned
+    /// by a search later on.
     pub source: String,
 }
 
@@ -71,7 +81,8 @@ impl From<tantivy::Error> for Error {
 }
 
 impl Event {
-    pub fn new(
+    #[cfg(test)]
+    pub(crate) fn new(
         body: &str,
         event_id: &str,
         sender: &str,
@@ -90,12 +101,16 @@ impl Event {
     }
 }
 
+/// A users profile information at the time an event was posted.
 pub struct Profile {
+    /// The users display name if one is set.
     pub display_name: Option<String>,
+    /// The user's avatar URL if they have set one.
     pub avatar_url: Option<String>,
 }
 
 impl Profile {
+    #[cfg(test)]
     pub fn new(display_name: &str, avatar_url: &str) -> Profile {
         Profile {
             display_name: Some(display_name.to_string()),
@@ -104,12 +119,17 @@ impl Profile {
     }
 }
 
+/// The main entry point to the index and database.
 pub struct Searcher {
     inner: IndexSearcher,
     database: Arc<PooledConnection<SqliteConnectionManager>>,
 }
 
 impl Searcher {
+    /// Search the index and return events matching a search term.
+    /// # Arguments
+    ///
+    /// * `term` - The search term that should be used to search the index.
     pub fn search(&self, term: &str) -> Vec<(f32, String, i64)> {
         let search_result = self.inner.search(term);
 
@@ -117,6 +137,7 @@ impl Searcher {
             return vec![]
         }
 
+        // TODO load the profile information as well.
         match Database::load_events(&self.database, &search_result) {
             Ok(result) => result,
             Err(_e) => vec![],
@@ -126,6 +147,7 @@ impl Searcher {
 
 unsafe impl Send for Searcher {}
 
+/// The Seshat database.
 pub struct Database {
     connection: Arc<PooledConnection<SqliteConnectionManager>>,
     _pool: r2d2::Pool<SqliteConnectionManager>,
@@ -137,6 +159,11 @@ pub struct Database {
 }
 
 impl Database {
+    /// Create a new Seshat database or open an existing one.
+    /// # Arguments
+    ///
+    /// * `path` - The directory where the database will be stored in. This
+    /// should be an empty directory if a new database will be created.
     pub fn new<P: AsRef<Path>>(path: P) -> Result<Database> {
         let db_path = path.as_ref().join("events.db");
         let manager = SqliteConnectionManager::file(&db_path);
@@ -218,31 +245,50 @@ impl Database {
         (t_handle, tx, pair2)
     }
 
+    /// Add an event with the given profile to the database.
+    /// # Arguments
+    ///
+    /// * `event` - The directory where the database will be stored in. This
+    /// * `profile` - The directory where the database will be stored in. This
+    ///
+    /// This is a fast non-blocking operation, it only queues up the event to be
+    /// added to the database. The events will be commited to the database
+    /// only when the user calls the `commit()` method.
     pub fn add_event(&self, event: Event, profile: Profile) {
         let message = ThreadMessage::Event((event, profile));
         self.tx.send(message).unwrap();
     }
 
+    /// Commit the currently queued up events. This method will block. A
+    /// non-blocking version of this method exists in the `commit_no_wait()`
+    /// method. Getting a Condvar that will signal that the commit was done is
+    /// possible using the `commit_get_cvar()` method.
     pub fn commit(&mut self) -> usize {
         let (last_opstamp, cvar) = self.commit_get_cvar();
         self.last_opstamp = Database::wait_for_commit(last_opstamp, &cvar);
         self.last_opstamp
     }
 
+    /// Reload the database to reflect the latest commit.
     pub fn reload(&mut self) -> Result<()> {
         self.index.reload()?;
         Ok(())
     }
 
+    /// Commit the currently queued up events without waiting for confirmation
+    /// that the operation is done.
     pub fn commit_no_wait(&mut self) {
         self.tx.send(ThreadMessage::Write).unwrap();
     }
 
+    /// Commit the currently queued up events and get a Condvar that will be
+    /// notified when the commit operation is done.
     pub fn commit_get_cvar(&mut self) -> (usize, Arc<(Mutex<AtomicUsize>, Condvar)>) {
         self.tx.send(ThreadMessage::Write).unwrap();
         (self.last_opstamp, self.condvar.clone())
     }
 
+    /// Wait for a Convdvar returned by `commit_get_cvar()` to trigger.
     pub fn wait_for_commit(
         last_opstamp: usize,
         condvar: &Arc<(Mutex<AtomicUsize>, Condvar)>,
@@ -398,11 +444,18 @@ impl Database {
         Ok(events)
     }
 
+    /// Search the index and return events matching a search term.
+    /// This is just a helper function that gets a searcher and performs a
+    /// search on it immediately.
+    /// # Arguments
+    ///
+    /// * `term` - The search term that should be used to search the index.
     pub fn search(&self, term: &str) -> Vec<(f32, String, i64)> {
         let searcher = self.get_searcher();
         searcher.search(term)
     }
 
+    /// Get a searcher that can be used to perform a search.
     pub fn get_searcher(&self) -> Searcher {
         let index_searcher = self.index.get_searcher();
         Searcher { inner: index_searcher, database: self.connection.clone() }
