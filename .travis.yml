@@ -1,4 +1,6 @@
 matrix:
+  allow_failures:
+    - os: windows
   include:
     - os: linux
       language: rust
