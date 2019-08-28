@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/matrix-org/seshat.svg?branch=master)](https://travis-ci.org/matrix-org/seshat)
+
 # Seshat
 
 Seshat is a database and indexer for Matrix events.
