@@ -16,6 +16,7 @@ before_install:
   - npm install
 
 script:
+  - cargo test
   - cd seshat-node
   - yarn install
   - yarn test
