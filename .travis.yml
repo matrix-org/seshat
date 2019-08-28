@@ -4,6 +4,14 @@ matrix:
       language: rust
       env:
         - TRAVIS_NODE_VERSION="12"
+    - os: osx
+      language: rust
+      env:
+        - TRAVIS_NODE_VERSION="12"
+    - os: windows
+      language: rust
+      env:
+        - TRAVIS_NODE_VERSION="12"
 
 cache: cargo
 
