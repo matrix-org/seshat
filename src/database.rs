@@ -308,8 +308,8 @@ impl Database {
             "CREATE TABLE IF NOT EXISTS profiles (
                 id INTEGER NOT NULL PRIMARY KEY,
                 user_id TEXT NOT NULL,
-                display_name TEXT,
-                avatar_url TEXT,
+                display_name TEXT NOT NULL,
+                avatar_url TEXT NOT NULL,
                 UNIQUE(user_id,display_name,avatar_url)
             )",
             NO_PARAMS,
@@ -343,16 +343,31 @@ impl Database {
         user_id: &str,
         profile: &Profile,
     ) -> Result<i64> {
-        let user_id = user_id.to_owned();
+        let display_name = profile.display_name.as_ref();
+        let avatar_url = profile.avatar_url.as_ref();
+
+        // unwrap_or_default doesn't work on references sadly.
+        let display_name = if let Some(d) = display_name {
+            d
+        } else {
+            ""
+        };
+
+        let avatar_url = if let Some(a) = avatar_url {
+            a
+        } else {
+            ""
+        };
+
         connection.execute(
             "
             INSERT OR IGNORE INTO profiles (
                 user_id, display_name, avatar_url
             ) VALUES(?1, ?2, ?3)",
             &[
-                &user_id as &dyn ToSql,
-                &profile.display_name,
-                &profile.avatar_url,
+                user_id,
+                display_name,
+                avatar_url,
             ],
         )?;
 
@@ -360,12 +375,12 @@ impl Database {
             "
             SELECT id FROM profiles WHERE (
                 user_id=?1
-                and (display_name is null or display_name=?2)
-                and (avatar_url is null or avatar_url=?3))",
+                and display_name=?2
+                and avatar_url=?3)",
             &[
-                &user_id as &dyn ToSql,
-                &profile.display_name,
-                &profile.avatar_url,
+                user_id,
+                display_name,
+                avatar_url
             ],
             |row| row.get(0),
         )?;
@@ -604,4 +619,30 @@ fn save_and_search() {
     let result = db.search("Test");
     assert!(!result.is_empty());
     assert_eq!(result[0].1, EVENT.source);
+}
+
+#[test]
+fn duplicate_empty_profiles() {
+    let tmpdir = tempdir().unwrap();
+    let mut db = Database::new(&tmpdir).unwrap();
+    let profile = Profile {display_name: None, avatar_url: None};
+    let user_id = "@alice.example.org";
+
+    let first_id = Database::save_profile(&db.connection, user_id, &profile).unwrap();
+    let second_id = Database::save_profile(&db.connection, user_id, &profile).unwrap();
+
+    assert_eq!(first_id, second_id);
+
+    let mut stmt = db.connection.prepare("SELECT id FROM profiles WHERE user_id=?1").unwrap();
+
+    let profile_ids = stmt.query_map(&[user_id], |row| row.get(0)).unwrap();
+
+    let mut id_count = 0;
+
+    for row in profile_ids {
+        let (profile_id): i64 = row.unwrap();
+        id_count += 1;
+    }
+
+    assert_eq!(id_count, 1);
 }
