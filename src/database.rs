@@ -102,6 +102,7 @@ impl Event {
 }
 
 /// A users profile information at the time an event was posted.
+#[derive(Debug, PartialEq, Default, Clone)]
 pub struct Profile {
     /// The users display name if one is set.
     pub display_name: Option<String>,
