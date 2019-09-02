@@ -389,6 +389,19 @@ impl Database {
         Ok(profile_id)
     }
 
+    pub(crate) fn load_profile(
+        connection: &PooledConnection<SqliteConnectionManager>,
+        profile_id: i64,
+    ) -> Result<Profile> {
+        let profile = connection.query_row(
+            "SELECT display_name, avatar_url FROM profiles WHERE id=?1",
+            &[profile_id],
+            |row| Ok(Profile {display_name: row.get(0)?, avatar_url: row.get(1)?}),
+        )?;
+
+        Ok(profile)
+    }
+
     pub(crate) fn save_event_helper(
         connection: &PooledConnection<SqliteConnectionManager>,
         event: &Event,
@@ -646,4 +659,18 @@ fn duplicate_empty_profiles() {
     }
 
     assert_eq!(id_count, 1);
+}
+
+#[test]
+fn load_a_profile() {
+    let tmpdir = tempdir().unwrap();
+    let mut db = Database::new(&tmpdir).unwrap();
+
+    let profile = Profile::new("Alice", "");
+    let user_id = "@alice.example.org";
+    let profile_id = Database::save_profile(&db.connection, user_id, &profile).unwrap();
+
+    let loaded_profile = Database::load_profile(&db.connection, profile_id).unwrap();
+
+    assert_eq!(profile, loaded_profile);
 }
