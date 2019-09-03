@@ -26,6 +26,17 @@ use tantivy;
 #[cfg(test)]
 use tempfile::tempdir;
 
+#[cfg(test)]
+use fake::{Faker, Dummy, Fake};
+
+#[cfg(test)]
+use fake::faker::name::raw::*;
+#[cfg(test)]
+use fake::faker::internet::raw::*;
+#[cfg(test)]
+use fake::locales::*;
+
+
 use crate::index::{Index, Writer, IndexSearcher};
 
 /// Struct representing a Matrix event that should be added to the database.
@@ -46,6 +57,21 @@ pub struct Event {
     /// The serialized json string of the event. This string will be returned
     /// by a search later on.
     pub source: String,
+}
+
+#[cfg(test)]
+impl<T> Dummy<T> for Event {
+    fn dummy_with_rng<R: ?Sized>(config: &T, rng: &mut R) -> Self {
+        let domain: String = FreeEmailProvider(EN).fake();
+        Event::new(
+            "Hello world",
+            &format!("${}:{}", (0..10).fake::<u8>(), &domain),
+            &format!("@{}:{}", Username(EN).fake::<String>(), FreeEmailProvider(EN).fake::<String>()),
+            151636_2244026,
+            "!test_room:localhost",
+            EVENT_SOURCE
+        )
+    }
 }
 
 enum ThreadMessage {
@@ -464,6 +490,78 @@ impl Database {
         }
     }
 
+    /// Load events surounding the given event.
+    pub fn load_event_context(
+        connection: &PooledConnection<SqliteConnectionManager>,
+        event: &Event,
+        before_limit: usize,
+        after_limit: usize
+    ) -> (Vec<String>, Vec<String>) {
+        let before = if before_limit == 0 {
+            vec![]
+        } else {
+            let mut stmt = connection.prepare(
+                "SELECT source
+                 FROM events WHERE (
+                     (event_id != ?1) &
+                     (room_id == ?2) &
+                     (server_ts <= ?3)
+                 ) ORDER BY server_ts DESC LIMIT ?4
+                 ",
+            ).unwrap();
+            let context = stmt.query_map(
+                &vec![
+                    &event.event_id as &dyn ToSql,
+                    &event.room_id,
+                    &event.server_ts,
+                    &(before_limit as i64)
+                ],
+                |row| {row.get(0)}
+            ).unwrap();
+            let mut ret: Vec<String> = Vec::new();
+
+            for row in context {
+                let event_source: String = row.unwrap();
+                ret.push(event_source)
+            }
+
+            ret
+        };
+
+        let after = if after_limit == 0 {
+            vec![]
+        } else {
+            let mut stmt = connection.prepare(
+                "SELECT source
+                 FROM events WHERE (
+                     (event_id != ?1) &
+                     (room_id == ?2) &
+                     (server_ts >= ?3)
+                 ) ORDER BY server_ts ASC LIMIT ?4
+                 ",
+            ).unwrap();
+            let context = stmt.query_map(
+                &vec![
+                    &event.event_id as &dyn ToSql,
+                    &event.room_id,
+                    &event.server_ts,
+                    &(after_limit as i64)
+                ],
+                |row| {row.get(0)}
+            ).unwrap();
+            let mut ret: Vec<String> = Vec::new();
+
+            for row in context {
+                let event_source: String = row.unwrap();
+                ret.push(event_source)
+            }
+
+            ret
+        };
+
+        (before, after)
+    }
+
     pub(crate) fn load_events(
         connection: &PooledConnection<SqliteConnectionManager>,
         search_result: &[(f32, String)],
@@ -714,4 +812,57 @@ fn duplicate_events() {
     let searcher = db.index.get_searcher();
     let result = searcher.search("Test");
     assert_eq!(result.len(), 1);
+}
+
+#[test]
+fn load_event_context() {
+    let tmpdir = tempdir().unwrap();
+    let mut db = Database::new(&tmpdir).unwrap();
+    let profile = Profile::new("Alice", "");
+
+    db.add_event(EVENT.clone(), profile.clone());
+
+    let mut before_event = None;
+
+    for i in 1..6 {
+        let mut event: Event = Faker.fake();
+        event.server_ts = EVENT.server_ts - i;
+        event.source = format!("Hello before event {}", i);
+
+        if before_event.is_none() {
+            before_event = Some(event.clone());
+        }
+
+        db.add_event(event, profile.clone());
+    };
+
+    let mut after_event = None;
+
+    for i in 1..6 {
+        let mut event: Event = Faker.fake();
+        event.server_ts = EVENT.server_ts + i;
+        event.source = format!("Hello after event {}", i);
+
+        if after_event.is_none() {
+            after_event = Some(event.clone());
+        }
+
+        db.add_event(event, profile.clone());
+    }
+
+    db.commit();
+    db.reload().unwrap();
+    db.reload().unwrap();
+
+    let (before, after) = Database::load_event_context(
+        &db.connection,
+        &EVENT,
+        1,
+        1
+    );
+
+    assert_eq!(before.len(), 1);
+    assert_eq!(before[0], before_event.as_ref().unwrap().source);
+    assert_eq!(after.len(), 1);
+    assert_eq!(after[0], after_event.as_ref().unwrap().source);
 }
