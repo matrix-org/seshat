@@ -222,7 +222,9 @@ impl Database {
                                 // Write the events
                                 // TODO all of this should be a single sqlite transaction
                                 for (e, p) in &events {
-                                    // TODO check if the event was already stored
+                                    if Database::event_in_store(&connection, &e) {
+                                        continue
+                                    }
                                     Database::save_event(&connection, e, p).unwrap();
                                     index_writer.add_event(&e.body, &e.event_id);
                                 }
@@ -430,14 +432,36 @@ impl Database {
         event: &Event,
         profile: &Profile,
     ) -> Result<()> {
+        if Database::event_in_store(connection, event) {
+            return Ok(());
+        }
+
         let profile_id = Database::save_profile(connection, &event.sender, profile)?;
         Database::save_event_helper(connection, event, profile_id)?;
 
         Ok(())
     }
 
-    pub(crate) fn event_in_store(&self) -> bool {
-        false
+    pub(crate) fn event_in_store(
+        connection: &PooledConnection<SqliteConnectionManager>,
+        event: &Event
+    ) -> bool {
+        let ret: std::result::Result<i64, rusqlite::Error> = connection.query_row(
+            "
+            SELECT id FROM events WHERE (
+                event_id=?1
+                and room_id=?2)",
+            &[
+                &event.event_id,
+                &event.room_id,
+            ],
+            |row| row.get(0),
+        );
+
+        match ret {
+            Ok(_event_id) => true,
+            Err(_e) => false
+        }
     }
 
     pub(crate) fn load_events(
@@ -673,4 +697,21 @@ fn load_a_profile() {
     let loaded_profile = Database::load_profile(&db.connection, profile_id).unwrap();
 
     assert_eq!(profile, loaded_profile);
+}
+
+#[test]
+fn duplicate_events() {
+    let tmpdir = tempdir().unwrap();
+    let mut db = Database::new(&tmpdir).unwrap();
+    let profile = Profile::new("Alice", "");
+
+    db.add_event(EVENT.clone(), profile.clone());
+    db.add_event(EVENT.clone(), profile.clone());
+
+    db.commit();
+    db.reload().unwrap();
+
+    let searcher = db.index.get_searcher();
+    let result = searcher.search("Test");
+    assert_eq!(result.len(), 1);
 }
