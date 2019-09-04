@@ -136,9 +136,9 @@ pub struct SearchResult {
     /// The source of the event that matched a search.
     pub event_source: String,
     /// Events that happened before our matched event.
-    pub before_events: Vec<String>,
+    pub events_before: Vec<String>,
     /// Events that happened after our matched event.
-    pub after_events: Vec<String>,
+    pub events_after: Vec<String>,
     /// The profile os the sender of the matched event.
     pub profile: Profile
 }

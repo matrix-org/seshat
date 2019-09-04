@@ -511,8 +511,8 @@ impl Database {
             );
             let result = SearchResult {
                 event_source: event.source,
-                before_events: before,
-                after_events: after,
+                events_before: before,
+                events_after: after,
                 profile
             };
             events.push((scores[i], result));
