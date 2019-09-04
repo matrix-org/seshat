@@ -14,16 +14,16 @@
 
 use std::collections::HashMap;
 
-use tantivy;
 use r2d2;
 use rusqlite;
+use tantivy;
 
-#[cfg(test)]
-use fake::{Dummy, Fake};
 #[cfg(test)]
 use fake::faker::internet::raw::*;
 #[cfg(test)]
 use fake::locales::*;
+#[cfg(test)]
+use fake::{Dummy, Fake};
 
 /// Struct representing a Matrix event that should be added to the database.
 #[derive(Debug, PartialEq, Default, Clone)]
@@ -52,10 +52,14 @@ impl<T> Dummy<T> for Event {
         Event::new(
             "Hello world",
             &format!("${}:{}", (0..10).fake::<u8>(), &domain),
-            &format!("@{}:{}", Username(EN).fake::<String>(), FreeEmailProvider(EN).fake::<String>()),
+            &format!(
+                "@{}:{}",
+                Username(EN).fake::<String>(),
+                FreeEmailProvider(EN).fake::<String>()
+            ),
             151636_2244026,
             "!test_room:localhost",
-            EVENT_SOURCE
+            EVENT_SOURCE,
         )
     }
 }

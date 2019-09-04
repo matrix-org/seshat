@@ -20,7 +20,7 @@ use std::sync::{Arc, Condvar, Mutex};
 use neon::prelude::*;
 use neon_serde;
 use serde_json;
-use seshat::{Database, Event, Profile, Searcher, SearchResult};
+use seshat::{Database, Event, Profile, SearchResult, Searcher};
 
 pub struct SeshatDatabase(Database);
 
@@ -51,7 +51,7 @@ struct SearchTask {
     inner: Searcher,
     term: String,
     before_limit: usize,
-    after_limit: usize
+    after_limit: usize,
 }
 
 impl Task for SearchTask {
@@ -60,7 +60,9 @@ impl Task for SearchTask {
     type JsEvent = JsValue;
 
     fn perform(&self) -> Result<Self::Output, Self::Error> {
-        Ok(self.inner.search(&self.term, self.before_limit, self.after_limit))
+        Ok(self
+            .inner
+            .search(&self.term, self.before_limit, self.after_limit))
     }
 
     fn complete(
@@ -283,7 +285,7 @@ fn search_result_to_js<'a, C: Context<'a>>(
 fn profile_to_js<'a, C: Context<'a>>(
     cx: &mut C,
     sender: String,
-    profile: Profile
+    profile: Profile,
 ) -> (Handle<'a, JsString>, Handle<'a, JsObject>) {
     let js_profile = JsObject::new(&mut *cx);
 
@@ -295,7 +297,9 @@ fn profile_to_js<'a, C: Context<'a>>(
             js_profile.set(&mut *cx, "display_name", js_name).unwrap();
         }
         None => {
-            js_profile.set(&mut *cx, "display_name", JsNull::new()).unwrap();
+            js_profile
+                .set(&mut *cx, "display_name", JsNull::new())
+                .unwrap();
         }
     };
 
@@ -305,7 +309,9 @@ fn profile_to_js<'a, C: Context<'a>>(
             js_profile.set(&mut *cx, "avatar_url", js_avatar).unwrap();
         }
         None => {
-            js_profile.set(&mut *cx, "avatar_url", JsNull::new()).unwrap();
+            js_profile
+                .set(&mut *cx, "avatar_url", JsNull::new())
+                .unwrap();
         }
     }
 

@@ -53,7 +53,7 @@ pub struct IndexSearcher {
     pub(crate) topic_field: tv::schema::Field,
     pub(crate) name_field: tv::schema::Field,
     pub(crate) event_id_field: tv::schema::Field,
-    pub(crate) query_parser: tv::query::QueryParser
+    pub(crate) query_parser: tv::query::QueryParser,
 }
 
 impl IndexSearcher {
@@ -65,7 +65,10 @@ impl IndexSearcher {
             Err(_e) => return vec![],
         };
 
-        let result = match self.inner.search(&query, &tv::collector::TopDocs::with_limit(10)) {
+        let result = match self
+            .inner
+            .search(&query, &tv::collector::TopDocs::with_limit(10))
+        {
             Ok(result) => result,
             Err(_e) => return vec![],
         };

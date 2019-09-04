@@ -15,24 +15,24 @@
 use r2d2::PooledConnection;
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::{Connection, ToSql, NO_PARAMS};
+use std::collections::HashMap;
 use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 use std::thread::JoinHandle;
-use std::collections::HashMap;
 
+#[cfg(test)]
+use fake::{Fake, Faker};
 #[cfg(test)]
 use tempfile::tempdir;
-#[cfg(test)]
-use fake::{Faker, Fake};
 
-use crate::index::{Index, Writer, IndexSearcher};
-use crate::types::{Event, SearchResult, Result, ThreadMessage, Profile};
+use crate::index::{Index, IndexSearcher, Writer};
+use crate::types::{Event, Profile, Result, SearchResult, ThreadMessage};
 
 #[cfg(test)]
-use crate::types::{EVENT};
+use crate::types::EVENT;
 
 /// The main entry point to the index and database.
 pub struct Searcher {
@@ -45,24 +45,14 @@ impl Searcher {
     /// # Arguments
     ///
     /// * `term` - The search term that should be used to search the index.
-    pub fn search(
-        &self,
-        term: &str,
-        before_limit: usize,
-        after_limit: usize,
-    ) -> Vec<SearchResult> {
+    pub fn search(&self, term: &str, before_limit: usize, after_limit: usize) -> Vec<SearchResult> {
         let search_result = self.inner.search(term);
 
         if search_result.is_empty() {
-            return vec![]
+            return vec![];
         }
 
-        match Database::load_events(
-            &self.database,
-            &search_result,
-            before_limit,
-            after_limit
-        ) {
+        match Database::load_events(&self.database, &search_result, before_limit, after_limit) {
             Ok(result) => result,
             Err(_e) => vec![],
         }
@@ -146,7 +136,7 @@ impl Database {
                                 // TODO all of this should be a single sqlite transaction
                                 for (e, p) in &events {
                                     if Database::event_in_store(&connection, &e) {
-                                        continue
+                                        continue;
                                     }
                                     Database::save_event(&connection, e, p).unwrap();
                                     index_writer.add_event(&e.body, &e.event_id);
@@ -275,28 +265,16 @@ impl Database {
         let avatar_url = profile.avatar_url.as_ref();
 
         // unwrap_or_default doesn't work on references sadly.
-        let display_name = if let Some(d) = display_name {
-            d
-        } else {
-            ""
-        };
+        let display_name = if let Some(d) = display_name { d } else { "" };
 
-        let avatar_url = if let Some(a) = avatar_url {
-            a
-        } else {
-            ""
-        };
+        let avatar_url = if let Some(a) = avatar_url { a } else { "" };
 
         connection.execute(
             "
             INSERT OR IGNORE INTO profiles (
                 user_id, display_name, avatar_url
             ) VALUES(?1, ?2, ?3)",
-            &[
-                user_id,
-                display_name,
-                avatar_url,
-            ],
+            &[user_id, display_name, avatar_url],
         )?;
 
         let profile_id: i64 = connection.query_row(
@@ -305,11 +283,7 @@ impl Database {
                 user_id=?1
                 and display_name=?2
                 and avatar_url=?3)",
-            &[
-                user_id,
-                display_name,
-                avatar_url
-            ],
+            &[user_id, display_name, avatar_url],
             |row| row.get(0),
         )?;
 
@@ -323,7 +297,12 @@ impl Database {
         let profile = connection.query_row(
             "SELECT display_name, avatar_url FROM profiles WHERE id=?1",
             &[profile_id],
-            |row| Ok(Profile {display_name: row.get(0)?, avatar_url: row.get(1)?}),
+            |row| {
+                Ok(Profile {
+                    display_name: row.get(0)?,
+                    avatar_url: row.get(1)?,
+                })
+            },
         )?;
 
         Ok(profile)
@@ -372,23 +351,20 @@ impl Database {
 
     pub(crate) fn event_in_store(
         connection: &PooledConnection<SqliteConnectionManager>,
-        event: &Event
+        event: &Event,
     ) -> bool {
         let ret: std::result::Result<i64, rusqlite::Error> = connection.query_row(
             "
             SELECT id FROM events WHERE (
                 event_id=?1
                 and room_id=?2)",
-            &[
-                &event.event_id,
-                &event.room_id,
-            ],
+            &[&event.event_id, &event.room_id],
             |row| row.get(0),
         );
 
         match ret {
             Ok(_event_id) => true,
-            Err(_e) => false
+            Err(_e) => false,
         }
     }
 
@@ -397,15 +373,16 @@ impl Database {
         connection: &PooledConnection<SqliteConnectionManager>,
         event: &Event,
         before_limit: usize,
-        after_limit: usize
+        after_limit: usize,
     ) -> (Vec<String>, Vec<String>, HashMap<String, Profile>) {
         let mut profiles: HashMap<String, Profile> = HashMap::new();
 
         let before = if before_limit == 0 {
             vec![]
         } else {
-            let mut stmt = connection.prepare(
-                "SELECT source, sender, display_name, avatar_url
+            let mut stmt = connection
+                .prepare(
+                    "SELECT source, sender, display_name, avatar_url
                  FROM events
                  INNER JOIN profiles on profiles.id = events.profile_id
                  WHERE (
@@ -414,23 +391,28 @@ impl Database {
                      (server_ts <= ?3)
                  ) ORDER BY server_ts DESC LIMIT ?4
                  ",
-            ).unwrap();
-            let context = stmt.query_map(
-                &vec![
-                    &event.event_id as &dyn ToSql,
-                    &event.room_id,
-                    &event.server_ts,
-                    &(after_limit as i64)
-                ],
-                |row| { Ok((
-                    row.get(0),
-                    row.get(1),
-                    Profile {
-                        display_name: row.get(2)?,
-                        avatar_url: row.get(3)?,
-                    }
-                ))}
-            ).unwrap();
+                )
+                .unwrap();
+            let context = stmt
+                .query_map(
+                    &vec![
+                        &event.event_id as &dyn ToSql,
+                        &event.room_id,
+                        &event.server_ts,
+                        &(after_limit as i64),
+                    ],
+                    |row| {
+                        Ok((
+                            row.get(0),
+                            row.get(1),
+                            Profile {
+                                display_name: row.get(2)?,
+                                avatar_url: row.get(3)?,
+                            },
+                        ))
+                    },
+                )
+                .unwrap();
             let mut ret: Vec<String> = Vec::new();
 
             for row in context {
@@ -445,8 +427,9 @@ impl Database {
         let after = if after_limit == 0 {
             vec![]
         } else {
-            let mut stmt = connection.prepare(
-                "SELECT source, sender, display_name, avatar_url
+            let mut stmt = connection
+                .prepare(
+                    "SELECT source, sender, display_name, avatar_url
                  FROM events
                  INNER JOIN profiles on profiles.id = events.profile_id
                  WHERE (
@@ -455,23 +438,28 @@ impl Database {
                      (server_ts >= ?3)
                  ) ORDER BY server_ts ASC LIMIT ?4
                  ",
-            ).unwrap();
-            let context = stmt.query_map(
-                &vec![
-                    &event.event_id as &dyn ToSql,
-                    &event.room_id,
-                    &event.server_ts,
-                    &(after_limit as i64)
-                ],
-                |row| { Ok((
-                    row.get(0),
-                    row.get(1),
-                    Profile {
-                        display_name: row.get(2)?,
-                        avatar_url: row.get(3)?,
-                    }
-                ))}
-            ).unwrap();
+                )
+                .unwrap();
+            let context = stmt
+                .query_map(
+                    &vec![
+                        &event.event_id as &dyn ToSql,
+                        &event.room_id,
+                        &event.server_ts,
+                        &(after_limit as i64),
+                    ],
+                    |row| {
+                        Ok((
+                            row.get(0),
+                            row.get(1),
+                            Profile {
+                                display_name: row.get(2)?,
+                                avatar_url: row.get(3)?,
+                            },
+                        ))
+                    },
+                )
+                .unwrap();
 
             let mut ret: Vec<String> = Vec::new();
 
@@ -512,32 +500,30 @@ impl Database {
         ))?;
 
         let (scores, event_ids): (Vec<f32>, Vec<String>) = search_result.iter().cloned().unzip();
-        let db_events = stmt.query_map(event_ids, |row| Ok((
-            Event {
-                body: row.get(0)?,
-                event_id: row.get(1)?,
-                sender: row.get(2)?,
-                server_ts: row.get(3)?,
-                room_id: row.get(4)?,
-                source: row.get(5)?,
-            },
-            Profile {
-                display_name: row.get(6)?,
-                avatar_url: row.get(7)?,
-            }
-        )))?;
+        let db_events = stmt.query_map(event_ids, |row| {
+            Ok((
+                Event {
+                    body: row.get(0)?,
+                    event_id: row.get(1)?,
+                    sender: row.get(2)?,
+                    server_ts: row.get(3)?,
+                    room_id: row.get(4)?,
+                    source: row.get(5)?,
+                },
+                Profile {
+                    display_name: row.get(6)?,
+                    avatar_url: row.get(7)?,
+                },
+            ))
+        })?;
 
         let mut events = Vec::new();
         let i = 0;
 
         for row in db_events {
             let (event, profile): (Event, Profile) = row?;
-            let (before, after, profiles) = Database::load_event_context(
-                connection,
-                &event,
-                before_limit,
-                after_limit
-            );
+            let (before, after, profiles) =
+                Database::load_event_context(connection, &event, before_limit, after_limit);
 
             let mut profiles = profiles;
             profiles.insert(event.sender.clone(), profile);
@@ -547,7 +533,7 @@ impl Database {
                 event_source: event.source,
                 events_before: before,
                 events_after: after,
-                profile_info: profiles
+                profile_info: profiles,
             };
             events.push(result);
         }
@@ -561,12 +547,7 @@ impl Database {
     /// # Arguments
     ///
     /// * `term` - The search term that should be used to search the index.
-    pub fn search(
-        &self,
-        term: &str,
-        before_limit: usize,
-        after_limit: usize,
-    ) -> Vec<SearchResult> {
+    pub fn search(&self, term: &str, before_limit: usize, after_limit: usize) -> Vec<SearchResult> {
         let searcher = self.get_searcher();
         searcher.search(term, before_limit, after_limit)
     }
@@ -574,7 +555,10 @@ impl Database {
     /// Get a searcher that can be used to perform a search.
     pub fn get_searcher(&self) -> Searcher {
         let index_searcher = self.index.get_searcher();
-        Searcher { inner: index_searcher, database: self.connection.clone() }
+        Searcher {
+            inner: index_searcher,
+            database: self.connection.clone(),
+        }
     }
 }
 
@@ -641,14 +625,16 @@ fn load_event() {
     let profile = Profile::new("Alice", "");
 
     Database::save_event(&db.connection, &EVENT, &profile).unwrap();
-    let events = Database::load_events(&db.connection, &[
+    let events = Database::load_events(
+        &db.connection,
+        &[
             (1.0, "$15163622445EBvZJ:localhost".to_string()),
             (0.3, "$FAKE".to_string()),
         ],
         0,
-        0
-        )
-        .unwrap();
+        0,
+    )
+    .unwrap();
 
     assert_eq!(*EVENT.source, events[0].event_source)
 }
@@ -673,14 +659,16 @@ fn save_the_event_multithreaded() {
     db.commit();
     db.reload().unwrap();
 
-    let events = Database::load_events(&db.connection, &[
+    let events = Database::load_events(
+        &db.connection,
+        &[
             (1.0, "$15163622445EBvZJ:localhost".to_string()),
             (0.3, "$FAKE".to_string()),
-            ],
-            0,
-            0
-        )
-        .unwrap();
+        ],
+        0,
+        0,
+    )
+    .unwrap();
 
     assert_eq!(*EVENT.source, events[0].event_source)
 }
@@ -706,7 +694,10 @@ fn save_and_search() {
 fn duplicate_empty_profiles() {
     let tmpdir = tempdir().unwrap();
     let db = Database::new(&tmpdir).unwrap();
-    let profile = Profile {display_name: None, avatar_url: None};
+    let profile = Profile {
+        display_name: None,
+        avatar_url: None,
+    };
     let user_id = "@alice.example.org";
 
     let first_id = Database::save_profile(&db.connection, user_id, &profile).unwrap();
@@ -714,7 +705,10 @@ fn duplicate_empty_profiles() {
 
     assert_eq!(first_id, second_id);
 
-    let mut stmt = db.connection.prepare("SELECT id FROM profiles WHERE user_id=?1").unwrap();
+    let mut stmt = db
+        .connection
+        .prepare("SELECT id FROM profiles WHERE user_id=?1")
+        .unwrap();
 
     let profile_ids = stmt.query_map(&[user_id], |row| row.get(0)).unwrap();
 
@@ -779,7 +773,7 @@ fn load_event_context() {
         }
 
         db.add_event(event, profile.clone());
-    };
+    }
 
     let mut after_event = None;
 
@@ -799,12 +793,7 @@ fn load_event_context() {
     db.reload().unwrap();
     db.reload().unwrap();
 
-    let (before, after, _) = Database::load_event_context(
-        &db.connection,
-        &EVENT,
-        1,
-        1
-    );
+    let (before, after, _) = Database::load_event_context(&db.connection, &EVENT, 1, 1);
 
     assert_eq!(before.len(), 1);
     assert_eq!(before[0], before_event.as_ref().unwrap().source);

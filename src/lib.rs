@@ -16,11 +16,9 @@
 
 #![deny(missing_docs)]
 
-
 #[cfg(test)]
 #[macro_use]
 extern crate lazy_static;
-
 
 mod database;
 mod index;
