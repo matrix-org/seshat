@@ -72,6 +72,12 @@ pub struct Database {
     index: Index,
 }
 
+type WriterRet = (
+    JoinHandle<()>,
+    Sender<ThreadMessage>,
+    Arc<(Mutex<AtomicUsize>, Condvar)>,
+);
+
 impl Database {
     /// Create a new Seshat database or open an existing one.
     /// # Arguments
@@ -109,11 +115,7 @@ impl Database {
     fn spawn_writer(
         connection: PooledConnection<SqliteConnectionManager>,
         mut index_writer: Writer,
-    ) -> (
-        JoinHandle<()>,
-        Sender<ThreadMessage>,
-        Arc<(Mutex<AtomicUsize>, Condvar)>,
-    ) {
+    ) -> WriterRet {
         let (tx, rx): (_, Receiver<ThreadMessage>) = channel();
 
         let pair = Arc::new((Mutex::new(AtomicUsize::new(0)), Condvar::new()));
