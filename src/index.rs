@@ -57,7 +57,7 @@ pub struct IndexSearcher {
 }
 
 impl IndexSearcher {
-    pub fn search(&self, term: &str) -> Vec<(f32, String)> {
+    pub fn search(&self, term: &str, limit: usize) -> Vec<(f32, String)> {
         // TODO we might want to propagate those errors instead of returning
         // empty vectors.
         let query = match self.query_parser.parse_query(term) {
@@ -67,7 +67,7 @@ impl IndexSearcher {
 
         let result = match self
             .inner
-            .search(&query, &tv::collector::TopDocs::with_limit(10))
+            .search(&query, &tv::collector::TopDocs::with_limit(limit))
         {
             Ok(result) => result,
             Err(_e) => return vec![],
@@ -162,7 +162,7 @@ fn add_an_event() {
     index.reload().unwrap();
 
     let searcher = index.get_searcher();
-    let result = searcher.search("Test");
+    let result = searcher.search("Test", 10);
 
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].1, event_id)

@@ -45,8 +45,14 @@ impl Searcher {
     /// # Arguments
     ///
     /// * `term` - The search term that should be used to search the index.
-    pub fn search(&self, term: &str, before_limit: usize, after_limit: usize) -> Vec<SearchResult> {
-        let search_result = self.inner.search(term);
+    pub fn search(
+        &self,
+        term: &str,
+        limit: usize,
+        before_limit: usize,
+        after_limit: usize,
+    ) -> Vec<SearchResult> {
+        let search_result = self.inner.search(term, limit);
 
         if search_result.is_empty() {
             return vec![];
@@ -550,9 +556,15 @@ impl Database {
     /// # Arguments
     ///
     /// * `term` - The search term that should be used to search the index.
-    pub fn search(&self, term: &str, before_limit: usize, after_limit: usize) -> Vec<SearchResult> {
+    pub fn search(
+        &self,
+        term: &str,
+        limit: usize,
+        before_limit: usize,
+        after_limit: usize,
+    ) -> Vec<SearchResult> {
         let searcher = self.get_searcher();
-        searcher.search(term, before_limit, after_limit)
+        searcher.search(term, limit, before_limit, after_limit)
     }
 
     /// Get a searcher that can be used to perform a search.
@@ -688,7 +700,7 @@ fn save_and_search() {
 
     assert_eq!(opstamp, 1);
 
-    let result = db.search("Test", 0, 0);
+    let result = db.search("Test", 10, 0, 0);
     assert!(!result.is_empty());
     assert_eq!(result[0].event_source, EVENT.source);
 }
@@ -752,7 +764,7 @@ fn duplicate_events() {
     db.reload().unwrap();
 
     let searcher = db.index.get_searcher();
-    let result = searcher.search("Test");
+    let result = searcher.search("Test", 10);
     assert_eq!(result.len(), 1);
 }
 
