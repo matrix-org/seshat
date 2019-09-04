@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+
 use tantivy;
 use r2d2;
 use rusqlite;
@@ -140,7 +142,7 @@ pub struct SearchResult {
     /// Events that happened after our matched event.
     pub events_after: Vec<String>,
     /// The profile os the sender of the matched event.
-    pub profile: Profile
+    pub profile_info: HashMap<String, Profile>
 }
 
 #[cfg(test)]

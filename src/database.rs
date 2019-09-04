@@ -21,6 +21,7 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 use std::thread::JoinHandle;
+use std::collections::HashMap;
 
 #[cfg(test)]
 use tempfile::tempdir;
@@ -392,13 +393,17 @@ impl Database {
         event: &Event,
         before_limit: usize,
         after_limit: usize
-    ) -> (Vec<String>, Vec<String>) {
+    ) -> (Vec<String>, Vec<String>, HashMap<String, Profile>) {
+        let mut profiles: HashMap<String, Profile> = HashMap::new();
+
         let before = if before_limit == 0 {
             vec![]
         } else {
             let mut stmt = connection.prepare(
-                "SELECT source
-                 FROM events WHERE (
+                "SELECT source, sender, display_name, avatar_url
+                 FROM events 
+                 INNER JOIN profiles on profiles.id = events.profile_id
+                 WHERE (
                      (event_id != ?1) &
                      (room_id == ?2) &
                      (server_ts <= ?3)
@@ -410,15 +415,23 @@ impl Database {
                     &event.event_id as &dyn ToSql,
                     &event.room_id,
                     &event.server_ts,
-                    &(before_limit as i64)
+                    &(after_limit as i64)
                 ],
-                |row| {row.get(0)}
+                |row| { Ok((
+                    row.get(0),
+                    row.get(1),
+                    Profile {
+                        display_name: row.get(2)?,
+                        avatar_url: row.get(3)?,
+                    }
+                ))}
             ).unwrap();
             let mut ret: Vec<String> = Vec::new();
 
             for row in context {
-                let event_source: String = row.unwrap();
-                ret.push(event_source)
+                let (source, sender, profile) = row.unwrap();
+                profiles.insert(sender.unwrap(), profile);
+                ret.push(source.unwrap())
             }
 
             ret
@@ -428,8 +441,10 @@ impl Database {
             vec![]
         } else {
             let mut stmt = connection.prepare(
-                "SELECT source
-                 FROM events WHERE (
+                "SELECT source, sender, display_name, avatar_url
+                 FROM events 
+                 INNER JOIN profiles on profiles.id = events.profile_id
+                 WHERE (
                      (event_id != ?1) &
                      (room_id == ?2) &
                      (server_ts >= ?3)
@@ -443,19 +458,28 @@ impl Database {
                     &event.server_ts,
                     &(after_limit as i64)
                 ],
-                |row| {row.get(0)}
+                |row| { Ok((
+                    row.get(0),
+                    row.get(1),
+                    Profile {
+                        display_name: row.get(2)?,
+                        avatar_url: row.get(3)?,
+                    }
+                ))}
             ).unwrap();
+
             let mut ret: Vec<String> = Vec::new();
 
             for row in context {
-                let event_source: String = row.unwrap();
-                ret.push(event_source)
+                let (source, sender, profile) = row.unwrap();
+                profiles.insert(sender.unwrap(), profile);
+                ret.push(source.unwrap())
             }
 
             ret
         };
 
-        (before, after)
+        (before, after, profiles)
     }
 
     pub(crate) fn load_events(
@@ -503,17 +527,21 @@ impl Database {
 
         for row in db_events {
             let (event, profile): (Event, Profile) = row?;
-            let (before, after) = Database::load_event_context(
+            let (before, after, profiles) = Database::load_event_context(
                 connection,
                 &event,
                 before_limit,
                 after_limit
             );
+
+            let mut profiles = profiles;
+            profiles.insert(event.sender.clone(), profile);
+
             let result = SearchResult {
                 event_source: event.source,
                 events_before: before,
                 events_after: after,
-                profile
+                profile_info: profiles
             };
             events.push((scores[i], result));
         }
@@ -666,7 +694,7 @@ fn save_and_search() {
 #[test]
 fn duplicate_empty_profiles() {
     let tmpdir = tempdir().unwrap();
-    let mut db = Database::new(&tmpdir).unwrap();
+    let db = Database::new(&tmpdir).unwrap();
     let profile = Profile {display_name: None, avatar_url: None};
     let user_id = "@alice.example.org";
 
@@ -682,7 +710,7 @@ fn duplicate_empty_profiles() {
     let mut id_count = 0;
 
     for row in profile_ids {
-        let (profile_id): i64 = row.unwrap();
+        let _profile_id: i64 = row.unwrap();
         id_count += 1;
     }
 
@@ -760,7 +788,7 @@ fn load_event_context() {
     db.reload().unwrap();
     db.reload().unwrap();
 
-    let (before, after) = Database::load_event_context(
+    let (before, after, _) = Database::load_event_context(
         &db.connection,
         &EVENT,
         1,
