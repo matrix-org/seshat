@@ -290,6 +290,7 @@ impl Database {
         Ok(profile_id)
     }
 
+    #[cfg(test)]
     pub(crate) fn load_profile(
         connection: &PooledConnection<SqliteConnectionManager>,
         profile_id: i64,
