@@ -17,17 +17,17 @@ const seshat = require('../native');
 /**
  * @typedef searchResult
  * @type {Object}
- * @property {Number} rank The rank of the search result.
+ * @property {number} rank The rank of the search result.
  * @property {Object} matrixEvent The full event of the search result.
  */
 
 /**
  * @typedef matrixEvent
  * @type {Object}
- * @property {String} event_id The unique ID of the event.
- * @property {String} sender The MXID of the user who sent this event.
- * @property {String} room_id The ID of the room where the event was sent.
- * @property {Number} origin_server_ts The timestamp in milliseconds of the
+ * @property {string} event_id The unique ID of the event.
+ * @property {string} sender The MXID of the user who sent this event.
+ * @property {string} room_id The ID of the room where the event was sent.
+ * @property {number} origin_server_ts The timestamp in milliseconds of the
  * originating homeserver when this event was sent.
  * @property {Object} content The content of the event. The content needs to
  * have either a body, topic or name key.
@@ -36,8 +36,8 @@ const seshat = require('../native');
 /**
  * @typedef matrixProfile
  * @type {Object}
- * @property {String} display_name The users display name, if one is set.
- * @property {String} avatar_url THe users avatar url, if one is set.
+ * @property {string} display_name The users display name, if one is set.
+ * @property {string} avatar_url THe users avatar url, if one is set.
  */
 
 
@@ -48,7 +48,7 @@ const seshat = require('../native');
  * search can be done on the database retrieving events that match a search
  * query.
  *
- * @param {String} path The path where the database should be stored. If a
+ * @param {string} path The path where the database should be stored. If a
  * database already exist in the given folder the database will be reused.
  *
  * @constructor
@@ -102,8 +102,8 @@ class Seshat extends seshat.Seshat {
   /**
    * Commit the queued up events to the database.
    *
-   * @param  {bool} wait Wait for the events to be commited. If true will block
-   * until the events are commited.
+   * @param  {boolean} wait Wait for the events to be commited. If true will
+   * block until the events are commited.
    *
    * @return {number} The latest stamp of the commit. The stamp is a unique
    * incrementing number that identifies the commit.
@@ -127,13 +127,17 @@ class Seshat extends seshat.Seshat {
    * method.
    *
    * @param  {string} term The term that is used to search the database.
+   * @param  {number} before_limit The number of events to fetch that preceded
+   * the event that matched the search term.
+   * @param  {number} after_limit The number of events to fetch that followed
+   * the event that matched the search term.
    *
    * @return {Promise<Array.<searchResult>>} The array of events that matched
    * the search term.
    */
-  async search(term) {
+  async search(term, before_limit = 0, after_limit = 0) {
     return new Promise((resolve) => {
-      this.searchAsync(term, (err, res) => {
+      this.searchAsync(term, before_limit, after_limit, (err, res) => {
         resolve(res);
       });
     });
@@ -142,12 +146,16 @@ class Seshat extends seshat.Seshat {
   /**
    * Search the database for events using the given search term.
    * @param  {string} term The term that is used to search the database.
+   * @param  {number} before_limit The number of events to fetch that preceded
+   * the event that matched the search term.
+   * @param  {number} after_limit The number of events to fetch that followed
+   * the event that matched the search term.
    *
    * @return {Array.<searchResult>} The array of events that matched the search
    * term.
    */
-  searchSync(term) {
-    return super.searchSync(term);
+  searchSync(term, before_limit = 0, after_limit = 0) {
+    return super.searchSync(term, before_limit, after_limit);
   }
 }
 
