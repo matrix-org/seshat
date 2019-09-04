@@ -55,7 +55,7 @@ struct SearchTask {
 }
 
 impl Task for SearchTask {
-    type Output = Vec<(f32, SearchResult)>;
+    type Output = Vec<SearchResult>;
     type Error = String;
     type JsEvent = JsValue;
 
@@ -233,11 +233,9 @@ declare_types! {
 
 fn search_result_to_js<'a, C: Context<'a>>(
     cx: &mut C,
-    element: (f32, SearchResult),
+    mut result: SearchResult,
 ) -> Handle<'a, JsObject> {
-    let (score, mut result) = element;
-
-    let rank = cx.number(f64::from(score));
+    let rank = cx.number(f64::from(result.score));
 
     // TODO handle these unwraps. While it is unlikely that deserialization will
     // fail since we control what gets inserted into the database and we
