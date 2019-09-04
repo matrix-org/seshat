@@ -242,6 +242,8 @@ impl Database {
                 sender TEXT NOT NULL,
                 server_ts DATETIME NOT NULL,
                 room_id TEXT NOT NULL,
+                content_value TEXT NOT NULL,
+                type TEXT NOT NULL,
                 source TEXT NOT NULL,
                 profile_id INTEGER NOT NULL,
                 FOREIGN KEY (profile_id) REFERENCES profile (id),
@@ -329,13 +331,16 @@ impl Database {
         connection.execute(
             "
             INSERT OR IGNORE INTO events (
-                event_id, sender, server_ts, room_id, source, profile_id
-            ) VALUES(?1, ?2, ?3, ?4, ?5, ?6)",
+                event_id, sender, server_ts, room_id, content_value, type,
+                source, profile_id
+            ) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
             &[
                 &event.event_id,
                 &event.sender,
                 &event.server_ts.to_string(),
                 &event.room_id,
+                &event.body,
+                "m.room.message",
                 &event.source,
                 &profile_id.to_string(),
             ],
@@ -469,7 +474,7 @@ impl Database {
             .collect::<String>();
 
         let mut stmt = connection.prepare(&format!(
-            "SELECT event_id, sender, server_ts, room_id, source, display_name, avatar_url
+            "SELECT content_value, event_id, sender, server_ts, room_id, source, display_name, avatar_url
              FROM events
              INNER JOIN profiles on profiles.id = events.profile_id
              WHERE event_id IN (?{})
@@ -480,16 +485,16 @@ impl Database {
         let (scores, event_ids): (Vec<f32>, Vec<String>) = search_result.iter().cloned().unzip();
         let db_events = stmt.query_map(event_ids, |row| Ok((
             Event {
-                body: "".to_owned(),
-                event_id: row.get(0)?,
-                sender: row.get(1)?,
-                server_ts: row.get(2)?,
-                room_id: row.get(3)?,
-                source: row.get(4)?,
+                body: row.get(0)?,
+                event_id: row.get(1)?,
+                sender: row.get(2)?,
+                server_ts: row.get(3)?,
+                room_id: row.get(4)?,
+                source: row.get(5)?,
             },
             Profile {
-                display_name: row.get(5)?,
-                avatar_url: row.get(6)?,
+                display_name: row.get(6)?,
+                avatar_url: row.get(7)?,
             }
         )))?;
 
