@@ -58,8 +58,6 @@ pub struct IndexSearcher {
 
 impl IndexSearcher {
     pub fn search(&self, term: &str) -> Vec<(f32, String)> {
-        // TODO this should be in a separate struct so we can run the search in
-        // a separate thread/task in node.
         let query = match self.query_parser.parse_query(term) {
             Ok(q) => q,
             Err(_e) => panic!("WHAAAAT")

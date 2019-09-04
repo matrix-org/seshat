@@ -30,8 +30,6 @@ use tempfile::tempdir;
 use fake::{Faker, Dummy, Fake};
 
 #[cfg(test)]
-use fake::faker::name::raw::*;
-#[cfg(test)]
 use fake::faker::internet::raw::*;
 #[cfg(test)]
 use fake::locales::*;
@@ -61,7 +59,7 @@ pub struct Event {
 
 #[cfg(test)]
 impl<T> Dummy<T> for Event {
-    fn dummy_with_rng<R: ?Sized>(config: &T, rng: &mut R) -> Self {
+    fn dummy_with_rng<R: ?Sized>(_config: &T, _rng: &mut R) -> Self {
         let domain: String = FreeEmailProvider(EN).fake();
         Event::new(
             "Hello world",
@@ -146,6 +144,19 @@ impl Profile {
     }
 }
 
+#[derive(Debug, PartialEq, Default, Clone)]
+/// A search result
+pub struct SearchResult {
+    /// The source of the event that matched a search.
+    pub event_source: String,
+    /// Events that happened before our matched event.
+    pub before_events: Vec<String>,
+    /// Events that happened after our matched event.
+    pub after_events: Vec<String>,
+    /// The profile os the sender of the matched event.
+    pub profile: Profile
+}
+
 /// The main entry point to the index and database.
 pub struct Searcher {
     inner: IndexSearcher,
@@ -157,15 +168,19 @@ impl Searcher {
     /// # Arguments
     ///
     /// * `term` - The search term that should be used to search the index.
-    pub fn search(&self, term: &str) -> Vec<(f32, String, i64)> {
+    pub fn search(&self, term: &str, before_limit: usize, after_limit: usize) -> Vec<(f32, SearchResult)> {
         let search_result = self.inner.search(term);
 
         if search_result.is_empty() {
             return vec![]
         }
 
-        // TODO load the profile information as well.
-        match Database::load_events(&self.database, &search_result) {
+        match Database::load_events(
+            &self.database,
+            &search_result,
+            before_limit,
+            after_limit
+        ) {
             Ok(result) => result,
             Err(_e) => vec![],
         }
@@ -565,7 +580,9 @@ impl Database {
     pub(crate) fn load_events(
         connection: &PooledConnection<SqliteConnectionManager>,
         search_result: &[(f32, String)],
-    ) -> rusqlite::Result<Vec<(f32, String, i64)>> {
+        before_limit: usize,
+        after_limit: usize,
+    ) -> rusqlite::Result<Vec<(f32, SearchResult)>> {
         if search_result.is_empty() {
             return Ok(vec![]);
         }
@@ -576,20 +593,48 @@ impl Database {
             .collect::<String>();
 
         let mut stmt = connection.prepare(&format!(
-            "SELECT source, profile_id
-             FROM events WHERE event_id IN (?{})
+            "SELECT event_id, sender, server_ts, room_id, source, display_name, avatar_url
+             FROM events
+             INNER JOIN profiles on profiles.id = events.profile_id
+             WHERE event_id IN (?{})
              ",
             &parameter_str
         ))?;
+
         let (scores, event_ids): (Vec<f32>, Vec<String>) = search_result.iter().cloned().unzip();
-        let db_events = stmt.query_map(event_ids, |row| Ok((row.get(0)?, row.get(1)?)))?;
+        let db_events = stmt.query_map(event_ids, |row| Ok((
+            Event {
+                body: "".to_owned(),
+                event_id: row.get(0)?,
+                sender: row.get(1)?,
+                server_ts: row.get(2)?,
+                room_id: row.get(3)?,
+                source: row.get(4)?,
+            },
+            Profile {
+                display_name: row.get(5)?,
+                avatar_url: row.get(6)?,
+            }
+        )))?;
 
         let mut events = Vec::new();
         let i = 0;
 
         for row in db_events {
-            let (e, p_id): (String, i64) = row?;
-            events.push((scores[i], e, p_id));
+            let (event, profile): (Event, Profile) = row?;
+            let (before, after) = Database::load_event_context(
+                connection,
+                &event,
+                before_limit,
+                after_limit
+            );
+            let result = SearchResult {
+                event_source: event.source,
+                before_events: before,
+                after_events: after,
+                profile
+            };
+            events.push((scores[i], result));
         }
 
         Ok(events)
@@ -601,9 +646,9 @@ impl Database {
     /// # Arguments
     ///
     /// * `term` - The search term that should be used to search the index.
-    pub fn search(&self, term: &str) -> Vec<(f32, String, i64)> {
+    pub fn search(&self, term: &str, before_limit: usize, after_limit: usize) -> Vec<(f32, SearchResult)> {
         let searcher = self.get_searcher();
-        searcher.search(term)
+        searcher.search(term, before_limit, after_limit)
     }
 
     /// Get a searcher that can be used to perform a search.
@@ -705,10 +750,13 @@ fn load_event() {
     let events = Database::load_events(&db.connection, &[
             (1.0, "$15163622445EBvZJ:localhost".to_string()),
             (0.3, "$FAKE".to_string()),
-        ])
+        ],
+        0,
+        0
+        )
         .unwrap();
 
-    assert_eq!(*EVENT.source, events[0].1)
+    assert_eq!(*EVENT.source, events[0].1.event_source)
 }
 
 #[test]
@@ -734,10 +782,13 @@ fn save_the_event_multithreaded() {
     let events = Database::load_events(&db.connection, &[
             (1.0, "$15163622445EBvZJ:localhost".to_string()),
             (0.3, "$FAKE".to_string()),
-        ])
+            ],
+            0,
+            0
+        )
         .unwrap();
 
-    assert_eq!(*EVENT.source, events[0].1)
+    assert_eq!(*EVENT.source, events[0].1.event_source)
 }
 
 #[test]
@@ -752,9 +803,9 @@ fn save_and_search() {
 
     assert_eq!(opstamp, 1);
 
-    let result = db.search("Test");
+    let result = db.search("Test", 0, 0);
     assert!(!result.is_empty());
-    assert_eq!(result[0].1, EVENT.source);
+    assert_eq!(result[0].1.event_source, EVENT.source);
 }
 
 #[test]
@@ -786,7 +837,7 @@ fn duplicate_empty_profiles() {
 #[test]
 fn load_a_profile() {
     let tmpdir = tempdir().unwrap();
-    let mut db = Database::new(&tmpdir).unwrap();
+    let db = Database::new(&tmpdir).unwrap();
 
     let profile = Profile::new("Alice", "");
     let user_id = "@alice.example.org";
