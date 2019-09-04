@@ -127,6 +127,8 @@ class Seshat extends seshat.Seshat {
    * method.
    *
    * @param  {string} term The term that is used to search the database.
+   * @param  {number} limit The maximum number of events that the search should
+   * return.
    * @param  {number} before_limit The number of events to fetch that preceded
    * the event that matched the search term.
    * @param  {number} after_limit The number of events to fetch that followed
@@ -135,9 +137,9 @@ class Seshat extends seshat.Seshat {
    * @return {Promise<Array.<searchResult>>} The array of events that matched
    * the search term.
    */
-  async search(term, before_limit = 0, after_limit = 0) {
+  async search(term, limit = 10, before_limit = 0, after_limit = 0) {
     return new Promise((resolve) => {
-      this.searchAsync(term, before_limit, after_limit, (err, res) => {
+      this.searchAsync(term, limit, before_limit, after_limit, (err, res) => {
         resolve(res);
       });
     });
@@ -146,6 +148,8 @@ class Seshat extends seshat.Seshat {
   /**
    * Search the database for events using the given search term.
    * @param  {string} term The term that is used to search the database.
+   * @param  {number} limit The maximum number of events that the search should
+   * return.
    * @param  {number} before_limit The number of events to fetch that preceded
    * the event that matched the search term.
    * @param  {number} after_limit The number of events to fetch that followed
@@ -154,8 +158,8 @@ class Seshat extends seshat.Seshat {
    * @return {Array.<searchResult>} The array of events that matched the search
    * term.
    */
-  searchSync(term, before_limit = 0, after_limit = 0) {
-    return super.searchSync(term, before_limit, after_limit);
+  searchSync(term, limit = 10, before_limit = 0, after_limit = 0) {
+    return super.searchSync(term, limit, before_limit, after_limit);
   }
 }
 

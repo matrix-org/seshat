@@ -50,6 +50,7 @@ impl Task for CommitTask {
 struct SearchTask {
     inner: Searcher,
     term: String,
+    limit: usize,
     before_limit: usize,
     after_limit: usize,
 }
@@ -62,7 +63,7 @@ impl Task for SearchTask {
     fn perform(&self) -> Result<Self::Output, Self::Error> {
         Ok(self
             .inner
-            .search(&self.term, self.before_limit, self.after_limit))
+            .search(&self.term, self.limit, self.before_limit, self.after_limit))
     }
 
     fn complete(
@@ -184,15 +185,16 @@ declare_types! {
 
         method searchSync(mut cx) {
             let term: String = cx.argument::<JsString>(0)?.value();
-            let before_limit: usize = cx.argument::<JsNumber>(1)?.value() as usize;
-            let after_limit: usize = cx.argument::<JsNumber>(2)?.value() as usize;
+            let limit: usize = cx.argument::<JsNumber>(1)?.value() as usize;
+            let before_limit: usize = cx.argument::<JsNumber>(2)?.value() as usize;
+            let after_limit: usize = cx.argument::<JsNumber>(3)?.value() as usize;
 
             let mut this = cx.this();
 
             let mut ret = {
                 let guard = cx.lock();
                 let db = &mut this.borrow_mut(&guard).0;
-                db.search(&term, before_limit, after_limit)
+                db.search(&term, limit, before_limit, after_limit)
             };
 
             let results = JsArray::new(&mut cx, ret.len() as u32);
@@ -207,10 +209,11 @@ declare_types! {
 
         method searchAsync(mut cx) {
             let term: String = cx.argument::<JsString>(0)?.value();
-            let before_limit: usize = cx.argument::<JsNumber>(1)?.value() as usize;
-            let after_limit: usize = cx.argument::<JsNumber>(2)?.value() as usize;
+            let limit: usize = cx.argument::<JsNumber>(1)?.value() as usize;
+            let before_limit: usize = cx.argument::<JsNumber>(2)?.value() as usize;
+            let after_limit: usize = cx.argument::<JsNumber>(3)?.value() as usize;
 
-            let f = cx.argument::<JsFunction>(3)?;
+            let f = cx.argument::<JsFunction>(4)?;
 
             let mut this = cx.this();
 
@@ -223,6 +226,7 @@ declare_types! {
             let task = SearchTask {
                 inner: searcher,
                 term,
+                limit,
                 before_limit,
                 after_limit
             };

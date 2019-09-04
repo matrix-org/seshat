@@ -108,7 +108,7 @@ describe('Database', function() {
 
   it('should return a search result for the stored event using promises', async function() {
     const db = createDb();
-    db.addEvent(matrixEvent, matrixProfile);
+    db.addEvent(matrixEvent, matrixProfileOnlyDisplayName);
 
     const opstamp = await db.commit();
     assert.equal(opstamp, 1);
