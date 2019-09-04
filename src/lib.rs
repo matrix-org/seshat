@@ -24,9 +24,11 @@ extern crate lazy_static;
 
 mod database;
 mod index;
+mod types;
 
 pub use database::Database;
-pub use database::Event;
-pub use database::Profile;
 pub use database::Searcher;
-pub use database::SearchResult;
+
+pub use types::Event;
+pub use types::Profile;
+pub use types::SearchResult;
