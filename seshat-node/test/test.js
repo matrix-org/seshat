@@ -108,7 +108,7 @@ describe('Database', function() {
 
   it('should return a search result for the stored event using promises', async function() {
     const db = createDb();
-    db.addEvent(matrixEvent);
+    db.addEvent(matrixEvent, matrixProfile);
 
     const opstamp = await db.commit();
     assert.equal(opstamp, 1);
@@ -116,6 +116,9 @@ describe('Database', function() {
     await db.commit();
 
     const results = await db.search('Test');
+    // console.log(results)
+    // console.log(results[0].context.profile_info)
+    // console.log(results[0].result.content)
     assert.notEqual(Object.entries(results).length, 0);
     assert.deepEqual(results[0].result, matrixEvent);
   });
