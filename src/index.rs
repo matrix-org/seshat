@@ -58,14 +58,16 @@ pub struct IndexSearcher {
 
 impl IndexSearcher {
     pub fn search(&self, term: &str) -> Vec<(f32, String)> {
+        // TODO we might want to propagate those errors instead of returning
+        // empty vectors.
         let query = match self.query_parser.parse_query(term) {
             Ok(q) => q,
-            Err(_e) => panic!("WHAAAAT")
+            Err(_e) => return vec![],
         };
 
         let result = match self.inner.search(&query, &tv::collector::TopDocs::with_limit(10)) {
             Ok(result) => result,
-            Err(_e) => panic!("ERRRO FOR RESULT")
+            Err(_e) => return vec![],
         };
 
         let mut docs = Vec::new();
