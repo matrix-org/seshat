@@ -135,6 +135,8 @@ impl Profile {
 #[derive(Debug, PartialEq, Default, Clone)]
 /// A search result
 pub struct SearchResult {
+    /// The score that the full text search assigned to this event.
+    pub score: f32,
     /// The source of the event that matched a search.
     pub event_source: String,
     /// Events that happened before our matched event.
@@ -142,7 +144,7 @@ pub struct SearchResult {
     /// Events that happened after our matched event.
     pub events_after: Vec<String>,
     /// The profile os the sender of the matched event.
-    pub profile_info: HashMap<String, Profile>
+    pub profile_info: HashMap<String, Profile>,
 }
 
 #[cfg(test)]

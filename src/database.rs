@@ -45,7 +45,12 @@ impl Searcher {
     /// # Arguments
     ///
     /// * `term` - The search term that should be used to search the index.
-    pub fn search(&self, term: &str, before_limit: usize, after_limit: usize) -> Vec<(f32, SearchResult)> {
+    pub fn search(
+        &self,
+        term: &str,
+        before_limit: usize,
+        after_limit: usize,
+    ) -> Vec<SearchResult> {
         let search_result = self.inner.search(term);
 
         if search_result.is_empty() {
@@ -487,7 +492,7 @@ impl Database {
         search_result: &[(f32, String)],
         before_limit: usize,
         after_limit: usize,
-    ) -> rusqlite::Result<Vec<(f32, SearchResult)>> {
+    ) -> rusqlite::Result<Vec<SearchResult>> {
         if search_result.is_empty() {
             return Ok(vec![]);
         }
@@ -538,12 +543,13 @@ impl Database {
             profiles.insert(event.sender.clone(), profile);
 
             let result = SearchResult {
+                score: scores[i],
                 event_source: event.source,
                 events_before: before,
                 events_after: after,
                 profile_info: profiles
             };
-            events.push((scores[i], result));
+            events.push(result);
         }
 
         Ok(events)
@@ -555,7 +561,12 @@ impl Database {
     /// # Arguments
     ///
     /// * `term` - The search term that should be used to search the index.
-    pub fn search(&self, term: &str, before_limit: usize, after_limit: usize) -> Vec<(f32, SearchResult)> {
+    pub fn search(
+        &self,
+        term: &str,
+        before_limit: usize,
+        after_limit: usize,
+    ) -> Vec<SearchResult> {
         let searcher = self.get_searcher();
         searcher.search(term, before_limit, after_limit)
     }
@@ -639,7 +650,7 @@ fn load_event() {
         )
         .unwrap();
 
-    assert_eq!(*EVENT.source, events[0].1.event_source)
+    assert_eq!(*EVENT.source, events[0].event_source)
 }
 
 #[test]
@@ -671,7 +682,7 @@ fn save_the_event_multithreaded() {
         )
         .unwrap();
 
-    assert_eq!(*EVENT.source, events[0].1.event_source)
+    assert_eq!(*EVENT.source, events[0].event_source)
 }
 
 #[test]
@@ -688,7 +699,7 @@ fn save_and_search() {
 
     let result = db.search("Test", 0, 0);
     assert!(!result.is_empty());
-    assert_eq!(result[0].1.event_source, EVENT.source);
+    assert_eq!(result[0].event_source, EVENT.source);
 }
 
 #[test]
