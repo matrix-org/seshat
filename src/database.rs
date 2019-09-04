@@ -401,7 +401,7 @@ impl Database {
         } else {
             let mut stmt = connection.prepare(
                 "SELECT source, sender, display_name, avatar_url
-                 FROM events 
+                 FROM events
                  INNER JOIN profiles on profiles.id = events.profile_id
                  WHERE (
                      (event_id != ?1) &
@@ -442,7 +442,7 @@ impl Database {
         } else {
             let mut stmt = connection.prepare(
                 "SELECT source, sender, display_name, avatar_url
-                 FROM events 
+                 FROM events
                  INNER JOIN profiles on profiles.id = events.profile_id
                  WHERE (
                      (event_id != ?1) &
