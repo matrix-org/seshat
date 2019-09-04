@@ -243,9 +243,29 @@ fn search_result_to_js<'a, C: Context<'a>>(
     let source = neon_serde::to_value(&mut *cx, &source).unwrap();
 
     let object = JsObject::new(&mut *cx);
+    let context = JsObject::new(&mut *cx);
+
+    let before = JsArray::new(&mut *cx, result.events_before.len() as u32);
+    let after = JsArray::new(&mut *cx, result.events_after.len() as u32);
+
+    for (i, event) in result.events_before.iter().enumerate() {
+        let js_event: serde_json::Value = serde_json::from_str(event).unwrap();
+        let js_event = neon_serde::to_value(&mut *cx, &js_event).unwrap();
+        before.set(&mut *cx, i as u32, js_event).unwrap();
+    }
+
+    for (i, event) in result.events_after.iter().enumerate() {
+        let js_event: serde_json::Value = serde_json::from_str(event).unwrap();
+        let js_event = neon_serde::to_value(&mut *cx, &js_event).unwrap();
+        after.set(&mut *cx, i as u32, js_event).unwrap();
+    }
+
+    context.set(&mut *cx, "events_before", before).unwrap();
+    context.set(&mut *cx, "events_after", after).unwrap();
 
     object.set(&mut *cx, "rank", rank).unwrap();
     object.set(&mut *cx, "result", source).unwrap();
+    object.set(&mut *cx, "context", context).unwrap();
 
     object
 }
