@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::sync::mpsc::Sender;
 
 use r2d2;
 use rusqlite;
@@ -70,8 +71,16 @@ impl<T> Dummy<T> for Event {
     }
 }
 
+pub(crate) type BacklogEventsT = (
+    BacklogCheckpoint,
+    Option<BacklogCheckpoint>,
+    Vec<(Event, Profile)>,
+    Sender<Result<()>>,
+);
+
 pub(crate) enum ThreadMessage {
     Event((Event, Profile)),
+    BacklogEvents(BacklogEventsT),
     Write,
 }
 

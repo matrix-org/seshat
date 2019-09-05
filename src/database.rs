@@ -29,7 +29,9 @@ use fake::{Fake, Faker};
 use tempfile::tempdir;
 
 use crate::index::{Index, IndexSearcher, Writer};
-use crate::types::{BacklogCheckpoint, Event, Profile, Result, SearchResult, ThreadMessage};
+use crate::types::{
+    BacklogCheckpoint, BacklogEventsT, Event, Profile, Result, SearchResult, ThreadMessage,
+};
 
 #[cfg(test)]
 use crate::types::EVENT;
@@ -118,12 +120,11 @@ impl Database {
         Ok(Index::new(path)?)
     }
 
-    fn write_queued_events(
-        connection: &PooledConnection<SqliteConnectionManager>,
+    fn write_events_helper(
+        connection: &rusqlite::Connection,
         index_writer: &mut Writer,
-        events: &mut Vec<(Event, Profile)>) -> Result<()> {
-        // Write the events
-        // TODO all of this should be a single sqlite transaction
+        events: &mut Vec<(Event, Profile)>,
+    ) -> Result<()> {
         for (e, p) in events.drain(..) {
             if Database::event_in_store(&connection, &e) {
                 continue;
@@ -131,13 +132,48 @@ impl Database {
             Database::save_event(&connection, &e, &p)?;
             index_writer.add_event(&e.body, &e.event_id);
         }
+
+        Ok(())
+    }
+
+    fn write_queued_events(
+        connection: &rusqlite::Connection,
+        index_writer: &mut Writer,
+        events: &mut Vec<(Event, Profile)>,
+    ) -> Result<()> {
+        Database::write_events_helper(connection, index_writer, events)?;
+        index_writer.commit()?;
+
+        Ok(())
+    }
+
+    fn write_backlog_events(
+        connection: &mut rusqlite::Connection,
+        index_writer: &mut Writer,
+        message: (
+            BacklogCheckpoint,
+            Option<BacklogCheckpoint>,
+            Vec<(Event, Profile)>,
+        ),
+    ) -> Result<()> {
+        let (new_checkpoint, old_checkpoint, mut events) = message;
+        let transaction = connection.transaction()?;
+
+        Database::write_events_helper(&transaction, index_writer, &mut events)?;
+        Database::replace_backlog_checkpoint(
+            &transaction,
+            &new_checkpoint,
+            old_checkpoint.as_ref(),
+        )?;
+
+        transaction.commit()?;
         index_writer.commit()?;
 
         Ok(())
     }
 
     fn spawn_writer(
-        connection: PooledConnection<SqliteConnectionManager>,
+        mut connection: PooledConnection<SqliteConnectionManager>,
         mut index_writer: Writer,
     ) -> WriterRet {
         let (tx, rx): (_, Receiver<ThreadMessage>) = channel();
@@ -161,11 +197,21 @@ impl Database {
                                 Database::write_queued_events(
                                     &connection,
                                     &mut index_writer,
-                                    &mut events
-                                ).unwrap();
+                                    &mut events,
+                                )
+                                .unwrap();
                                 // Notify that we are done with the write.
                                 opstamp.fetch_add(1, Ordering::SeqCst);
                                 cvar.notify_all();
+                            }
+                            ThreadMessage::BacklogEvents(m) => {
+                                let (check, old_check, events, sender) = m;
+                                let ret = Database::write_backlog_events(
+                                    &mut connection,
+                                    &mut index_writer,
+                                    (check, old_check, events),
+                                );
+                                sender.send(ret).unwrap_or(());
                             }
                         };
                     }
@@ -235,6 +281,21 @@ impl Database {
         *opstamp.get_mut()
     }
 
+    /// Add the given events from the backlog to the database.
+    pub fn add_backlog_events(
+        &self,
+        events: Vec<(Event, Profile)>,
+        new_checkpoint: BacklogCheckpoint,
+        old_checkpoint: Option<BacklogCheckpoint>,
+    ) -> Receiver<Result<()>> {
+        let (sender, receiver): (_, Receiver<Result<()>>) = channel();
+        let payload = (new_checkpoint, old_checkpoint, events, sender);
+        let message = ThreadMessage::BacklogEvents(payload);
+        self.tx.send(message).unwrap();
+
+        receiver
+    }
+
     fn create_tables(conn: &Connection) -> Result<()> {
         conn.execute(
             "CREATE TABLE IF NOT EXISTS profiles (
@@ -283,7 +344,7 @@ impl Database {
     }
 
     pub(crate) fn save_profile(
-        connection: &PooledConnection<SqliteConnectionManager>,
+        connection: &rusqlite::Connection,
         user_id: &str,
         profile: &Profile,
     ) -> Result<i64> {
@@ -336,7 +397,7 @@ impl Database {
     }
 
     pub(crate) fn save_event_helper(
-        connection: &PooledConnection<SqliteConnectionManager>,
+        connection: &rusqlite::Connection,
         event: &Event,
         profile_id: i64,
     ) -> Result<()> {
@@ -362,7 +423,7 @@ impl Database {
     }
 
     pub(crate) fn save_event(
-        connection: &PooledConnection<SqliteConnectionManager>,
+        connection: &rusqlite::Connection,
         event: &Event,
         profile: &Profile,
     ) -> Result<()> {
@@ -376,10 +437,7 @@ impl Database {
         Ok(())
     }
 
-    pub(crate) fn event_in_store(
-        connection: &PooledConnection<SqliteConnectionManager>,
-        event: &Event,
-    ) -> bool {
+    pub(crate) fn event_in_store(connection: &rusqlite::Connection, event: &Event) -> bool {
         let ret: std::result::Result<i64, rusqlite::Error> = connection.query_row(
             "
             SELECT id FROM events WHERE (
@@ -595,32 +653,33 @@ impl Database {
     }
 
     pub(crate) fn replace_backlog_checkpoint(
-        transaction: rusqlite::Transaction,
+        connection: &rusqlite::Connection,
         new: &BacklogCheckpoint,
         old: Option<&BacklogCheckpoint>,
     ) -> Result<()> {
-        transaction.execute(
+        connection.execute(
             "INSERT OR IGNORE INTO backlogcheckpoints (room_id, token)
             VALUES(?1, ?2)",
             &[&new.room_id, &new.token],
         )?;
 
         if let Some(checkpoint) = old {
-            transaction.execute(
+            connection.execute(
                 "DELETE FROM backlogcheckpoints
                 WHERE (room_id=?1 AND token=?2)",
                 &[&checkpoint.room_id, &checkpoint.token],
             )?;
         }
 
-        transaction.commit()?;
-
         Ok(())
     }
 
-    pub(crate) fn load_checkpoints(
-        connection: &PooledConnection<SqliteConnectionManager>,
-    ) -> Result<Vec<BacklogCheckpoint>> {
+    /// Load all the previously stored backlog checkpoints from the database.
+    /// # Arguments
+    ///
+    /// * `connection` - The database connection that should be used to load the
+    /// checkpoints.
+    pub fn load_checkpoints(connection: &rusqlite::Connection) -> Result<Vec<BacklogCheckpoint>> {
         let mut stmt = connection.prepare("SELECT room_id, token FROM backlogcheckpoints")?;
 
         let rows = stmt.query_map(NO_PARAMS, |row| {
@@ -642,7 +701,7 @@ impl Database {
 
     #[cfg(test)]
     pub(crate) fn get_connection(&mut self) -> Result<PooledConnection<SqliteConnectionManager>> {
-        let mut connection = self._pool.get()?;
+        let connection = self._pool.get()?;
         Ok(connection)
     }
 }
@@ -899,7 +958,8 @@ fn save_and_load_checkpoints() {
     let mut connection = db.get_connection().unwrap();
     let transaction = connection.transaction().unwrap();
 
-    Database::replace_backlog_checkpoint(transaction, &checkpoint, None).unwrap();
+    Database::replace_backlog_checkpoint(&transaction, &checkpoint, None).unwrap();
+    transaction.commit().unwrap();
 
     let checkpoints = Database::load_checkpoints(&connection).unwrap();
 
@@ -910,11 +970,38 @@ fn save_and_load_checkpoints() {
         token: "12345".to_string(),
     };
 
-    let transaction = connection.transaction().unwrap();
-    Database::replace_backlog_checkpoint(transaction, &new_checkpoint, Some(&checkpoint)).unwrap();
+    Database::replace_backlog_checkpoint(&connection, &new_checkpoint, Some(&checkpoint)).unwrap();
 
     let checkpoints = Database::load_checkpoints(&connection).unwrap();
 
     assert!(!checkpoints.contains(&checkpoint));
     assert!(checkpoints.contains(&new_checkpoint));
+}
+
+#[test]
+fn save_and_search_backlog_events() {
+    let tmpdir = tempdir().unwrap();
+    let mut db = Database::new(&tmpdir).unwrap();
+    let profile = Profile::new("Alice", "");
+
+    let mut events = Vec::new();
+
+    for i in 1..6 {
+        let mut event: Event = Faker.fake();
+        event.server_ts = EVENT.server_ts - i;
+        event.source = format!("Hello before event {}", i);
+        events.push((event, profile.clone()));
+    }
+
+    let checkpoint = BacklogCheckpoint {
+        room_id: "!test:room".to_string(),
+        token: "1234".to_string(),
+    };
+
+    let receiver = db.add_backlog_events(events, checkpoint.clone(), None);
+    let ret = receiver.recv().unwrap();
+    assert!(ret.is_ok());
+
+    let checkpoints = Database::load_checkpoints(&db.connection).unwrap();
+    assert!(checkpoints.contains(&checkpoint));
 }
