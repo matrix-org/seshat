@@ -118,6 +118,24 @@ impl Database {
         Ok(Index::new(path)?)
     }
 
+    fn write_queued_events(
+        connection: &PooledConnection<SqliteConnectionManager>,
+        index_writer: &mut Writer,
+        events: &mut Vec<(Event, Profile)>) -> Result<()> {
+        // Write the events
+        // TODO all of this should be a single sqlite transaction
+        for (e, p) in events.drain(..) {
+            if Database::event_in_store(&connection, &e) {
+                continue;
+            }
+            Database::save_event(&connection, &e, &p)?;
+            index_writer.add_event(&e.body, &e.event_id);
+        }
+        index_writer.commit()?;
+
+        Ok(())
+    }
+
     fn spawn_writer(
         connection: PooledConnection<SqliteConnectionManager>,
         mut index_writer: Writer,
@@ -140,21 +158,11 @@ impl Database {
                         match m {
                             ThreadMessage::Event(e) => events.push(e),
                             ThreadMessage::Write => {
-                                // Write the events
-                                // TODO all of this should be a single sqlite transaction
-                                for (e, p) in &events {
-                                    if Database::event_in_store(&connection, &e) {
-                                        continue;
-                                    }
-                                    Database::save_event(&connection, e, p).unwrap();
-                                    index_writer.add_event(&e.body, &e.event_id);
-                                }
-
-                                // Clear the event queue.
-                                events.clear();
-                                // TODO remove the unwrap.
-                                index_writer.commit().unwrap();
-
+                                Database::write_queued_events(
+                                    &connection,
+                                    &mut index_writer,
+                                    &mut events
+                                ).unwrap();
                                 // Notify that we are done with the write.
                                 opstamp.fetch_add(1, Ordering::SeqCst);
                                 cvar.notify_all();
