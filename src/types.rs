@@ -45,6 +45,12 @@ pub struct Event {
     pub source: String,
 }
 
+#[derive(Debug, PartialEq, Default, Clone)]
+pub struct BacklogCheckpoint {
+    pub room_id: String,
+    pub token: String,
+}
+
 #[cfg(test)]
 impl<T> Dummy<T> for Event {
     fn dummy_with_rng<R: ?Sized>(_config: &T, _rng: &mut R) -> Self {
