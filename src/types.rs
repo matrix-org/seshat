@@ -47,8 +47,13 @@ pub struct Event {
 }
 
 #[derive(Debug, PartialEq, Default, Clone)]
+/// A checkpoint that remembers the current point in a room timeline when
+/// fetching the backlog of the room.
 pub struct BacklogCheckpoint {
+    /// The unique id of the room that this checkpoint belongs to.
     pub room_id: String,
+    /// The token that can be used to go further back in the event timeline of
+    /// the room and fetch more messages from the backlog.
     pub token: String,
 }
 

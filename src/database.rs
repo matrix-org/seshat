@@ -30,7 +30,7 @@ use tempfile::tempdir;
 
 use crate::index::{Index, IndexSearcher, Writer};
 use crate::types::{
-    BacklogCheckpoint, BacklogEventsT, Event, Profile, Result, SearchResult, ThreadMessage,
+    BacklogCheckpoint, Event, Profile, Result, SearchResult, ThreadMessage,
 };
 
 #[cfg(test)]
@@ -282,6 +282,14 @@ impl Database {
     }
 
     /// Add the given events from the backlog to the database.
+    /// # Arguments
+    ///
+    /// * `events` - The events that will be added.
+    /// * `new_checkpoint` - A checkpoint that states where we need to continue
+    /// fetching events from the backlog. This checkpoint will be persisted in
+    /// the database.
+    /// * `old_checkpoint` - The checkpoint that was used to fetch the given
+    /// events. This checkpoint will be removed from the database.
     pub fn add_backlog_events(
         &self,
         events: Vec<(Event, Profile)>,
