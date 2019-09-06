@@ -42,6 +42,15 @@ function createDb() {
   return db;
 }
 
+const exampleEvents = [
+  {event: matrixEvent, profile: matrixProfileOnlyDisplayName}
+]
+
+const checkPoint = {
+  room_id: '!TESTROOM',
+  token: '1234'
+}
+
 describe('Database', function() {
   it('should be created succesfully.', function() {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'seshat-'));
@@ -123,6 +132,21 @@ describe('Database', function() {
     assert.deepEqual(results[0].result, matrixEvent);
   });
 
+  it('should allow messages from the backlog to be added in a batched way', async function() {
+    const db = createDb();
+    db.addBacklogEventsSync(exampleEvents, checkPoint)
+    db.reload();
+    const results = await db.search('Test');
+    assert.notEqual(Object.entries(results).length, 0);
+  });
+
+  it('should allow messages from the backlog to be added using a promise', async function() {
+    const db = createDb();
+    await db.addBacklogEvents(exampleEvents, checkPoint)
+    db.reload();
+    const results = await db.search('Test');
+    assert.notEqual(Object.entries(results).length, 0);
+  });
 
   it('should throw an error when adding events with missing fields.', function() {
     delete matrixEvent.content;
