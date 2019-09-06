@@ -11,6 +11,7 @@ tantivy = { git = "https://github.com/tantivy-search/tantivy" }
 rusqlite = "0.20"
 r2d2_sqlite = "0.12"
 r2d2 = "0.8"
+failure = "0.1.5"
 
 [dev-dependencies]
 tempfile = "3.1"

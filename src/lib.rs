@@ -30,3 +30,6 @@ pub use database::Searcher;
 pub use types::Event;
 pub use types::Profile;
 pub use types::SearchResult;
+pub use types::BacklogCheckpoint;
+pub use types::Result;
+pub use types::Error;

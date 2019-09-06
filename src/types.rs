@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 use std::sync::mpsc::Sender;
+use failure::Fail;
 
 use r2d2;
 use rusqlite;
@@ -89,13 +90,22 @@ pub(crate) enum ThreadMessage {
     Write,
 }
 
-#[derive(Debug)]
+#[derive(Fail, Debug)]
+/// Seshat error types.
 pub enum Error {
+    #[fail(display = "Sqlite pool error: {}", _0)]
+    /// Error signaling that there was an error with the Sqlite connection
+    /// pool.
     PoolError(r2d2::Error),
+    #[fail(display = "Sqlite database error: {}", _0)]
+    /// Error signaling that there was an error an Sqlite transaction.
     DatabaseError(rusqlite::Error),
+    #[fail(display = "Index error: {}", _0)]
+    /// Error signaling that there was an with the event indexer.
     IndexError(tantivy::Error),
 }
 
+/// Result type for seshat operations.
 pub type Result<T> = std::result::Result<T, Error>;
 
 impl From<r2d2::Error> for Error {
