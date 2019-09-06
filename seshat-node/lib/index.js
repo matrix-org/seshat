@@ -161,6 +161,24 @@ class Seshat extends seshat.Seshat {
   searchSync(term, limit = 10, before_limit = 0, after_limit = 0) {
     return super.searchSync(term, limit, before_limit, after_limit);
   }
+
+  addBacklogEventsSync(events, newCheckpoint = null, oldCheckPoint = null) {
+    return super.addBacklogEventsSync(events, newCheckpoint, oldCheckPoint);
+  }
+
+  async addBacklogEvents(events, newCheckpoint = null, oldCheckPoint = null) {
+    return new Promise((resolve, reject) => {
+      super.addBacklogEvents(
+          events,
+          newCheckpoint,
+          oldCheckPoint,
+          (err, res) => {
+            if (err) reject(err);
+            else resolve(res);
+          }
+      );
+    });
+  }
 }
 
 module.exports = Seshat;

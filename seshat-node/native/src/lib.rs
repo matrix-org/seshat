@@ -16,11 +16,12 @@
 extern crate neon;
 use std::sync::atomic::AtomicUsize;
 use std::sync::{Arc, Condvar, Mutex};
+use std::sync::mpsc::Receiver;
 
 use neon::prelude::*;
 use neon_serde;
 use serde_json;
-use seshat::{Database, Event, Profile, SearchResult, Searcher};
+use seshat::{Database, Event, Profile, SearchResult, Searcher, BacklogCheckpoint};
 
 pub struct SeshatDatabase(Database);
 
@@ -83,6 +84,32 @@ impl Task for SearchTask {
     }
 }
 
+struct AddBacklogTask {
+    receiver: Receiver<seshat::Result<()>>
+}
+
+impl Task for AddBacklogTask {
+    type Output = ();
+    type Error = seshat::Error;
+    type JsEvent = JsValue;
+
+    fn perform(&self) -> Result<Self::Output, Self::Error> {
+        self.receiver.recv().unwrap()
+    }
+
+    fn complete(
+        self,
+        mut cx: TaskContext,
+        result: Result<Self::Output, Self::Error>,
+    ) -> JsResult<Self::JsEvent> {
+        match result {
+            Ok(_) => Ok(cx.undefined().upcast()),
+            Err(e) => cx.throw_type_error(e.to_string()),
+        }
+    }
+}
+
+
 declare_types! {
     pub class Seshat for SeshatDatabase {
         init(mut cx) {
@@ -99,6 +126,26 @@ declare_types! {
             Ok(
                 SeshatDatabase(db)
            )
+        }
+
+        method addBacklogEventsSync(mut cx) {
+            let receiver = add_backlog_events_helper(&mut cx)?;
+            let ret = receiver.recv().unwrap();
+
+            match ret {
+                Ok(_) => Ok(cx.undefined().upcast()),
+                Err(e) => cx.throw_type_error(e.to_string()),
+            }
+        }
+
+        method addBacklogEvents(mut cx) {
+            let f = cx.argument::<JsFunction>(3)?;
+            let receiver = add_backlog_events_helper(&mut cx)?;
+
+            let task = AddBacklogTask { receiver };
+            task.schedule(f);
+
+            Ok(cx.undefined().upcast())
         }
 
         method addEvent(mut cx) {
@@ -235,6 +282,56 @@ declare_types! {
             Ok(cx.undefined().upcast())
         }
     }
+}
+
+fn parse_checkpoint(cx: &mut CallContext<Seshat>, argument: Option<Handle<JsValue>>) -> Result<Option<BacklogCheckpoint>, neon::result::Throw> {
+    match argument {
+        Some(c) => {
+            match c.downcast::<JsObject>() {
+                Ok(object) => Ok(Some(js_checkpoint_to_rust(cx, *object)?)),
+                Err(_e) => {
+                    let _o = c.downcast::<JsNull>().or_throw(cx)?;
+                    Ok(None)
+                }
+            }
+        },
+        None => Ok(None),
+    }
+}
+
+fn add_backlog_events_helper(cx: &mut CallContext<Seshat>) -> Result<Receiver<seshat::Result<()>>, neon::result::Throw> {
+    let js_events = cx.argument::<JsArray>(0)?;
+    let mut js_events: Vec<Handle<JsValue>> = js_events.to_vec(cx)?;
+
+    let js_checkpoint = cx.argument_opt(1);
+    let new_checkpoint: Option<BacklogCheckpoint> = parse_checkpoint(cx, js_checkpoint)?;
+
+    let js_checkpoint = cx.argument_opt(2);
+    let old_checkpoint: Option<BacklogCheckpoint> = parse_checkpoint(cx, js_checkpoint)?;
+
+    let mut events: Vec<(Event, Profile)> = Vec::new();
+
+    for obj in js_events.drain(..) {
+        let obj = obj.downcast::<JsObject>().or_throw(cx)?;
+        let event = obj.get(cx, "event")?.downcast::<JsObject>().or_throw(cx)?;
+        // TODO make the profile optional.
+        let profile = obj.get(cx, "profile")?.downcast::<JsObject>().or_throw(cx)?;
+
+        let event = parse_event(cx, *event)?;
+        let profile = parse_profile(cx, *profile)?;
+
+        events.push((event, profile));
+    }
+
+    let receiver = {
+        let this = cx.this();
+        let guard = cx.lock();
+        let db = &this.borrow(&guard).0;
+        // TODO remove this unwrap.
+        db.add_backlog_events(events, new_checkpoint.unwrap(), old_checkpoint)
+    };
+
+    Ok(receiver)
 }
 
 fn search_result_to_js<'a, C: Context<'a>>(
@@ -399,6 +496,16 @@ fn parse_profile(
         display_name,
         avatar_url,
     })
+}
+
+fn js_checkpoint_to_rust(
+    cx: &mut CallContext<Seshat>,
+    object: JsObject,
+) -> Result<BacklogCheckpoint, neon::result::Throw> {
+    let room_id = object.get(&mut *cx, "room_id")?.downcast::<JsString>().or_throw(&mut *cx)?.value();
+    let token = object.get(&mut *cx, "token")?.downcast::<JsString>().or_throw(&mut *cx)?.value();
+
+    Ok(BacklogCheckpoint { room_id, token })
 }
 
 register_module!(mut cx, { cx.export_class::<Seshat>("Seshat") });
