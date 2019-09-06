@@ -9,15 +9,16 @@
     "neon-cli": "^0.3.0"
   },
   "devDependencies": {
-    "jsdoc": "^3.6.3",
     "chai": "^4.2.0",
-    "mocha": "^6.2.0",
     "eslint": "^6.2.2",
-    "eslint-config-google": "^0.13.0"
+    "eslint-config-google": "^0.13.0",
+    "jsdoc": "^3.6.3",
+    "mocha": "^6.2.0",
+    "nyc": "^14.1.1"
   },
   "scripts": {
     "install": "neon build",
-    "test": "mocha",
+    "test": "nyc mocha",
     "lint": "eslint lib/index.js"
   }
 }
