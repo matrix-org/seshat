@@ -73,14 +73,24 @@ impl Task for SearchTask {
         result: Result<Self::Output, Self::Error>,
     ) -> JsResult<Self::JsEvent> {
         let mut ret = result.unwrap();
-        let results = JsArray::new(&mut cx, ret.len() as u32);
+
+        let count = ret.len();
+        let results = JsArray::new(&mut cx, count as u32);
+        let count = JsNumber::new(&mut cx, count as f64);
 
         for (i, element) in ret.drain(..).enumerate() {
             let object = search_result_to_js(&mut cx, element);
             results.set(&mut cx, i as u32, object).unwrap();
         }
 
-        Ok(results.upcast())
+        let search_result = JsObject::new(&mut cx);
+        let highlights = JsArray::new(&mut cx, 0);
+
+        search_result.set(&mut cx, "count", count).unwrap();
+        search_result.set(&mut cx, "results", results).unwrap();
+        search_result.set(&mut cx, "highlights", highlights).unwrap();
+
+        Ok(search_result.upcast())
     }
 }
 
@@ -244,14 +254,23 @@ declare_types! {
                 db.search(&term, limit, before_limit, after_limit)
             };
 
-            let results = JsArray::new(&mut cx, ret.len() as u32);
+            let count = ret.len();
+            let results = JsArray::new(&mut cx, count as u32);
+            let count = JsNumber::new(&mut cx, count as f64);
 
             for (i, element) in ret.drain(..).enumerate() {
                 let object = search_result_to_js(&mut cx, element);
                 results.set(&mut cx, i as u32, object).unwrap();
             }
 
-            Ok(results.upcast())
+            let search_result = JsObject::new(&mut cx);
+            let highlights = JsArray::new(&mut cx, 0);
+
+            search_result.set(&mut cx, "count", count).unwrap();
+            search_result.set(&mut cx, "results", results).unwrap();
+            search_result.set(&mut cx, "highlights", highlights).unwrap();
+
+            Ok(search_result.upcast())
         }
 
         method searchAsync(mut cx) {

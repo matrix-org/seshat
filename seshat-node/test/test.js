@@ -111,8 +111,8 @@ describe('Database', function() {
     db.reload();
 
     const results = db.searchSync('Test');
-    assert.notEqual(Object.entries(results).length, 0);
-    assert.deepEqual(results[0].result, matrixEvent);
+    assert.notEqual(results.count, 0);
+    assert.deepEqual(results.results[0].result, matrixEvent);
   });
 
   it('should return a search result for the stored event using promises', async function() {
@@ -128,8 +128,8 @@ describe('Database', function() {
     // console.log(results)
     // console.log(results[0].context.profile_info)
     // console.log(results[0].result.content)
-    assert.notEqual(Object.entries(results).length, 0);
-    assert.deepEqual(results[0].result, matrixEvent);
+    assert.notEqual(results.count, 0);
+    assert.deepEqual(results.results[0].result, matrixEvent);
   });
 
   it('should allow messages from the backlog to be added in a batched way', async function() {
