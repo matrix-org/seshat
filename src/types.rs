@@ -78,7 +78,7 @@ impl<T> Dummy<T> for Event {
 }
 
 pub(crate) type BacklogEventsT = (
-    BacklogCheckpoint,
+    Option<BacklogCheckpoint>,
     Option<BacklogCheckpoint>,
     Vec<(Event, Profile)>,
     Sender<Result<()>>,

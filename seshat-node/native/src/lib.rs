@@ -347,7 +347,7 @@ fn add_backlog_events_helper(cx: &mut CallContext<Seshat>) -> Result<Receiver<se
         let guard = cx.lock();
         let db = &this.borrow(&guard).0;
         // TODO remove this unwrap.
-        db.add_backlog_events(events, new_checkpoint.unwrap(), old_checkpoint)
+        db.add_backlog_events(events, new_checkpoint, old_checkpoint)
     };
 
     Ok(receiver)

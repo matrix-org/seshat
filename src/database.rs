@@ -151,7 +151,7 @@ impl Database {
         connection: &mut rusqlite::Connection,
         index_writer: &mut Writer,
         message: (
-            BacklogCheckpoint,
+            Option<BacklogCheckpoint>,
             Option<BacklogCheckpoint>,
             Vec<(Event, Profile)>,
         ),
@@ -162,7 +162,7 @@ impl Database {
         Database::write_events_helper(&transaction, index_writer, &mut events)?;
         Database::replace_backlog_checkpoint(
             &transaction,
-            &new_checkpoint,
+            new_checkpoint.as_ref(),
             old_checkpoint.as_ref(),
         )?;
 
@@ -293,7 +293,7 @@ impl Database {
     pub fn add_backlog_events(
         &self,
         events: Vec<(Event, Profile)>,
-        new_checkpoint: BacklogCheckpoint,
+        new_checkpoint: Option<BacklogCheckpoint>,
         old_checkpoint: Option<BacklogCheckpoint>,
     ) -> Receiver<Result<()>> {
         let (sender, receiver): (_, Receiver<Result<()>>) = channel();
@@ -662,14 +662,16 @@ impl Database {
 
     pub(crate) fn replace_backlog_checkpoint(
         connection: &rusqlite::Connection,
-        new: &BacklogCheckpoint,
+        new: Option<&BacklogCheckpoint>,
         old: Option<&BacklogCheckpoint>,
     ) -> Result<()> {
-        connection.execute(
-            "INSERT OR IGNORE INTO backlogcheckpoints (room_id, token)
-            VALUES(?1, ?2)",
-            &[&new.room_id, &new.token],
-        )?;
+        if let Some(checkpoint) = new {
+            connection.execute(
+                "INSERT OR IGNORE INTO backlogcheckpoints (room_id, token)
+                VALUES(?1, ?2)",
+                &[&checkpoint.room_id, &checkpoint.token],
+            )?;
+        }
 
         if let Some(checkpoint) = old {
             connection.execute(
@@ -966,7 +968,7 @@ fn save_and_load_checkpoints() {
     let mut connection = db.get_connection().unwrap();
     let transaction = connection.transaction().unwrap();
 
-    Database::replace_backlog_checkpoint(&transaction, &checkpoint, None).unwrap();
+    Database::replace_backlog_checkpoint(&transaction, Some(&checkpoint), None).unwrap();
     transaction.commit().unwrap();
 
     let checkpoints = Database::load_checkpoints(&connection).unwrap();
@@ -978,7 +980,7 @@ fn save_and_load_checkpoints() {
         token: "12345".to_string(),
     };
 
-    Database::replace_backlog_checkpoint(&connection, &new_checkpoint, Some(&checkpoint)).unwrap();
+    Database::replace_backlog_checkpoint(&connection, Some(&new_checkpoint), Some(&checkpoint)).unwrap();
 
     let checkpoints = Database::load_checkpoints(&connection).unwrap();
 
@@ -1006,7 +1008,7 @@ fn save_and_search_backlog_events() {
         token: "1234".to_string(),
     };
 
-    let receiver = db.add_backlog_events(events, checkpoint.clone(), None);
+    let receiver = db.add_backlog_events(events, Some(checkpoint.clone()), None);
     let ret = receiver.recv().unwrap();
     assert!(ret.is_ok());
 
