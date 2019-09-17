@@ -129,7 +129,7 @@ impl Task for LoadCheckPointsTask {
     type JsEvent = JsArray;
 
     fn perform(&self) -> Result<Self::Output, Self::Error> {
-        Database::load_checkpoints(&self.connection)
+        self.connection.load_checkpoints()
     }
 
     fn complete(

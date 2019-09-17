@@ -86,6 +86,29 @@ pub struct Database {
 /// separate thread.
 pub struct Connection(PooledConnection<SqliteConnectionManager>);
 
+impl Connection {
+    /// Load all the previously stored backlog checkpoints from the database.
+    /// # Arguments
+    pub fn load_checkpoints(&self) -> Result<Vec<BacklogCheckpoint>> {
+        let mut stmt = self.prepare("SELECT room_id, token FROM backlogcheckpoints")?;
+
+        let rows = stmt.query_map(NO_PARAMS, |row| {
+            Ok(BacklogCheckpoint {
+                room_id: row.get(0)?,
+                token: row.get(1)?,
+            })
+        })?;
+
+        let mut checkpoints = Vec::new();
+
+        for row in rows {
+            let checkpoint: BacklogCheckpoint = row?;
+            checkpoints.push(checkpoint);
+        }
+        Ok(checkpoints)
+    }
+}
+
 
 impl Deref for Connection {
     type Target = PooledConnection<SqliteConnectionManager>;
@@ -705,31 +728,6 @@ impl Database {
         Ok(())
     }
 
-    /// Load all the previously stored backlog checkpoints from the database.
-    /// # Arguments
-    ///
-    /// * `connection` - The database connection that should be used to load the
-    /// checkpoints.
-    pub fn load_checkpoints(connection: &Connection) -> Result<Vec<BacklogCheckpoint>> {
-        let mut stmt = connection.prepare("SELECT room_id, token FROM backlogcheckpoints")?;
-
-        let rows = stmt.query_map(NO_PARAMS, |row| {
-            Ok(BacklogCheckpoint {
-                room_id: row.get(0)?,
-                token: row.get(1)?,
-            })
-        })?;
-
-        let mut checkpoints = Vec::new();
-
-        for row in rows {
-            let checkpoint: BacklogCheckpoint = row?;
-            checkpoints.push(checkpoint);
-        }
-
-        Ok(checkpoints)
-    }
-
     /// Get a database connection.
     /// Note that this connection should only be used for reading.
     pub fn get_connection(&mut self) -> Result<Connection> {
@@ -993,7 +991,7 @@ fn save_and_load_checkpoints() {
     Database::replace_backlog_checkpoint(&transaction, Some(&checkpoint), None).unwrap();
     transaction.commit().unwrap();
 
-    let checkpoints = Database::load_checkpoints(&connection).unwrap();
+    let checkpoints = connection.load_checkpoints().unwrap();
 
     assert!(checkpoints.contains(&checkpoint));
 
@@ -1004,7 +1002,7 @@ fn save_and_load_checkpoints() {
 
     Database::replace_backlog_checkpoint(&connection, Some(&new_checkpoint), Some(&checkpoint)).unwrap();
 
-    let checkpoints = Database::load_checkpoints(&connection).unwrap();
+    let checkpoints = connection.load_checkpoints().unwrap();
 
     assert!(!checkpoints.contains(&checkpoint));
     assert!(checkpoints.contains(&new_checkpoint));
@@ -1035,6 +1033,6 @@ fn save_and_search_backlog_events() {
     assert!(ret.is_ok());
     let connection = db.get_connection().unwrap();
 
-    let checkpoints = Database::load_checkpoints(&connection).unwrap();
+    let checkpoints = connection.load_checkpoints().unwrap();
     assert!(checkpoints.contains(&checkpoint));
 }
