@@ -202,6 +202,23 @@ class Seshat extends seshat.Seshat {
       );
     });
   }
+
+  async addBacklogCheckpoint(checkpoint) {
+    return this.addBacklogEvents([], checkpoint);
+  }
+
+  async removeBacklogCheckpoint(checkpoint) {
+    return this.addBacklogEvents([], null, checkpoint);
+  }
+
+  async loadCheckpoints() {
+    return new Promise((resolve) => {
+      super.loadCheckpoints((err, res) => {
+        if (err) reject(err);
+        else resolve(res);
+      });
+    });
+  }
 }
 
 module.exports = Seshat;
