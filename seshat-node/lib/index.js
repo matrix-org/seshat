@@ -14,12 +14,14 @@
 
 const seshat = require('../native');
 
+
 /**
  * @typedef searchResult
  * @type {Object}
  * @property {number} rank The rank of the search result.
  * @property {Object} matrixEvent The full event of the search result.
  */
+
 
 /**
  * @typedef matrixEvent
@@ -33,11 +35,22 @@ const seshat = require('../native');
  * have either a body, topic or name key.
  */
 
+
 /**
  * @typedef matrixProfile
  * @type {Object}
  * @property {string} display_name The users display name, if one is set.
- * @property {string} avatar_url THe users avatar url, if one is set.
+ * @property {string} avatar_url The users avatar url, if one is set.
+ */
+
+
+/**
+ * @typedef checkpoint
+ * @type {Object}
+ * @property {string} room_id The unique id of the room that this checkpoint
+ * belongs to.
+ * @property {string} token The token that can be used to fetch more events for
+ * the given room.
  */
 
 
@@ -162,6 +175,16 @@ class Seshat extends seshat.Seshat {
     return super.searchSync(term, limit, before_limit, after_limit);
   }
 
+  /**
+   * Add a batch of events from the room history to the database.
+   * @param  {array<matrixEvent>} events An array of events that will be added
+   * to the database.
+   * @param  {checkpoint} newCheckpoint
+   * @param  {checkpoint} oldCheckPoint
+   *
+   * @return {Array.<searchResult>} The array of events that matched the search
+   * term.
+   */
   addBacklogEventsSync(events, newCheckpoint = null, oldCheckPoint = null) {
     return super.addBacklogEventsSync(events, newCheckpoint, oldCheckPoint);
   }
