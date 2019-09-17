@@ -709,8 +709,9 @@ impl Database {
         Ok(checkpoints)
     }
 
-    #[cfg(test)]
-    pub(crate) fn get_connection(&mut self) -> Result<PooledConnection<SqliteConnectionManager>> {
+    /// Get a database connection.
+    /// Note that this connection should only be used for reading.
+    pub fn get_connection(&mut self) -> Result<PooledConnection<SqliteConnectionManager>> {
         let connection = self._pool.get()?;
         Ok(connection)
     }

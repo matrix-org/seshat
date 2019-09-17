@@ -146,6 +146,8 @@ describe('Database', function() {
     db.reload();
     const results = await db.search('Test');
     assert.notEqual(Object.entries(results).length, 0);
+    const checkpoints = await db.loadCheckpoints();
+    assert.deepEqual(checkpoints[0], checkPoint);
   });
 
   it('should throw an error when adding events with missing fields.', function() {

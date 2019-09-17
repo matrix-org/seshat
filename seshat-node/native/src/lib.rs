@@ -21,6 +21,8 @@ use std::sync::mpsc::Receiver;
 use neon::prelude::*;
 use neon_serde;
 use serde_json;
+use r2d2::PooledConnection;
+use r2d2_sqlite::SqliteConnectionManager;
 use seshat::{Database, Event, Profile, SearchResult, Searcher, BacklogCheckpoint};
 
 pub struct SeshatDatabase(Database);
@@ -119,6 +121,46 @@ impl Task for AddBacklogTask {
     }
 }
 
+struct LoadCheckPointsTask {
+    connection: PooledConnection<SqliteConnectionManager>,
+}
+
+impl Task for LoadCheckPointsTask {
+    type Output = Vec<BacklogCheckpoint>;
+    type Error = seshat::Error;
+    type JsEvent = JsArray;
+
+    fn perform(&self) -> Result<Self::Output, Self::Error> {
+        Database::load_checkpoints(&self.connection)
+    }
+
+    fn complete(
+        self,
+        mut cx: TaskContext,
+        result: Result<Self::Output, Self::Error>,
+    ) -> JsResult<Self::JsEvent> {
+        let mut checkpoints = match result {
+            Ok(c) => c,
+            Err(e) => return cx.throw_type_error(e.to_string()),
+        };
+        let count = checkpoints.len();
+        let ret = JsArray::new(&mut cx, count as u32);
+
+        for (i, c) in checkpoints.drain(..).enumerate() {
+            let js_checkpoint = JsObject::new(&mut cx);
+
+            let room_id = JsString::new(&mut cx, c.room_id);
+            let token = JsString::new(&mut cx, c.token);
+
+            js_checkpoint.set(&mut cx, "room_id", room_id).unwrap();
+            js_checkpoint.set(&mut cx, "token", token).unwrap();
+
+            ret.set(&mut cx, i as u32, js_checkpoint).unwrap();
+        }
+
+        Ok(ret)
+    }
+}
 
 declare_types! {
     pub class Seshat for SeshatDatabase {
@@ -153,6 +195,27 @@ declare_types! {
             let receiver = add_backlog_events_helper(&mut cx)?;
 
             let task = AddBacklogTask { receiver };
+            task.schedule(f);
+
+            Ok(cx.undefined().upcast())
+        }
+
+        method loadCheckpoints(mut cx) {
+            let f = cx.argument::<JsFunction>(0)?;
+            let mut this = cx.this();
+
+            let connection = {
+                let guard = cx.lock();
+                let db = &mut this.borrow_mut(&guard).0;
+                db.get_connection()
+            };
+
+            let connection = match connection {
+                Ok(c) => c,
+                Err(e) => return cx.throw_type_error(format!("Unable to get a database connection {}", e.to_string())),
+            };
+
+            let task = LoadCheckPointsTask { connection };
             task.schedule(f);
 
             Ok(cx.undefined().upcast())
