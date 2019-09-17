@@ -25,6 +25,7 @@ mod index;
 mod types;
 
 pub use database::Database;
+pub use database::Connection;
 pub use database::Searcher;
 
 pub use types::Event;

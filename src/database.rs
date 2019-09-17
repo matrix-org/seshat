@@ -14,13 +14,14 @@
 
 use r2d2::PooledConnection;
 use r2d2_sqlite::SqliteConnectionManager;
-use rusqlite::{Connection, ToSql, NO_PARAMS};
+use rusqlite::{ToSql, NO_PARAMS};
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
+use std::ops::{Deref, DerefMut};
 use std::thread::JoinHandle;
 
 #[cfg(test)]
@@ -78,6 +79,26 @@ pub struct Database {
     condvar: Arc<(Mutex<AtomicUsize>, Condvar)>,
     last_opstamp: usize,
     index: Index,
+}
+
+/// A Seshat database connection.
+/// The connection can be used to read data out of the database using a
+/// separate thread.
+pub struct Connection(PooledConnection<SqliteConnectionManager>);
+
+
+impl Deref for Connection {
+    type Target = PooledConnection<SqliteConnectionManager>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for Connection {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
 }
 
 type WriterRet = (
@@ -304,7 +325,7 @@ impl Database {
         receiver
     }
 
-    fn create_tables(conn: &Connection) -> Result<()> {
+    fn create_tables(conn: &rusqlite::Connection) -> Result<()> {
         conn.execute(
             "CREATE TABLE IF NOT EXISTS profiles (
                 id INTEGER NOT NULL PRIMARY KEY,
@@ -689,7 +710,7 @@ impl Database {
     ///
     /// * `connection` - The database connection that should be used to load the
     /// checkpoints.
-    pub fn load_checkpoints(connection: &rusqlite::Connection) -> Result<Vec<BacklogCheckpoint>> {
+    pub fn load_checkpoints(connection: &Connection) -> Result<Vec<BacklogCheckpoint>> {
         let mut stmt = connection.prepare("SELECT room_id, token FROM backlogcheckpoints")?;
 
         let rows = stmt.query_map(NO_PARAMS, |row| {
@@ -711,9 +732,9 @@ impl Database {
 
     /// Get a database connection.
     /// Note that this connection should only be used for reading.
-    pub fn get_connection(&mut self) -> Result<PooledConnection<SqliteConnectionManager>> {
+    pub fn get_connection(&mut self) -> Result<Connection> {
         let connection = self._pool.get()?;
-        Ok(connection)
+        Ok(Connection(connection))
     }
 }
 
@@ -1012,7 +1033,8 @@ fn save_and_search_backlog_events() {
     let receiver = db.add_backlog_events(events, Some(checkpoint.clone()), None);
     let ret = receiver.recv().unwrap();
     assert!(ret.is_ok());
+    let connection = db.get_connection().unwrap();
 
-    let checkpoints = Database::load_checkpoints(&db.connection).unwrap();
+    let checkpoints = Database::load_checkpoints(&connection).unwrap();
     assert!(checkpoints.contains(&checkpoint));
 }

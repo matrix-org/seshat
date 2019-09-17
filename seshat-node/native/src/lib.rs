@@ -21,9 +21,7 @@ use std::sync::mpsc::Receiver;
 use neon::prelude::*;
 use neon_serde;
 use serde_json;
-use r2d2::PooledConnection;
-use r2d2_sqlite::SqliteConnectionManager;
-use seshat::{Database, Event, Profile, SearchResult, Searcher, BacklogCheckpoint};
+use seshat::{Database, Connection, Event, Profile, SearchResult, Searcher, BacklogCheckpoint};
 
 pub struct SeshatDatabase(Database);
 
@@ -122,7 +120,7 @@ impl Task for AddBacklogTask {
 }
 
 struct LoadCheckPointsTask {
-    connection: PooledConnection<SqliteConnectionManager>,
+    connection: Connection,
 }
 
 impl Task for LoadCheckPointsTask {
