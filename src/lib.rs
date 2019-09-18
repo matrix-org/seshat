@@ -24,13 +24,13 @@ mod database;
 mod index;
 mod types;
 
-pub use database::Database;
 pub use database::Connection;
+pub use database::Database;
 pub use database::Searcher;
 
+pub use types::BacklogCheckpoint;
+pub use types::Error;
 pub use types::Event;
 pub use types::Profile;
-pub use types::SearchResult;
-pub use types::BacklogCheckpoint;
 pub use types::Result;
-pub use types::Error;
+pub use types::SearchResult;

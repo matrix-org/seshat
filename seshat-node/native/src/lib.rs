@@ -15,13 +15,13 @@
 #[macro_use]
 extern crate neon;
 use std::sync::atomic::AtomicUsize;
-use std::sync::{Arc, Condvar, Mutex};
 use std::sync::mpsc::Receiver;
+use std::sync::{Arc, Condvar, Mutex};
 
 use neon::prelude::*;
 use neon_serde;
 use serde_json;
-use seshat::{Database, Connection, Event, Profile, SearchResult, Searcher, BacklogCheckpoint};
+use seshat::{BacklogCheckpoint, Connection, Database, Event, Profile, SearchResult, Searcher};
 
 pub struct SeshatDatabase(Database);
 
@@ -88,14 +88,16 @@ impl Task for SearchTask {
 
         search_result.set(&mut cx, "count", count).unwrap();
         search_result.set(&mut cx, "results", results).unwrap();
-        search_result.set(&mut cx, "highlights", highlights).unwrap();
+        search_result
+            .set(&mut cx, "highlights", highlights)
+            .unwrap();
 
         Ok(search_result.upcast())
     }
 }
 
 struct AddBacklogTask {
-    receiver: Receiver<seshat::Result<()>>
+    receiver: Receiver<seshat::Result<()>>,
 }
 
 impl Task for AddBacklogTask {
@@ -364,22 +366,25 @@ declare_types! {
     }
 }
 
-fn parse_checkpoint(cx: &mut CallContext<Seshat>, argument: Option<Handle<JsValue>>) -> Result<Option<BacklogCheckpoint>, neon::result::Throw> {
+fn parse_checkpoint(
+    cx: &mut CallContext<Seshat>,
+    argument: Option<Handle<JsValue>>,
+) -> Result<Option<BacklogCheckpoint>, neon::result::Throw> {
     match argument {
-        Some(c) => {
-            match c.downcast::<JsObject>() {
-                Ok(object) => Ok(Some(js_checkpoint_to_rust(cx, *object)?)),
-                Err(_e) => {
-                    let _o = c.downcast::<JsNull>().or_throw(cx)?;
-                    Ok(None)
-                }
+        Some(c) => match c.downcast::<JsObject>() {
+            Ok(object) => Ok(Some(js_checkpoint_to_rust(cx, *object)?)),
+            Err(_e) => {
+                let _o = c.downcast::<JsNull>().or_throw(cx)?;
+                Ok(None)
             }
         },
         None => Ok(None),
     }
 }
 
-fn add_backlog_events_helper(cx: &mut CallContext<Seshat>) -> Result<Receiver<seshat::Result<()>>, neon::result::Throw> {
+fn add_backlog_events_helper(
+    cx: &mut CallContext<Seshat>,
+) -> Result<Receiver<seshat::Result<()>>, neon::result::Throw> {
     let js_events = cx.argument::<JsArray>(0)?;
     let mut js_events: Vec<Handle<JsValue>> = js_events.to_vec(cx)?;
 
@@ -395,7 +400,10 @@ fn add_backlog_events_helper(cx: &mut CallContext<Seshat>) -> Result<Receiver<se
         let obj = obj.downcast::<JsObject>().or_throw(cx)?;
         let event = obj.get(cx, "event")?.downcast::<JsObject>().or_throw(cx)?;
         // TODO make the profile optional.
-        let profile = obj.get(cx, "profile")?.downcast::<JsObject>().or_throw(cx)?;
+        let profile = obj
+            .get(cx, "profile")?
+            .downcast::<JsObject>()
+            .or_throw(cx)?;
 
         let event = parse_event(cx, *event)?;
         let profile = parse_profile(cx, *profile)?;
@@ -582,8 +590,16 @@ fn js_checkpoint_to_rust(
     cx: &mut CallContext<Seshat>,
     object: JsObject,
 ) -> Result<BacklogCheckpoint, neon::result::Throw> {
-    let room_id = object.get(&mut *cx, "room_id")?.downcast::<JsString>().or_throw(&mut *cx)?.value();
-    let token = object.get(&mut *cx, "token")?.downcast::<JsString>().or_throw(&mut *cx)?.value();
+    let room_id = object
+        .get(&mut *cx, "room_id")?
+        .downcast::<JsString>()
+        .or_throw(&mut *cx)?
+        .value();
+    let token = object
+        .get(&mut *cx, "token")?
+        .downcast::<JsString>()
+        .or_throw(&mut *cx)?
+        .value();
 
     Ok(BacklogCheckpoint { room_id, token })
 }

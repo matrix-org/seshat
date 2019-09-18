@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use failure::Fail;
 use std::collections::HashMap;
 use std::sync::mpsc::Sender;
-use failure::Fail;
 
 use r2d2;
 use rusqlite;

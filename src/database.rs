@@ -16,12 +16,12 @@ use r2d2::PooledConnection;
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::{ToSql, NO_PARAMS};
 use std::collections::HashMap;
+use std::ops::{Deref, DerefMut};
 use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
-use std::ops::{Deref, DerefMut};
 use std::thread::JoinHandle;
 
 #[cfg(test)]
@@ -30,9 +30,7 @@ use fake::{Fake, Faker};
 use tempfile::tempdir;
 
 use crate::index::{Index, IndexSearcher, Writer};
-use crate::types::{
-    BacklogCheckpoint, Event, Profile, Result, SearchResult, ThreadMessage,
-};
+use crate::types::{BacklogCheckpoint, Event, Profile, Result, SearchResult, ThreadMessage};
 
 #[cfg(test)]
 use crate::types::EVENT;
@@ -73,7 +71,7 @@ unsafe impl Send for Searcher {}
 /// The Seshat database.
 pub struct Database {
     connection: Arc<PooledConnection<SqliteConnectionManager>>,
-    _pool: r2d2::Pool<SqliteConnectionManager>,
+    pool: r2d2::Pool<SqliteConnectionManager>,
     _write_thread: JoinHandle<()>,
     tx: Sender<ThreadMessage>,
     condvar: Arc<(Mutex<AtomicUsize>, Condvar)>,
@@ -108,7 +106,6 @@ impl Connection {
         Ok(checkpoints)
     }
 }
-
 
 impl Deref for Connection {
     type Target = PooledConnection<SqliteConnectionManager>;
@@ -151,7 +148,7 @@ impl Database {
 
         Ok(Database {
             connection,
-            _pool: pool,
+            pool: pool,
             _write_thread: t_handle,
             tx,
             condvar,
@@ -507,7 +504,7 @@ impl Database {
 
     /// Load events surounding the given event.
     pub fn load_event_context(
-        connection: &PooledConnection<SqliteConnectionManager>,
+        connection: &rusqlite::Connection,
         event: &Event,
         before_limit: usize,
         after_limit: usize,
@@ -613,7 +610,7 @@ impl Database {
     }
 
     pub(crate) fn load_events(
-        connection: &PooledConnection<SqliteConnectionManager>,
+        connection: &rusqlite::Connection,
         search_result: &[(f32, String)],
         before_limit: usize,
         after_limit: usize,
@@ -731,7 +728,7 @@ impl Database {
     /// Get a database connection.
     /// Note that this connection should only be used for reading.
     pub fn get_connection(&mut self) -> Result<Connection> {
-        let connection = self._pool.get()?;
+        let connection = self.pool.get()?;
         Ok(Connection(connection))
     }
 }
@@ -1000,7 +997,8 @@ fn save_and_load_checkpoints() {
         token: "12345".to_string(),
     };
 
-    Database::replace_backlog_checkpoint(&connection, Some(&new_checkpoint), Some(&checkpoint)).unwrap();
+    Database::replace_backlog_checkpoint(&connection, Some(&new_checkpoint), Some(&checkpoint))
+        .unwrap();
 
     let checkpoints = connection.load_checkpoints().unwrap();
 
