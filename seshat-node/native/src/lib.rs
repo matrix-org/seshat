@@ -54,6 +54,7 @@ struct SearchTask {
     limit: usize,
     before_limit: usize,
     after_limit: usize,
+    room_id: Option<String>,
 }
 
 impl Task for SearchTask {
@@ -64,7 +65,7 @@ impl Task for SearchTask {
     fn perform(&self) -> Result<Self::Output, Self::Error> {
         Ok(self
             .inner
-            .search(&self.term, self.limit, self.before_limit, self.after_limit))
+            .search(&self.term, self.limit, self.before_limit, self.after_limit, self.room_id.as_ref()))
     }
 
     fn complete(
@@ -309,12 +310,19 @@ declare_types! {
             let before_limit: usize = cx.argument::<JsNumber>(2)?.value() as usize;
             let after_limit: usize = cx.argument::<JsNumber>(3)?.value() as usize;
 
+            let room_id: Option<String> = match cx.argument_opt(4) {
+                Some(p) => {
+                    Some(p.downcast::<JsString>().or_throw(&mut cx)?.value())
+                },
+                None => None
+            };
+
             let mut this = cx.this();
 
             let mut ret = {
                 let guard = cx.lock();
                 let db = &mut this.borrow_mut(&guard).0;
-                db.search(&term, limit, before_limit, after_limit)
+                db.search(&term, limit, before_limit, after_limit, room_id.as_ref())
             };
 
             let count = ret.len();
@@ -337,12 +345,10 @@ declare_types! {
         }
 
         method searchAsync(mut cx) {
-            let term: String = cx.argument::<JsString>(0)?.value();
-            let limit: usize = cx.argument::<JsNumber>(1)?.value() as usize;
-            let before_limit: usize = cx.argument::<JsNumber>(2)?.value() as usize;
-            let after_limit: usize = cx.argument::<JsNumber>(3)?.value() as usize;
+            let args = cx.argument::<JsObject>(0)?;
+            let f = cx.argument::<JsFunction>(1)?;
 
-            let f = cx.argument::<JsFunction>(4)?;
+            let (term, limit, before_limit, after_limit, _) = parse_search_object(&mut cx, args)?;
 
             let mut this = cx.this();
 
@@ -357,13 +363,43 @@ declare_types! {
                 term,
                 limit,
                 before_limit,
-                after_limit
+                after_limit,
+                room_id: None
             };
             task.schedule(f);
 
             Ok(cx.undefined().upcast())
         }
     }
+}
+
+fn parse_search_object(
+    cx: &mut CallContext<Seshat>,
+    argument: Handle<JsObject>,
+    ) -> Result<(String, usize, usize, usize, Option<String>), neon::result::Throw> {
+
+    let term = argument
+        .get(&mut *cx, "search_term")?
+        .downcast::<JsString>()
+        .or_throw(&mut *cx)?
+        .value();
+
+    let limit: usize = argument
+        .get(&mut *cx, "limit")?
+        .downcast::<JsNumber>().unwrap_or_else(|_| JsNumber::new(&mut *cx, 10))
+        .value() as usize;
+
+    let before_limit: usize = argument
+        .get(&mut *cx, "before_limit")?
+        .downcast::<JsNumber>().unwrap_or_else(|_| JsNumber::new(&mut *cx, 0))
+        .value() as usize;
+
+    let after_limit: usize = argument
+        .get(&mut *cx, "before_limit")?
+        .downcast::<JsNumber>().unwrap_or_else(|_| JsNumber::new(&mut *cx, 0))
+        .value() as usize;
+
+    Ok((term, limit, before_limit, after_limit, None))
 }
 
 fn parse_checkpoint(

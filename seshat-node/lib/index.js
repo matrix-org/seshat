@@ -139,20 +139,22 @@ class Seshat extends seshat.Seshat {
    * This is the asynchronous equivalent of the <code>searchSync()</code>
    * method.
    *
-   * @param  {string} term The term that is used to search the database.
-   * @param  {number} limit The maximum number of events that the search should
-   * return.
-   * @param  {number} before_limit The number of events to fetch that preceded
-   * the event that matched the search term.
-   * @param  {number} after_limit The number of events to fetch that followed
-   * the event that matched the search term.
+   * @param  {object} args Arguments object for the search.
+   * @param  {string} args.searchTerm The term that is used to search the
+   * database.
+   * @param  {number} args.limit The maximum number of events that the search
+   * should return.
+   * @param  {number} args.before_limit The number of events to fetch that
+   * preceded the event that matched the search term.
+   * @param  {number} args.after_limit The number of events to fetch that
+   * followed the event that matched the search term.
    *
    * @return {Promise<Array.<searchResult>>} The array of events that matched
    * the search term.
    */
-  async search(term, limit = 10, before_limit = 0, after_limit = 0) {
+  async search(args) {
     return new Promise((resolve) => {
-      this.searchAsync(term, limit, before_limit, after_limit, (err, res) => {
+      this.searchAsync(args, (err, res) => {
         resolve(res);
       });
     });

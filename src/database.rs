@@ -30,7 +30,16 @@ use fake::{Fake, Faker};
 use tempfile::tempdir;
 
 use crate::index::{Index, IndexSearcher, Writer};
-use crate::types::{BacklogCheckpoint, Event, Profile, Result, SearchResult, ThreadMessage};
+use crate::types::{
+    BacklogCheckpoint,
+    Event,
+    Profile,
+    Result,
+    SearchResult,
+    ThreadMessage,
+    RoomId,
+    EventId
+};
 
 #[cfg(test)]
 use crate::types::EVENT;
@@ -52,8 +61,9 @@ impl Searcher {
         limit: usize,
         before_limit: usize,
         after_limit: usize,
+        room_id: Option<&RoomId>,
     ) -> Vec<SearchResult> {
-        let search_result = self.inner.search(term, limit);
+        let search_result = self.inner.search(term, limit, room_id);
 
         if search_result.is_empty() {
             return vec![];
@@ -148,7 +158,7 @@ impl Database {
 
         Ok(Database {
             connection,
-            pool: pool,
+            pool,
             _write_thread: t_handle,
             tx,
             condvar,
@@ -171,7 +181,7 @@ impl Database {
                 continue;
             }
             Database::save_event(&connection, &e, &p)?;
-            index_writer.add_event(&e.body, &e.event_id);
+            index_writer.add_event(&e.body, &e.event_id, &e.room_id);
         }
 
         Ok(())
@@ -611,7 +621,7 @@ impl Database {
 
     pub(crate) fn load_events(
         connection: &rusqlite::Connection,
-        search_result: &[(f32, String)],
+        search_result: &[(f32, EventId)],
         before_limit: usize,
         after_limit: usize,
     ) -> rusqlite::Result<Vec<SearchResult>> {
@@ -687,9 +697,10 @@ impl Database {
         limit: usize,
         before_limit: usize,
         after_limit: usize,
+        room_id: Option<&RoomId>
     ) -> Vec<SearchResult> {
         let searcher = self.get_searcher();
-        searcher.search(term, limit, before_limit, after_limit)
+        searcher.search(term, limit, before_limit, after_limit, room_id)
     }
 
     /// Get a searcher that can be used to perform a search.
@@ -856,7 +867,7 @@ fn save_and_search() {
 
     assert_eq!(opstamp, 1);
 
-    let result = db.search("Test", 10, 0, 0);
+    let result = db.search("Test", 10, 0, 0, None);
     assert!(!result.is_empty());
     assert_eq!(result[0].event_source, EVENT.source);
 }
@@ -920,7 +931,7 @@ fn duplicate_events() {
     db.reload().unwrap();
 
     let searcher = db.index.get_searcher();
-    let result = searcher.search("Test", 10);
+    let result = searcher.search("Test", 10, None);
     assert_eq!(result.len(), 1);
 }
 

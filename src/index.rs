@@ -15,22 +15,26 @@
 use std::path::Path;
 use tantivy as tv;
 
+use crate::types::{EventId, RoomId};
+
 #[cfg(test)]
 use tempfile::TempDir;
 
-pub struct Index {
+pub(crate) struct Index {
     index: tv::Index,
     reader: tv::IndexReader,
     body_field: tv::schema::Field,
     topic_field: tv::schema::Field,
     name_field: tv::schema::Field,
     event_id_field: tv::schema::Field,
+    room_id_field: tv::schema::Field,
 }
 
-pub struct Writer {
+pub(crate) struct Writer {
     pub(crate) inner: tv::IndexWriter,
     pub(crate) body_field: tv::schema::Field,
     pub(crate) event_id_field: tv::schema::Field,
+    room_id_field: tv::schema::Field,
 }
 
 impl Writer {
@@ -39,28 +43,38 @@ impl Writer {
         Ok(())
     }
 
-    pub fn add_event(&mut self, body: &str, event_id: &str) {
+    pub fn add_event(&mut self, body: &str, event_id: &str, room_id: &str) {
         let mut doc = tv::Document::default();
         doc.add_text(self.body_field, body);
         doc.add_text(self.event_id_field, event_id);
+        doc.add_text(self.room_id_field, room_id);
         self.inner.add_document(doc);
     }
 }
 
-pub struct IndexSearcher {
+pub(crate) struct IndexSearcher {
     pub(crate) inner: tv::LeasedItem<tv::Searcher>,
-    pub(crate) body_field: tv::schema::Field,
-    pub(crate) topic_field: tv::schema::Field,
-    pub(crate) name_field: tv::schema::Field,
     pub(crate) event_id_field: tv::schema::Field,
     pub(crate) query_parser: tv::query::QueryParser,
 }
 
 impl IndexSearcher {
-    pub fn search(&self, term: &str, limit: usize) -> Vec<(f32, String)> {
+    pub fn search(
+        &self,
+        term: &str,
+        limit: usize,
+        room_id: Option<&RoomId>
+    ) -> Vec<(f32, EventId)> {
         // TODO we might want to propagate those errors instead of returning
         // empty vectors.
-        let query = match self.query_parser.parse_query(term) {
+
+        let term = if let Some(room) = room_id {
+            format!("{} AND room_id:\"{}\"", term, room)
+        } else {
+            term.to_owned()
+        };
+
+        let query = match self.query_parser.parse_query(&term) {
             Ok(q) => q,
             Err(_e) => return vec![],
         };
@@ -81,7 +95,7 @@ impl IndexSearcher {
                 Err(_e) => continue,
             };
 
-            let event_id: String = match doc.get_first(self.event_id_field) {
+            let event_id: EventId = match doc.get_first(self.event_id_field) {
                 Some(s) => s.text().unwrap().to_owned(),
                 None => continue,
             };
@@ -102,6 +116,8 @@ impl Index {
         let name_field = schemabuilder.add_text_field("name", tv::schema::TEXT);
         let event_id_field = schemabuilder.add_text_field("event_id", tv::schema::STORED);
 
+        let room_id_field = schemabuilder.add_text_field("room_id", tv::schema::TEXT);
+
         let schema = schemabuilder.build();
 
         let index_dir = tv::directory::MmapDirectory::open(path)?;
@@ -116,6 +132,7 @@ impl Index {
             topic_field,
             name_field,
             event_id_field,
+            room_id_field,
         })
     }
 
@@ -123,16 +140,13 @@ impl Index {
         let searcher = self.reader.searcher();
         let query_parser = tv::query::QueryParser::for_index(
             &self.index,
-            vec![self.body_field, self.topic_field, self.name_field],
+            vec![self.body_field, self.topic_field, self.name_field, self.room_id_field],
         );
 
         IndexSearcher {
             inner: searcher,
             query_parser,
-            body_field: self.body_field,
             event_id_field: self.event_id_field,
-            topic_field: self.topic_field,
-            name_field: self.name_field,
         }
     }
 
@@ -145,6 +159,7 @@ impl Index {
             inner: self.index.writer(50_000_000)?,
             body_field: self.body_field,
             event_id_field: self.event_id_field,
+            room_id_field: self.room_id_field,
         })
     }
 }
@@ -157,13 +172,37 @@ fn add_an_event() {
     let event_id = "$15163622445EBvZJ:localhost";
     let mut writer = index.get_writer().unwrap();
 
-    writer.add_event("Test message", &event_id);
+    writer.add_event("Test message", &event_id, "!Test:room");
     writer.commit().unwrap();
     index.reload().unwrap();
 
     let searcher = index.get_searcher();
-    let result = searcher.search("Test", 10);
+    let result = searcher.search("Test", 10, None);
 
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].1, event_id)
+}
+
+#[test]
+fn add_events_to_differing_rooms() {
+    let tmpdir = TempDir::new().unwrap();
+    let index = Index::new(&tmpdir).unwrap();
+
+    let event_id = "$15163622445EBvZJ:localhost";
+    let mut writer = index.get_writer().unwrap();
+
+    writer.add_event("Test message", &event_id, "!Test:room");
+    writer.add_event("Test message", "$16678900:localhost", "!Test2:room");
+
+    writer.commit().unwrap();
+    index.reload().unwrap();
+
+    let searcher = index.get_searcher();
+    let result = searcher.search("Test", 10, Some(&"!Test:room".to_string()));
+
+    assert_eq!(result.len(), 1);
+    assert_eq!(result[0].1, event_id);
+
+    let result = searcher.search("Test", 10, None);
+    assert_eq!(result.len(), 2);
 }

@@ -108,6 +108,9 @@ pub enum Error {
 /// Result type for seshat operations.
 pub type Result<T> = std::result::Result<T, Error>;
 
+pub(crate) type RoomId = String;
+pub(crate) type EventId = String;
+
 impl From<r2d2::Error> for Error {
     fn from(err: r2d2::Error) -> Self {
         Error::PoolError(err)

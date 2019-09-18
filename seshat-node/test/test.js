@@ -124,7 +124,7 @@ describe('Database', function() {
     await db.commit();
     await db.commit();
 
-    const results = await db.search('Test');
+    const results = await db.search({search_term: 'Test'});
     // console.log(results)
     // console.log(results[0].context.profile_info)
     // console.log(results[0].result.content)
@@ -136,7 +136,7 @@ describe('Database', function() {
     const db = createDb();
     db.addBacklogEventsSync(exampleEvents, checkPoint)
     db.reload();
-    const results = await db.search('Test');
+    const results = await db.search({search_term: 'Test'});
     assert.notEqual(Object.entries(results).length, 0);
   });
 
@@ -144,7 +144,7 @@ describe('Database', function() {
     const db = createDb();
     await db.addBacklogEvents(exampleEvents, checkPoint)
     db.reload();
-    const results = await db.search('Test');
+    const results = await db.search({search_term: 'Test'});
     assert.notEqual(Object.entries(results).length, 0);
     const checkpoints = await db.loadCheckpoints();
     assert.deepEqual(checkpoints[0], checkPoint);
