@@ -292,7 +292,9 @@ impl Database {
         self.last_opstamp
     }
 
-    /// Reload the database to reflect the latest commit.
+    /// Reload the database so that a search reflects the state of the last
+    /// commit. Note that this happens automatically and this method should be
+    /// used only in unit tests.
     pub fn reload(&mut self) -> Result<()> {
         self.index.reload()?;
         Ok(())
