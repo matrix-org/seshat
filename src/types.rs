@@ -81,7 +81,7 @@ pub(crate) type BacklogEventsT = (
     Option<BacklogCheckpoint>,
     Option<BacklogCheckpoint>,
     Vec<(Event, Profile)>,
-    Sender<Result<()>>,
+    Sender<Result<bool>>,
 );
 
 pub(crate) enum ThreadMessage {

@@ -102,13 +102,13 @@ impl Task for SearchTask {
 }
 
 struct AddBacklogTask {
-    receiver: Receiver<seshat::Result<()>>,
+    receiver: Receiver<seshat::Result<bool>>,
 }
 
 impl Task for AddBacklogTask {
-    type Output = ();
+    type Output = bool;
     type Error = seshat::Error;
-    type JsEvent = JsValue;
+    type JsEvent = JsBoolean;
 
     fn perform(&self) -> Result<Self::Output, Self::Error> {
         self.receiver.recv().unwrap()
@@ -120,7 +120,7 @@ impl Task for AddBacklogTask {
         result: Result<Self::Output, Self::Error>,
     ) -> JsResult<Self::JsEvent> {
         match result {
-            Ok(_) => Ok(cx.undefined().upcast()),
+            Ok(r) => Ok(JsBoolean::new(&mut cx, r)),
             Err(e) => cx.throw_type_error(e.to_string()),
         }
     }
@@ -190,7 +190,7 @@ declare_types! {
             let ret = receiver.recv().unwrap();
 
             match ret {
-                Ok(_) => Ok(cx.undefined().upcast()),
+                Ok(r) => Ok(JsBoolean::new(&mut cx, r).upcast()),
                 Err(e) => cx.throw_type_error(e.to_string()),
             }
         }
@@ -445,7 +445,7 @@ fn parse_checkpoint(
 
 fn add_backlog_events_helper(
     cx: &mut CallContext<Seshat>,
-) -> Result<Receiver<seshat::Result<()>>, neon::result::Throw> {
+) -> Result<Receiver<seshat::Result<bool>>, neon::result::Throw> {
     let js_events = cx.argument::<JsArray>(0)?;
     let mut js_events: Vec<Handle<JsValue>> = js_events.to_vec(cx)?;
 

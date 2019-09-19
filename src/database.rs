@@ -169,16 +169,20 @@ impl Database {
         connection: &rusqlite::Connection,
         index_writer: &mut Writer,
         events: &mut Vec<(Event, Profile)>,
-    ) -> Result<()> {
+    ) -> Result<bool> {
+        let mut ret = Vec::new();
+
         for (e, p) in events.drain(..) {
             if Database::event_in_store(&connection, &e) {
+                ret.push(true);
                 continue;
             }
             Database::save_event(&connection, &e, &p)?;
             index_writer.add_event(&e.body, &e.event_id, &e.room_id, e.server_ts as u64);
+            ret.push(false);
         }
 
-        Ok(())
+        Ok(ret.iter().all(|&x| x))
     }
 
     fn write_queued_events(
@@ -200,11 +204,11 @@ impl Database {
             Option<BacklogCheckpoint>,
             Vec<(Event, Profile)>,
         ),
-    ) -> Result<()> {
+    ) -> Result<bool> {
         let (new_checkpoint, old_checkpoint, mut events) = message;
         let transaction = connection.transaction()?;
 
-        Database::write_events_helper(&transaction, index_writer, &mut events)?;
+        let ret = Database::write_events_helper(&transaction, index_writer, &mut events)?;
         Database::replace_backlog_checkpoint(
             &transaction,
             new_checkpoint.as_ref(),
@@ -214,7 +218,7 @@ impl Database {
         transaction.commit()?;
         index_writer.commit()?;
 
-        Ok(())
+        Ok(ret)
     }
 
     fn spawn_writer(
@@ -342,8 +346,8 @@ impl Database {
         events: Vec<(Event, Profile)>,
         new_checkpoint: Option<BacklogCheckpoint>,
         old_checkpoint: Option<BacklogCheckpoint>,
-    ) -> Receiver<Result<()>> {
-        let (sender, receiver): (_, Receiver<Result<()>>) = channel();
+    ) -> Receiver<Result<bool>> {
+        let (sender, receiver): (_, Receiver<Result<bool>>) = channel();
         let payload = (new_checkpoint, old_checkpoint, events, sender);
         let message = ThreadMessage::BacklogEvents(payload);
         self.tx.send(message).unwrap();

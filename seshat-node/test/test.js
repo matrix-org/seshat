@@ -144,20 +144,31 @@ describe('Database', function() {
 
   it('should allow messages from the backlog to be added in a batched way', async function() {
     const db = createDb();
-    db.addBacklogEventsSync(exampleEvents, checkPoint)
+    let ret = db.addBacklogEventsSync(exampleEvents, checkPoint);
+    assert.equal(ret, false);
+
     db.reload();
     const results = await db.search({search_term: 'Test'});
     assert.notEqual(Object.entries(results).length, 0);
+
+    let ret2 = db.addBacklogEventsSync(exampleEvents, checkPoint);
+    assert.equal(ret2, true);
   });
 
   it('should allow messages from the backlog to be added using a promise', async function() {
     const db = createDb();
-    await db.addBacklogEvents(exampleEvents, checkPoint)
+    let ret = await db.addBacklogEvents(exampleEvents, checkPoint)
+    assert.equal(ret, false);
     db.reload();
+
     const results = await db.search({search_term: 'Test'});
     assert.notEqual(Object.entries(results).length, 0);
+
     const checkpoints = await db.loadCheckpoints();
     assert.deepEqual(checkpoints[0], checkPoint);
+
+    let ret2 = await db.addBacklogEvents(exampleEvents, checkPoint)
+    assert.equal(ret2, true);
   });
 
   it('should allow to search events in a specific room', async function() {
