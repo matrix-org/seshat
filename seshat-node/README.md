@@ -26,6 +26,6 @@ db.addEvent(textEvent, profile);
 // Commit events waiting in the queue to the database.
 await db.commit();
 // Search the database for messages containing the word 'Test'
-let results = await db.search('Test');
+let results = await db.search({search_term: 'Test'});
 
 ```
