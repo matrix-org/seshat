@@ -159,10 +159,10 @@ impl Task for LoadCheckPointsTask {
             let room_id = JsString::new(&mut cx, c.room_id);
             let token = JsString::new(&mut cx, c.token);
 
-            js_checkpoint.set(&mut cx, "room_id", room_id).unwrap();
-            js_checkpoint.set(&mut cx, "token", token).unwrap();
+            js_checkpoint.set(&mut cx, "room_id", room_id)?;
+            js_checkpoint.set(&mut cx, "token", token)?;
 
-            ret.set(&mut cx, i as u32, js_checkpoint).unwrap();
+            ret.set(&mut cx, i as u32, js_checkpoint)?;
         }
 
         Ok(ret)
@@ -338,15 +338,15 @@ declare_types! {
 
             for (i, element) in ret.drain(..).enumerate() {
                 let object = search_result_to_js(&mut cx, element);
-                results.set(&mut cx, i as u32, object).unwrap();
+                results.set(&mut cx, i as u32, object)?;
             }
 
             let search_result = JsObject::new(&mut cx);
             let highlights = JsArray::new(&mut cx, 0);
 
-            search_result.set(&mut cx, "count", count).unwrap();
-            search_result.set(&mut cx, "results", results).unwrap();
-            search_result.set(&mut cx, "highlights", highlights).unwrap();
+            search_result.set(&mut cx, "count", count)?;
+            search_result.set(&mut cx, "results", results)?;
+            search_result.set(&mut cx, "highlights", highlights)?;
 
             Ok(search_result.upcast())
         }
@@ -474,7 +474,6 @@ fn add_backlog_events_helper(
         let this = cx.this();
         let guard = cx.lock();
         let db = &this.borrow(&guard).0;
-        // TODO remove this unwrap.
         db.add_backlog_events(events, new_checkpoint, old_checkpoint)
     };
 
