@@ -31,14 +31,7 @@ use tempfile::tempdir;
 
 use crate::index::{Index, IndexSearcher, Writer};
 use crate::types::{
-    BacklogCheckpoint,
-    Event,
-    Profile,
-    Result,
-    SearchResult,
-    ThreadMessage,
-    RoomId,
-    EventId
+    BacklogCheckpoint, Event, EventId, Profile, Result, RoomId, SearchResult, ThreadMessage,
 };
 
 #[cfg(test)]
@@ -61,9 +54,10 @@ impl Searcher {
         limit: usize,
         before_limit: usize,
         after_limit: usize,
+        order_by_recent: bool,
         room_id: Option<&RoomId>,
     ) -> Vec<SearchResult> {
-        let search_result = self.inner.search(term, limit, room_id);
+        let search_result = self.inner.search(term, limit, order_by_recent, room_id);
 
         if search_result.is_empty() {
             return vec![];
@@ -181,7 +175,7 @@ impl Database {
                 continue;
             }
             Database::save_event(&connection, &e, &p)?;
-            index_writer.add_event(&e.body, &e.event_id, &e.room_id);
+            index_writer.add_event(&e.body, &e.event_id, &e.room_id, e.server_ts as u64);
         }
 
         Ok(())
@@ -697,10 +691,18 @@ impl Database {
         limit: usize,
         before_limit: usize,
         after_limit: usize,
-        room_id: Option<&RoomId>
+        order_by_recent: bool,
+        room_id: Option<&RoomId>,
     ) -> Vec<SearchResult> {
         let searcher = self.get_searcher();
-        searcher.search(term, limit, before_limit, after_limit, room_id)
+        searcher.search(
+            term,
+            limit,
+            before_limit,
+            after_limit,
+            order_by_recent,
+            room_id,
+        )
     }
 
     /// Get a searcher that can be used to perform a search.
@@ -867,7 +869,7 @@ fn save_and_search() {
 
     assert_eq!(opstamp, 1);
 
-    let result = db.search("Test", 10, 0, 0, None);
+    let result = db.search("Test", 10, 0, 0, false, None);
     assert!(!result.is_empty());
     assert_eq!(result[0].event_source, EVENT.source);
 }
@@ -931,7 +933,7 @@ fn duplicate_events() {
     db.reload().unwrap();
 
     let searcher = db.index.get_searcher();
-    let result = searcher.search("Test", 10, None);
+    let result = searcher.search("Test", 10, false, None);
     assert_eq!(result.len(), 1);
 }
 

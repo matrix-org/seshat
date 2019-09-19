@@ -173,8 +173,8 @@ class Seshat extends seshat.Seshat {
    * @return {Array.<searchResult>} The array of events that matched the search
    * term.
    */
-  searchSync(term, limit = 10, before_limit = 0, after_limit = 0) {
-    return super.searchSync(term, limit, before_limit, after_limit);
+  searchSync(term, limit = 10, before_limit = 0, after_limit = 0, order_by_recent = false) {
+    return super.searchSync(term, limit, before_limit, after_limit, order_by_recent);
   }
 
   /**
