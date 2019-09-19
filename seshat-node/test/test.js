@@ -120,7 +120,7 @@ describe('Database', function() {
     await db.commit();
     db.reload();
 
-    const results = db.searchSync('Test');
+    const results = db.searchSync({search_term:'Test'});
     assert.notEqual(results.count, 0);
     assert.deepEqual(results.results[0].result, matrixEvent);
   });

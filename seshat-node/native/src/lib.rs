@@ -309,19 +309,8 @@ declare_types! {
         }
 
         method searchSync(mut cx) {
-            let term: String = cx.argument::<JsString>(0)?.value();
-            let limit: usize = cx.argument::<JsNumber>(1)?.value() as usize;
-            let before_limit: usize = cx.argument::<JsNumber>(2)?.value() as usize;
-            let after_limit: usize = cx.argument::<JsNumber>(3)?.value() as usize;
-            let order_by_recent: bool = cx.argument::<JsBoolean>(4)?.value();
-
-            let room_id: Option<String> = match cx.argument_opt(5) {
-                Some(p) => {
-                    Some(p.downcast::<JsString>().or_throw(&mut cx)?.value())
-                },
-                None => None
-            };
-
+            let args = cx.argument::<JsObject>(0)?;
+            let (term, limit, before_limit, after_limit, order_by_recent, room_id) = parse_search_object(&mut cx, args)?;
             let mut this = cx.this();
 
             let mut ret = {
