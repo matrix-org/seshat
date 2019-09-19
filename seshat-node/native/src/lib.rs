@@ -86,8 +86,8 @@ impl Task for SearchTask {
         let count = JsNumber::new(&mut cx, count as f64);
 
         for (i, element) in ret.drain(..).enumerate() {
-            let object = search_result_to_js(&mut cx, element);
-            results.set(&mut cx, i as u32, object).unwrap();
+            let object = search_result_to_js(&mut cx, element)?;
+            results.set(&mut cx, i as u32, object)?;
         }
 
         let search_result = JsObject::new(&mut cx);
@@ -337,7 +337,7 @@ declare_types! {
             let count = JsNumber::new(&mut cx, count as f64);
 
             for (i, element) in ret.drain(..).enumerate() {
-                let object = search_result_to_js(&mut cx, element);
+                let object = search_result_to_js(&mut cx, element)?;
                 results.set(&mut cx, i as u32, object)?;
             }
 
@@ -483,7 +483,7 @@ fn add_backlog_events_helper(
 fn search_result_to_js<'a, C: Context<'a>>(
     cx: &mut C,
     mut result: SearchResult,
-) -> Handle<'a, JsObject> {
+) -> Result<Handle<'a, JsObject>, neon::result::Throw> {
     let rank = cx.number(f64::from(result.score));
 
     // TODO handle these unwraps. While it is unlikely that deserialization will
@@ -492,7 +492,7 @@ fn search_result_to_js<'a, C: Context<'a>>(
     // crash if someone else puts events into the database.
 
     let source: serde_json::Value = serde_json::from_str(&result.event_source).unwrap();
-    let source = neon_serde::to_value(&mut *cx, &source).unwrap();
+    let source = neon_serde::to_value(&mut *cx, &source)?;
 
     let object = JsObject::new(&mut *cx);
     let context = JsObject::new(&mut *cx);
@@ -503,37 +503,37 @@ fn search_result_to_js<'a, C: Context<'a>>(
 
     for (i, event) in result.events_before.iter().enumerate() {
         let js_event: serde_json::Value = serde_json::from_str(event).unwrap();
-        let js_event = neon_serde::to_value(&mut *cx, &js_event).unwrap();
-        before.set(&mut *cx, i as u32, js_event).unwrap();
+        let js_event = neon_serde::to_value(&mut *cx, &js_event)?;
+        before.set(&mut *cx, i as u32, js_event)?;
     }
 
     for (i, event) in result.events_after.iter().enumerate() {
         let js_event: serde_json::Value = serde_json::from_str(event).unwrap();
-        let js_event = neon_serde::to_value(&mut *cx, &js_event).unwrap();
-        after.set(&mut *cx, i as u32, js_event).unwrap();
+        let js_event = neon_serde::to_value(&mut *cx, &js_event)?;
+        after.set(&mut *cx, i as u32, js_event)?;
     }
 
     for (sender, profile) in result.profile_info.drain() {
-        let (js_sender, js_profile) = profile_to_js(cx, sender, profile);
-        profile_info.set(&mut *cx, js_sender, js_profile).unwrap();
+        let (js_sender, js_profile) = profile_to_js(cx, sender, profile)?;
+        profile_info.set(&mut *cx, js_sender, js_profile)?;
     }
 
-    context.set(&mut *cx, "events_before", before).unwrap();
-    context.set(&mut *cx, "events_after", after).unwrap();
-    context.set(&mut *cx, "profile_info", profile_info).unwrap();
+    context.set(&mut *cx, "events_before", before)?;
+    context.set(&mut *cx, "events_after", after)?;
+    context.set(&mut *cx, "profile_info", profile_info)?;
 
-    object.set(&mut *cx, "rank", rank).unwrap();
-    object.set(&mut *cx, "result", source).unwrap();
-    object.set(&mut *cx, "context", context).unwrap();
+    object.set(&mut *cx, "rank", rank)?;
+    object.set(&mut *cx, "result", source)?;
+    object.set(&mut *cx, "context", context)?;
 
-    object
+    Ok(object)
 }
 
 fn profile_to_js<'a, C: Context<'a>>(
     cx: &mut C,
     sender: String,
     profile: Profile,
-) -> (Handle<'a, JsString>, Handle<'a, JsObject>) {
+) -> Result<(Handle<'a, JsString>, Handle<'a, JsObject>), neon::result::Throw> {
     let js_profile = JsObject::new(&mut *cx);
 
     let js_sender = JsString::new(&mut *cx, sender);
@@ -541,28 +541,24 @@ fn profile_to_js<'a, C: Context<'a>>(
     match profile.display_name {
         Some(name) => {
             let js_name = JsString::new(&mut *cx, name);
-            js_profile.set(&mut *cx, "display_name", js_name).unwrap();
+            js_profile.set(&mut *cx, "display_name", js_name)?;
         }
         None => {
-            js_profile
-                .set(&mut *cx, "display_name", JsNull::new())
-                .unwrap();
+            js_profile.set(&mut *cx, "display_name", JsNull::new())?;
         }
     };
 
     match profile.avatar_url {
         Some(avatar) => {
             let js_avatar = JsString::new(&mut *cx, avatar);
-            js_profile.set(&mut *cx, "avatar_url", js_avatar).unwrap();
+            js_profile.set(&mut *cx, "avatar_url", js_avatar)?;
         }
         None => {
-            js_profile
-                .set(&mut *cx, "avatar_url", JsNull::new())
-                .unwrap();
+            js_profile.set(&mut *cx, "avatar_url", JsNull::new())?;
         }
     }
 
-    (js_sender, js_profile)
+    Ok((js_sender, js_profile))
 }
 
 fn parse_event(
