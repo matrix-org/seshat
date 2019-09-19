@@ -92,12 +92,13 @@ impl Connection {
     /// Load all the previously stored backlog checkpoints from the database.
     /// # Arguments
     pub fn load_checkpoints(&self) -> Result<Vec<BacklogCheckpoint>> {
-        let mut stmt = self.prepare("SELECT room_id, token FROM backlogcheckpoints")?;
+        let mut stmt = self.prepare("SELECT room_id, token, full_crawl FROM backlogcheckpoints")?;
 
         let rows = stmt.query_map(NO_PARAMS, |row| {
             Ok(BacklogCheckpoint {
                 room_id: row.get(0)?,
                 token: row.get(1)?,
+                full_crawl: row.get(2)?,
             })
         })?;
 
@@ -389,7 +390,8 @@ impl Database {
                 id INTEGER NOT NULL PRIMARY KEY,
                 room_id TEXT NOT NULL,
                 token TEXT NOT NULL,
-                UNIQUE(room_id,token)
+                full_crawl BOOLEAN NOT NULL,
+                UNIQUE(room_id,token,full_crawl)
             )",
             NO_PARAMS,
         )?;
@@ -727,17 +729,17 @@ impl Database {
     ) -> Result<()> {
         if let Some(checkpoint) = new {
             connection.execute(
-                "INSERT OR IGNORE INTO backlogcheckpoints (room_id, token)
-                VALUES(?1, ?2)",
-                &[&checkpoint.room_id, &checkpoint.token],
+                "INSERT OR IGNORE INTO backlogcheckpoints (room_id, token, full_crawl)
+                VALUES(?1, ?2, ?3)",
+                &[&checkpoint.room_id, &checkpoint.token, &checkpoint.full_crawl as &dyn ToSql],
             )?;
         }
 
         if let Some(checkpoint) = old {
             connection.execute(
                 "DELETE FROM backlogcheckpoints
-                WHERE (room_id=?1 AND token=?2)",
-                &[&checkpoint.room_id, &checkpoint.token],
+                WHERE (room_id=?1 AND token=?2 AND full_crawl=?3)",
+                &[&checkpoint.room_id, &checkpoint.token, &checkpoint.full_crawl as &dyn ToSql],
             )?;
         }
 
@@ -999,6 +1001,7 @@ fn save_and_load_checkpoints() {
     let checkpoint = BacklogCheckpoint {
         room_id: "!test:room".to_string(),
         token: "1234".to_string(),
+        full_crawl: false,
     };
 
     let mut connection = db.get_connection().unwrap();
@@ -1014,6 +1017,7 @@ fn save_and_load_checkpoints() {
     let new_checkpoint = BacklogCheckpoint {
         room_id: "!test:room".to_string(),
         token: "12345".to_string(),
+        full_crawl: false,
     };
 
     Database::replace_backlog_checkpoint(&connection, Some(&new_checkpoint), Some(&checkpoint))
@@ -1043,6 +1047,7 @@ fn save_and_search_backlog_events() {
     let checkpoint = BacklogCheckpoint {
         room_id: "!test:room".to_string(),
         token: "1234".to_string(),
+        full_crawl: false,
     };
 
     let receiver = db.add_backlog_events(events, Some(checkpoint.clone()), None);

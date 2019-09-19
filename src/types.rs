@@ -56,6 +56,8 @@ pub struct BacklogCheckpoint {
     /// The token that can be used to go further back in the event timeline of
     /// the room and fetch more messages from the backlog.
     pub token: String,
+    /// Is this a checkpoint for a complete crawl of the message history.
+    pub full_crawl: bool
 }
 
 #[cfg(test)]

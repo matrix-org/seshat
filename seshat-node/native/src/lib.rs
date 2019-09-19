@@ -156,9 +156,11 @@ impl Task for LoadCheckPointsTask {
 
             let room_id = JsString::new(&mut cx, c.room_id);
             let token = JsString::new(&mut cx, c.token);
+            let full_crawl = JsBoolean::new(&mut cx, c.full_crawl);
 
             js_checkpoint.set(&mut cx, "room_id", room_id)?;
             js_checkpoint.set(&mut cx, "token", token)?;
+            js_checkpoint.set(&mut cx, "full_crawl", full_crawl)?;
 
             ret.set(&mut cx, i as u32, js_checkpoint)?;
         }
@@ -662,8 +664,13 @@ fn js_checkpoint_to_rust(
         .downcast::<JsString>()
         .or_throw(&mut *cx)?
         .value();
+    let full_crawl: bool = object
+        .get(&mut *cx, "full_crawl")?
+        .downcast::<JsBoolean>()
+        .unwrap_or_else(|_| JsBoolean::new(&mut *cx, false))
+        .value();
 
-    Ok(BacklogCheckpoint { room_id, token })
+    Ok(BacklogCheckpoint { room_id, token, full_crawl })
 }
 
 register_module!(mut cx, { cx.export_class::<Seshat>("Seshat") });
