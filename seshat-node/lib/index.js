@@ -77,150 +77,150 @@ const seshat = require('../native');
  * let results = await db.search('Test');
  */
 class Seshat extends seshat.Seshat {
-  /**
-   * Add an event to the database.
-   *
-   * This method adds an event only to a queue. To write the events to the
-   * database the <code>commit()</code> methods needs to be called.
-   *
-   * @param  {matrixEvent} matrixEvent A Matrix event that should be added to
-   * the database.
-   * @param  {matrixProfile} profile The user profile of the sender at the time
-   * the event was sent.
-   *
-   * @return {Array.<searchResult>} The array of events that matched the search
-   * term.
-   */
-  addEvent(matrixEvent, profile = {}) {
-    return super.addEvent(matrixEvent, profile);
-  };
+    /**
+     * Add an event to the database.
+     *
+     * This method adds an event only to a queue. To write the events to the
+     * database the <code>commit()</code> methods needs to be called.
+     *
+     * @param  {matrixEvent} matrixEvent A Matrix event that should be added to
+     * the database.
+     * @param  {matrixProfile} profile The user profile of the sender at the time
+     * the event was sent.
+     *
+     * @return {Array.<searchResult>} The array of events that matched the search
+     * term.
+     */
+    addEvent(matrixEvent, profile = {}) {
+        return super.addEvent(matrixEvent, profile);
+    };
 
-  /**
-   * Commit the queued up events to the database.
-   *
-   * This is the asynchronous equivalent of the <code>commitSync()</code>
-   * method.
-   *
-   * @return {Promise<number>} The latest stamp of the commit. The stamp is
-   * a unique incrementing number that identifies the commit.
-   */
-  async commit() {
-    return new Promise((resolve, reject) => {
-      this.commitAsync((err, res) => {
-        resolve(res);
-      });
-    });
-  }
+    /**
+     * Commit the queued up events to the database.
+     *
+     * This is the asynchronous equivalent of the <code>commitSync()</code>
+     * method.
+     *
+     * @return {Promise<number>} The latest stamp of the commit. The stamp is
+     * a unique incrementing number that identifies the commit.
+     */
+    async commit() {
+        return new Promise((resolve, reject) => {
+            this.commitAsync((err, res) => {
+                resolve(res);
+            });
+        });
+    }
 
-  /**
-   * Commit the queued up events to the database.
-   *
-   * @param  {boolean} wait Wait for the events to be commited. If true will
-   * block until the events are commited.
-   *
-   * @return {number} The latest stamp of the commit. The stamp is a unique
-   * incrementing number that identifies the commit.
-   */
-  commitSync(wait = false) {
-    return super.commitSync(wait);
-  }
+    /**
+     * Commit the queued up events to the database.
+     *
+     * @param  {boolean} wait Wait for the events to be commited. If true will
+     * block until the events are commited.
+     *
+     * @return {number} The latest stamp of the commit. The stamp is a unique
+     * incrementing number that identifies the commit.
+     */
+    commitSync(wait = false) {
+        return super.commitSync(wait);
+    }
 
-  /**
-   * Reload the indexer of the database to reflect the changes of the last
-   * commit. A reload will happen automatically, this method is mainly useful
-   * for unit testing purposes to force a reload before a search.
-   */
-  reload() {
-    super.reload();
-  };
+    /**
+     * Reload the indexer of the database to reflect the changes of the last
+     * commit. A reload will happen automatically, this method is mainly useful
+     * for unit testing purposes to force a reload before a search.
+     */
+    reload() {
+        super.reload();
+    };
 
-  /**
-   * Search the database for events using the given search term.
-   * This is the asynchronous equivalent of the <code>searchSync()</code>
-   * method.
-   *
-   * @param  {object} args Arguments object for the search.
-   * @param  {string} args.searchTerm The term that is used to search the
-   * database.
-   * @param  {number} args.limit The maximum number of events that the search
-   * should return.
-   * @param  {number} args.before_limit The number of events to fetch that
-   * preceded the event that matched the search term.
-   * @param  {number} args.after_limit The number of events to fetch that
-   * followed the event that matched the search term.
-   *
-   * @return {Promise<Array.<searchResult>>} The array of events that matched
-   * the search term.
-   */
-  async search(args) {
-    return new Promise((resolve) => {
-      this.searchAsync(args, (err, res) => {
-        resolve(res);
-      });
-    });
-  }
+    /**
+     * Search the database for events using the given search term.
+     * This is the asynchronous equivalent of the <code>searchSync()</code>
+     * method.
+     *
+     * @param  {object} args Arguments object for the search.
+     * @param  {string} args.searchTerm The term that is used to search the
+     * database.
+     * @param  {number} args.limit The maximum number of events that the search
+     * should return.
+     * @param  {number} args.before_limit The number of events to fetch that
+     * preceded the event that matched the search term.
+     * @param  {number} args.after_limit The number of events to fetch that
+     * followed the event that matched the search term.
+     *
+     * @return {Promise<Array.<searchResult>>} The array of events that matched
+     * the search term.
+     */
+    async search(args) {
+        return new Promise((resolve) => {
+            this.searchAsync(args, (err, res) => {
+                resolve(res);
+            });
+        });
+    }
 
-  /**
-   * Search the database for events using the given search term.
-   * @param  {string} term The term that is used to search the database.
-   * @param  {number} limit The maximum number of events that the search should
-   * return.
-   * @param  {number} before_limit The number of events to fetch that preceded
-   * the event that matched the search term.
-   * @param  {number} after_limit The number of events to fetch that followed
-   * the event that matched the search term.
-   *
-   * @return {Array.<searchResult>} The array of events that matched the search
-   * term.
-   */
-  searchSync(term, limit = 10, before_limit = 0, after_limit = 0, order_by_recent = false) {
-    return super.searchSync(term, limit, before_limit, after_limit, order_by_recent);
-  }
+    /**
+     * Search the database for events using the given search term.
+     * @param  {string} term The term that is used to search the database.
+     * @param  {number} limit The maximum number of events that the search should
+     * return.
+     * @param  {number} before_limit The number of events to fetch that preceded
+     * the event that matched the search term.
+     * @param  {number} after_limit The number of events to fetch that followed
+     * the event that matched the search term.
+     *
+     * @return {Array.<searchResult>} The array of events that matched the search
+     * term.
+     */
+    searchSync(term, limit = 10, before_limit = 0, after_limit = 0, order_by_recent = false) {
+        return super.searchSync(term, limit, before_limit, after_limit, order_by_recent);
+    }
 
-  /**
-   * Add a batch of events from the room history to the database.
-   * @param  {array<matrixEvent>} events An array of events that will be added
-   * to the database.
-   * @param  {checkpoint} newCheckpoint
-   * @param  {checkpoint} oldCheckPoint
-   *
-   * @return {Array.<searchResult>} The array of events that matched the search
-   * term.
-   */
-  addBacklogEventsSync(events, newCheckpoint = null, oldCheckPoint = null) {
-    return super.addBacklogEventsSync(events, newCheckpoint, oldCheckPoint);
-  }
+    /**
+     * Add a batch of events from the room history to the database.
+     * @param  {array<matrixEvent>} events An array of events that will be added
+     * to the database.
+     * @param  {checkpoint} newCheckpoint
+     * @param  {checkpoint} oldCheckPoint
+     *
+     * @return {Array.<searchResult>} The array of events that matched the search
+     * term.
+     */
+    addBacklogEventsSync(events, newCheckpoint = null, oldCheckPoint = null) {
+        return super.addBacklogEventsSync(events, newCheckpoint, oldCheckPoint);
+    }
 
-  async addBacklogEvents(events, newCheckpoint = null, oldCheckPoint = null) {
-    return new Promise((resolve, reject) => {
-      super.addBacklogEvents(
-          events,
-          newCheckpoint,
-          oldCheckPoint,
-          (err, res) => {
-            if (err) reject(err);
-            else resolve(res);
-          }
-      );
-    });
-  }
+    async addBacklogEvents(events, newCheckpoint = null, oldCheckPoint = null) {
+        return new Promise((resolve, reject) => {
+            super.addBacklogEvents(
+                events,
+                newCheckpoint,
+                oldCheckPoint,
+                (err, res) => {
+                    if (err) reject(err);
+                    else resolve(res);
+                }
+            );
+        });
+    }
 
-  async addBacklogCheckpoint(checkpoint) {
-    return this.addBacklogEvents([], checkpoint);
-  }
+    async addBacklogCheckpoint(checkpoint) {
+        return this.addBacklogEvents([], checkpoint);
+    }
 
-  async removeBacklogCheckpoint(checkpoint) {
-    return this.addBacklogEvents([], null, checkpoint);
-  }
+    async removeBacklogCheckpoint(checkpoint) {
+        return this.addBacklogEvents([], null, checkpoint);
+    }
 
-  async loadCheckpoints() {
-    return new Promise((resolve) => {
-      super.loadCheckpoints((err, res) => {
-        if (err) reject(err);
-        else resolve(res);
-      });
-    });
-  }
+    async loadCheckpoints() {
+        return new Promise((resolve) => {
+            super.loadCheckpoints((err, res) => {
+                if (err) reject(err);
+                else resolve(res);
+            });
+        });
+    }
 }
 
 module.exports = Seshat;
