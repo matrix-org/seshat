@@ -32,7 +32,7 @@ struct CommitTask {
 
 impl Task for CommitTask {
     type Output = usize;
-    type Error = String;
+    type Error = ();
     type JsEvent = JsNumber;
 
     fn perform(&self) -> Result<Self::Output, Self::Error> {
@@ -60,7 +60,7 @@ struct SearchTask {
 
 impl Task for SearchTask {
     type Output = Vec<SearchResult>;
-    type Error = String;
+    type Error = ();
     type JsEvent = JsValue;
 
     fn perform(&self) -> Result<Self::Output, Self::Error> {
