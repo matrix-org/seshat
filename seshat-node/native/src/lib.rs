@@ -368,10 +368,12 @@ declare_types! {
     }
 }
 
+type SearchArgs = (String, usize, usize, usize, bool, Option<String>);
+
 fn parse_search_object(
     cx: &mut CallContext<Seshat>,
     argument: Handle<JsObject>,
-) -> Result<(String, usize, usize, usize, bool, Option<String>), neon::result::Throw> {
+) -> Result<SearchArgs, neon::result::Throw> {
     let term = argument
         .get(&mut *cx, "search_term")?
         .downcast::<JsString>()
