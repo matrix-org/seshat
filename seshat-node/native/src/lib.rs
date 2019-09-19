@@ -459,15 +459,21 @@ fn add_backlog_events_helper(
 
     for obj in js_events.drain(..) {
         let obj = obj.downcast::<JsObject>().or_throw(cx)?;
-        let event = obj.get(cx, "event")?.downcast::<JsObject>().or_throw(cx)?;
-        // TODO make the profile optional.
-        let profile = obj
-            .get(cx, "profile")?
-            .downcast::<JsObject>()
-            .or_throw(cx)?;
 
+        let event = obj.get(cx, "event")?.downcast::<JsObject>().or_throw(cx)?;
         let event = parse_event(cx, *event)?;
-        let profile = parse_profile(cx, *profile)?;
+
+        let profile: Profile = match obj.get(cx, "profile") {
+            Ok(p) => {
+                if let Ok(p) = p.downcast::<JsObject>() {
+                    parse_profile(cx, *p)?
+                } else {
+                    Profile { display_name: None, avatar_url: None }
+                }
+            }
+            Err(_e) => Profile { display_name: None, avatar_url: None },
+        };
+
 
         events.push((event, profile));
     }
