@@ -93,11 +93,9 @@ impl Task for SearchTask {
         let search_result = JsObject::new(&mut cx);
         let highlights = JsArray::new(&mut cx, 0);
 
-        search_result.set(&mut cx, "count", count).unwrap();
-        search_result.set(&mut cx, "results", results).unwrap();
-        search_result
-            .set(&mut cx, "highlights", highlights)
-            .unwrap();
+        search_result.set(&mut cx, "count", count)?;
+        search_result.set(&mut cx, "results", results)?;
+        search_result.set(&mut cx, "highlights", highlights)?;
 
         Ok(search_result.upcast())
     }
