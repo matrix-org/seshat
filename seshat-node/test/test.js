@@ -16,6 +16,16 @@ const matrixEvent = {
   origin_server_ts: 1516362244026,
 };
 
+const matrixEventRoom2 = {
+  event_id: '$15163622515EBvZJ:localhost',
+  room_id: '!TESTROOM2',
+  sender: '@alice:example.org',
+  content: {
+    body: 'Test message',
+  },
+  origin_server_ts: 1516362244064,
+};
+
 const matrixProfile = {
   display_name: 'Alice (from wonderland)',
   avatar_url: '',
@@ -148,6 +158,24 @@ describe('Database', function() {
     assert.notEqual(Object.entries(results).length, 0);
     const checkpoints = await db.loadCheckpoints();
     assert.deepEqual(checkpoints[0], checkPoint);
+  });
+
+  it('should allow to search events in a specific room', async function() {
+    const db = createDb();
+    db.addEvent(matrixEvent, matrixProfileOnlyDisplayName);
+    db.addEvent(matrixEventRoom2, matrixProfileOnlyDisplayName);
+
+    const opstamp = await db.commit();
+    assert.equal(opstamp, 1);
+    await db.commit();
+    await db.commit();
+
+    const results = await db.search({
+      search_term: 'Test',
+      room_id: '!TESTROOM',
+    });
+    assert.equal(results.count, 1);
+    assert.deepEqual(results.results[0].result, matrixEvent);
   });
 
   it('should throw an error when adding events with missing fields.', function() {

@@ -415,13 +415,26 @@ fn parse_search_object(
         .unwrap_or_else(|_| JsBoolean::new(&mut *cx, false))
         .value();
 
+    let room_id = argument.get(&mut *cx, "room_id");
+
+    let room_id: Option<String> = match room_id {
+        Ok(r) => {
+            if let Ok(r) = r.downcast::<JsString>() {
+                Some(r.value())
+            } else {
+                None
+            }
+        }
+        Err(_e) => None,
+    };
+
     Ok((
         term,
         limit,
         before_limit,
         after_limit,
         order_by_recent,
-        None,
+        room_id,
     ))
 }
 
