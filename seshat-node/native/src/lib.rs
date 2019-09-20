@@ -14,12 +14,19 @@
 
 #[macro_use]
 extern crate neon;
+use std::path::PathBuf;
 use std::sync::mpsc::Receiver;
+use fs_extra::dir;
 
 use neon::prelude::*;
 use neon_serde;
 use serde_json;
 use seshat::{BacklogCheckpoint, Connection, Database, Event, Profile, SearchResult, Searcher};
+
+#[no_mangle]
+pub extern "C" fn __cxa_pure_virtual() {
+    loop {}
+}
 
 pub struct SeshatDatabase(Database);
 
@@ -172,6 +179,31 @@ impl Task for LoadCheckPointsTask {
     }
 }
 
+struct GetSizeTask {
+    path: PathBuf,
+}
+
+impl Task for GetSizeTask {
+    type Output = u64;
+    type Error = fs_extra::error::Error;
+    type JsEvent = JsNumber;
+
+    fn perform(&self) -> Result<Self::Output, Self::Error> {
+        dir::get_size(&self.path)
+    }
+
+    fn complete(
+        self,
+        mut cx: TaskContext,
+        result: Result<Self::Output, Self::Error>,
+    ) -> JsResult<Self::JsEvent> {
+        match result {
+            Ok(r) => Ok(JsNumber::new(&mut cx, r as f64)),
+            Err(e) => cx.throw_type_error(e.to_string()),
+        }
+    }
+}
+
 declare_types! {
     pub class Seshat for SeshatDatabase {
         init(mut cx) {
@@ -285,6 +317,24 @@ declare_types! {
                     panic!(message)
                 }
             }
+        }
+
+        method getSize(mut cx) {
+            let f = cx.argument::<JsFunction>(0)?;
+
+            let mut this = cx.this();
+
+            let path = {
+                let guard = cx.lock();
+                let db = &mut this.borrow_mut(&guard).0;
+                db.get_path().to_path_buf()
+            };
+
+            let task = GetSizeTask { path };
+            task.schedule(f);
+
+            Ok(cx.undefined().upcast())
+
         }
 
         method commitSync(mut cx) {

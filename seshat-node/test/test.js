@@ -2,7 +2,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const expect = require('chai').expect;
-const assert = require('assert');
+const assert = require('chai').assert;
 
 const Seshat = require('../');
 
@@ -179,6 +179,16 @@ describe('Database', function() {
         });
         assert.equal(results.count, 1);
         assert.deepEqual(results.results[0].result, matrixEvent);
+    });
+
+    it('should allow us to get the size of the database', async function() {
+        const db = createDb();
+        db.addEvent(matrixEvent, matrixProfileOnlyDisplayName);
+        db.addEvent(matrixEventRoom2, matrixProfileOnlyDisplayName);
+
+        await db.commit();
+        let size = await db.getSize();
+        assert.isAbove(size, 0)
     });
 
     it('should throw an error when adding events with missing fields.', function() {
