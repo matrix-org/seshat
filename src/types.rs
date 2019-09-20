@@ -19,6 +19,7 @@ use std::sync::mpsc::Sender;
 use r2d2;
 use rusqlite;
 use tantivy;
+use fs_extra;
 
 #[cfg(test)]
 use fake::faker::internet::raw::*;
@@ -100,11 +101,15 @@ pub enum Error {
     /// pool.
     PoolError(r2d2::Error),
     #[fail(display = "Sqlite database error: {}", _0)]
-    /// Error signaling that there was an error an Sqlite transaction.
+    /// Error signaling that there was an error with a Sqlite transaction.
     DatabaseError(rusqlite::Error),
     #[fail(display = "Index error: {}", _0)]
-    /// Error signaling that there was an with the event indexer.
+    /// Error signaling that there was an error with the event indexer.
     IndexError(tantivy::Error),
+    #[fail(display = "File system error: {}", _0)]
+    /// Error signaling that there was an error while reading from the
+    /// filesystem.
+    FsError(fs_extra::error::Error),
 }
 
 /// Result type for seshat operations.
@@ -136,6 +141,12 @@ impl From<rusqlite::Error> for Error {
 impl From<tantivy::Error> for Error {
     fn from(err: tantivy::Error) -> Self {
         Error::IndexError(err)
+    }
+}
+
+impl From<fs_extra::error::Error> for Error {
+    fn from(err: fs_extra::error::Error) -> Self {
+        Error::FsError(err)
     }
 }
 

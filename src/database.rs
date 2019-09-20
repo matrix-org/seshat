@@ -17,11 +17,12 @@ use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::{ToSql, NO_PARAMS};
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::Arc;
 use std::thread;
 use std::thread::JoinHandle;
+use fs_extra::dir;
 
 #[cfg(test)]
 use fake::{Fake, Faker};
@@ -76,6 +77,7 @@ unsafe impl Send for Searcher {}
 
 /// The Seshat database.
 pub struct Database {
+    path: PathBuf,
     connection: Arc<PooledConnection<SqliteConnectionManager>>,
     pool: r2d2::Pool<SqliteConnectionManager>,
     _write_thread: JoinHandle<()>,
@@ -133,8 +135,11 @@ impl Database {
     /// # Arguments
     ///
     /// * `path` - The directory where the database will be stored in. This
-    /// should be an empty directory if a new database will be created.
-    pub fn new<P: AsRef<Path>>(path: P) -> Result<Database> {
+    /// should be an empty directory if a new database should be created.
+    pub fn new<P: AsRef<Path>>(path: P) -> Result<Database>
+    where
+        PathBuf: std::convert::From<P>,
+    {
         let db_path = path.as_ref().join("events.db");
         let manager = SqliteConnectionManager::file(&db_path);
         let pool = r2d2::Pool::new(manager)?;
@@ -148,12 +153,24 @@ impl Database {
         let (t_handle, tx) = Database::spawn_writer(pool.get()?, writer);
 
         Ok(Database {
+            path: path.into(),
             connection,
             pool,
             _write_thread: t_handle,
             tx,
             index,
         })
+    }
+
+    /// Get the size of the database.
+    /// This returns the number of bytes the database is using on disk.
+    pub fn get_size(&self) -> Result<u64> {
+        Ok(dir::get_size(self.get_path())?)
+    }
+
+    /// Get the path of the directory where the Seshat database lives in.
+    pub fn get_path(&self) -> &Path {
+        self.path.as_path()
     }
 
     fn create_index<P: AsRef<Path>>(path: &P) -> Result<Index> {
@@ -723,13 +740,13 @@ impl Database {
 #[test]
 fn create_event_db() {
     let tmpdir = tempdir().unwrap();
-    let _db = Database::new(tmpdir).unwrap();
+    let _db = Database::new(tmpdir.path()).unwrap();
 }
 
 #[test]
 fn store_profile() {
     let tmpdir = tempdir().unwrap();
-    let db = Database::new(&tmpdir).unwrap();
+    let db = Database::new(tmpdir.path()).unwrap();
 
     let profile = Profile::new("Alice", "");
 
@@ -748,7 +765,7 @@ fn store_profile() {
 #[test]
 fn store_empty_profile() {
     let tmpdir = tempdir().unwrap();
-    let db = Database::new(&tmpdir).unwrap();
+    let db = Database::new(tmpdir.path()).unwrap();
 
     let profile = Profile {
         display_name: None,
@@ -761,7 +778,7 @@ fn store_empty_profile() {
 #[test]
 fn store_event() {
     let tmpdir = tempdir().unwrap();
-    let db = Database::new(&tmpdir).unwrap();
+    let db = Database::new(tmpdir.path()).unwrap();
     let profile = Profile::new("Alice", "");
     let id = Database::save_profile(&db.connection, "@alice.example.org", &profile).unwrap();
 
@@ -771,7 +788,7 @@ fn store_event() {
 #[test]
 fn store_event_and_profile() {
     let tmpdir = tempdir().unwrap();
-    let db = Database::new(&tmpdir).unwrap();
+    let db = Database::new(tmpdir.path()).unwrap();
     let profile = Profile::new("Alice", "");
     Database::save_event(&db.connection, &EVENT, &profile).unwrap();
 }
@@ -779,7 +796,7 @@ fn store_event_and_profile() {
 #[test]
 fn load_event() {
     let tmpdir = tempdir().unwrap();
-    let db = Database::new(&tmpdir).unwrap();
+    let db = Database::new(tmpdir.path()).unwrap();
     let profile = Profile::new("Alice", "");
 
     Database::save_event(&db.connection, &EVENT, &profile).unwrap();
@@ -800,14 +817,14 @@ fn load_event() {
 #[test]
 fn commit_a_write() {
     let tmpdir = tempdir().unwrap();
-    let mut db = Database::new(&tmpdir).unwrap();
+    let mut db = Database::new(tmpdir.path()).unwrap();
     db.commit().unwrap();
 }
 
 #[test]
 fn save_the_event_multithreaded() {
     let tmpdir = tempdir().unwrap();
-    let mut db = Database::new(&tmpdir).unwrap();
+    let mut db = Database::new(tmpdir.path()).unwrap();
     let profile = Profile::new("Alice", "");
 
     db.add_event(EVENT.clone(), profile);
@@ -831,7 +848,7 @@ fn save_the_event_multithreaded() {
 #[test]
 fn save_and_search() {
     let tmpdir = tempdir().unwrap();
-    let mut db = Database::new(&tmpdir).unwrap();
+    let mut db = Database::new(tmpdir.path()).unwrap();
     let profile = Profile::new("Alice", "");
 
     db.add_event(EVENT.clone(), profile);
@@ -846,7 +863,7 @@ fn save_and_search() {
 #[test]
 fn duplicate_empty_profiles() {
     let tmpdir = tempdir().unwrap();
-    let db = Database::new(&tmpdir).unwrap();
+    let db = Database::new(tmpdir.path()).unwrap();
     let profile = Profile {
         display_name: None,
         avatar_url: None,
@@ -878,7 +895,7 @@ fn duplicate_empty_profiles() {
 #[test]
 fn load_a_profile() {
     let tmpdir = tempdir().unwrap();
-    let db = Database::new(&tmpdir).unwrap();
+    let db = Database::new(tmpdir.path()).unwrap();
 
     let profile = Profile::new("Alice", "");
     let user_id = "@alice.example.org";
@@ -892,7 +909,7 @@ fn load_a_profile() {
 #[test]
 fn duplicate_events() {
     let tmpdir = tempdir().unwrap();
-    let mut db = Database::new(&tmpdir).unwrap();
+    let mut db = Database::new(tmpdir.path()).unwrap();
     let profile = Profile::new("Alice", "");
 
     db.add_event(EVENT.clone(), profile.clone());
@@ -909,7 +926,7 @@ fn duplicate_events() {
 #[test]
 fn load_event_context() {
     let tmpdir = tempdir().unwrap();
-    let mut db = Database::new(&tmpdir).unwrap();
+    let mut db = Database::new(tmpdir.path()).unwrap();
     let profile = Profile::new("Alice", "");
 
     db.add_event(EVENT.clone(), profile.clone());
@@ -957,7 +974,7 @@ fn load_event_context() {
 #[test]
 fn save_and_load_checkpoints() {
     let tmpdir = tempdir().unwrap();
-    let mut db = Database::new(&tmpdir).unwrap();
+    let mut db = Database::new(tmpdir.path()).unwrap();
 
     let checkpoint = BacklogCheckpoint {
         room_id: "!test:room".to_string(),
@@ -993,7 +1010,7 @@ fn save_and_load_checkpoints() {
 #[test]
 fn save_and_search_backlog_events() {
     let tmpdir = tempdir().unwrap();
-    let mut db = Database::new(&tmpdir).unwrap();
+    let mut db = Database::new(tmpdir.path()).unwrap();
     let profile = Profile::new("Alice", "");
 
     let mut events = Vec::new();
@@ -1018,4 +1035,30 @@ fn save_and_search_backlog_events() {
 
     let checkpoints = connection.load_checkpoints().unwrap();
     assert!(checkpoints.contains(&checkpoint));
+}
+
+#[test]
+fn get_size() {
+    let tmpdir = tempdir().unwrap();
+    let mut db = Database::new(tmpdir.path()).unwrap();
+
+    let profile = Profile::new("Alice", "");
+
+    db.add_event(EVENT.clone(), profile.clone());
+
+    let mut before_event = None;
+
+    for i in 1..6 {
+        let mut event: Event = Faker.fake();
+        event.server_ts = EVENT.server_ts - i;
+        event.source = format!("Hello before event {}", i);
+
+        if before_event.is_none() {
+            before_event = Some(event.clone());
+        }
+
+        db.add_event(event, profile.clone());
+    }
+    db.commit().unwrap();
+    assert!(db.get_size().unwrap() > 0);
 }
