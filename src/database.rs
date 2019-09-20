@@ -19,7 +19,7 @@ use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 use std::path::Path;
 use std::sync::mpsc::{channel, Receiver, Sender};
-use std::sync::{Arc};
+use std::sync::Arc;
 use std::thread;
 use std::thread::JoinHandle;
 
@@ -30,7 +30,8 @@ use tempfile::tempdir;
 
 use crate::index::{Index, IndexSearcher, Writer};
 use crate::types::{
-    BacklogCheckpoint, Event, EventId, Profile, Result, RoomId, SearchResult, ThreadMessage,
+    BacklogCheckpoint, Event, EventContext, EventId, Profile, Result, RoomId, SearchResult,
+    ThreadMessage,
 };
 
 #[cfg(test)]
@@ -55,17 +56,19 @@ impl Searcher {
         after_limit: usize,
         order_by_recent: bool,
         room_id: Option<&RoomId>,
-    ) -> Vec<SearchResult> {
-        let search_result = self.inner.search(term, limit, order_by_recent, room_id).unwrap();
+    ) -> Result<Vec<SearchResult>> {
+        let search_result = self.inner.search(term, limit, order_by_recent, room_id)?;
 
         if search_result.is_empty() {
-            return vec![];
+            return Ok(vec![]);
         }
 
-        match Database::load_events(&self.database, &search_result, before_limit, after_limit) {
-            Ok(result) => result,
-            Err(_e) => vec![],
-        }
+        Ok(Database::load_events(
+            &self.database,
+            &search_result,
+            before_limit,
+            after_limit,
+        )?)
     }
 }
 
@@ -123,10 +126,7 @@ impl DerefMut for Connection {
     }
 }
 
-type WriterRet = (
-    JoinHandle<()>,
-    Sender<ThreadMessage>,
-);
+type WriterRet = (JoinHandle<()>, Sender<ThreadMessage>);
 
 impl Database {
     /// Create a new Seshat database or open an existing one.
@@ -486,15 +486,14 @@ impl Database {
         event: &Event,
         before_limit: usize,
         after_limit: usize,
-    ) -> (Vec<String>, Vec<String>, HashMap<String, Profile>) {
+    ) -> rusqlite::Result<EventContext> {
         let mut profiles: HashMap<String, Profile> = HashMap::new();
 
         let before = if before_limit == 0 {
             vec![]
         } else {
-            let mut stmt = connection
-                .prepare(
-                    "SELECT source, sender, display_name, avatar_url
+            let mut stmt = connection.prepare(
+                "SELECT source, sender, display_name, avatar_url
                  FROM events
                  INNER JOIN profiles on profiles.id = events.profile_id
                  WHERE (
@@ -503,34 +502,31 @@ impl Database {
                      (server_ts <= ?3)
                  ) ORDER BY server_ts DESC LIMIT ?4
                  ",
-                )
-                .unwrap();
-            let context = stmt
-                .query_map(
-                    &vec![
-                        &event.event_id as &dyn ToSql,
-                        &event.room_id,
-                        &event.server_ts,
-                        &(after_limit as i64),
-                    ],
-                    |row| {
-                        Ok((
-                            row.get(0),
-                            row.get(1),
-                            Profile {
-                                display_name: row.get(2)?,
-                                avatar_url: row.get(3)?,
-                            },
-                        ))
-                    },
-                )
-                .unwrap();
+            )?;
+            let context = stmt.query_map(
+                &vec![
+                    &event.event_id as &dyn ToSql,
+                    &event.room_id,
+                    &event.server_ts,
+                    &(after_limit as i64),
+                ],
+                |row| {
+                    Ok((
+                        row.get(0),
+                        row.get(1),
+                        Profile {
+                            display_name: row.get(2)?,
+                            avatar_url: row.get(3)?,
+                        },
+                    ))
+                },
+            )?;
             let mut ret: Vec<String> = Vec::new();
 
             for row in context {
-                let (source, sender, profile) = row.unwrap();
-                profiles.insert(sender.unwrap(), profile);
-                ret.push(source.unwrap())
+                let (source, sender, profile) = row?;
+                profiles.insert(sender?, profile);
+                ret.push(source?)
             }
 
             ret
@@ -539,9 +535,8 @@ impl Database {
         let after = if after_limit == 0 {
             vec![]
         } else {
-            let mut stmt = connection
-                .prepare(
-                    "SELECT source, sender, display_name, avatar_url
+            let mut stmt = connection.prepare(
+                "SELECT source, sender, display_name, avatar_url
                  FROM events
                  INNER JOIN profiles on profiles.id = events.profile_id
                  WHERE (
@@ -550,41 +545,38 @@ impl Database {
                      (server_ts >= ?3)
                  ) ORDER BY server_ts ASC LIMIT ?4
                  ",
-                )
-                .unwrap();
-            let context = stmt
-                .query_map(
-                    &vec![
-                        &event.event_id as &dyn ToSql,
-                        &event.room_id,
-                        &event.server_ts,
-                        &(after_limit as i64),
-                    ],
-                    |row| {
-                        Ok((
-                            row.get(0),
-                            row.get(1),
-                            Profile {
-                                display_name: row.get(2)?,
-                                avatar_url: row.get(3)?,
-                            },
-                        ))
-                    },
-                )
-                .unwrap();
+            )?;
+            let context = stmt.query_map(
+                &vec![
+                    &event.event_id as &dyn ToSql,
+                    &event.room_id,
+                    &event.server_ts,
+                    &(after_limit as i64),
+                ],
+                |row| {
+                    Ok((
+                        row.get(0),
+                        row.get(1),
+                        Profile {
+                            display_name: row.get(2)?,
+                            avatar_url: row.get(3)?,
+                        },
+                    ))
+                },
+            )?;
 
             let mut ret: Vec<String> = Vec::new();
 
             for row in context {
-                let (source, sender, profile) = row.unwrap();
-                profiles.insert(sender.unwrap(), profile);
-                ret.push(source.unwrap())
+                let (source, sender, profile) = row?;
+                profiles.insert(sender?, profile);
+                ret.push(source?)
             }
 
             ret
         };
 
-        (before, after, profiles)
+        Ok((before, after, profiles))
     }
 
     pub(crate) fn load_events(
@@ -635,7 +627,7 @@ impl Database {
         for row in db_events {
             let (event, profile): (Event, Profile) = row?;
             let (before, after, profiles) =
-                Database::load_event_context(connection, &event, before_limit, after_limit);
+                Database::load_event_context(connection, &event, before_limit, after_limit)?;
 
             let mut profiles = profiles;
             profiles.insert(event.sender.clone(), profile);
@@ -667,7 +659,7 @@ impl Database {
         after_limit: usize,
         order_by_recent: bool,
         room_id: Option<&RoomId>,
-    ) -> Vec<SearchResult> {
+    ) -> Result<Vec<SearchResult>> {
         let searcher = self.get_searcher();
         searcher.search(
             term,
@@ -697,7 +689,11 @@ impl Database {
             connection.execute(
                 "INSERT OR IGNORE INTO backlogcheckpoints (room_id, token, full_crawl)
                 VALUES(?1, ?2, ?3)",
-                &[&checkpoint.room_id, &checkpoint.token, &checkpoint.full_crawl as &dyn ToSql],
+                &[
+                    &checkpoint.room_id,
+                    &checkpoint.token,
+                    &checkpoint.full_crawl as &dyn ToSql,
+                ],
             )?;
         }
 
@@ -705,7 +701,11 @@ impl Database {
             connection.execute(
                 "DELETE FROM backlogcheckpoints
                 WHERE (room_id=?1 AND token=?2 AND full_crawl=?3)",
-                &[&checkpoint.room_id, &checkpoint.token, &checkpoint.full_crawl as &dyn ToSql],
+                &[
+                    &checkpoint.room_id,
+                    &checkpoint.token,
+                    &checkpoint.full_crawl as &dyn ToSql,
+                ],
             )?;
         }
 
@@ -838,7 +838,7 @@ fn save_and_search() {
     db.commit().unwrap();
     db.reload().unwrap();
 
-    let result = db.search("Test", 10, 0, 0, false, None);
+    let result = db.search("Test", 10, 0, 0, false, None).unwrap();
     assert!(!result.is_empty());
     assert_eq!(result[0].event_source, EVENT.source);
 }
@@ -946,7 +946,7 @@ fn load_event_context() {
     db.reload().unwrap();
     db.reload().unwrap();
 
-    let (before, after, _) = Database::load_event_context(&db.connection, &EVENT, 1, 1);
+    let (before, after, _) = Database::load_event_context(&db.connection, &EVENT, 1, 1).unwrap();
 
     assert_eq!(before.len(), 1);
     assert_eq!(before[0], before_event.as_ref().unwrap().source);

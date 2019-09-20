@@ -57,7 +57,7 @@ pub struct BacklogCheckpoint {
     /// the room and fetch more messages from the backlog.
     pub token: String,
     /// Is this a checkpoint for a complete crawl of the message history.
-    pub full_crawl: bool
+    pub full_crawl: bool,
 }
 
 #[cfg(test)]
@@ -110,8 +110,16 @@ pub enum Error {
 /// Result type for seshat operations.
 pub type Result<T> = std::result::Result<T, Error>;
 
+pub(crate) type EventContext = (
+    Vec<SerializedEvent>,
+    Vec<SerializedEvent>,
+    HashMap<MxId, Profile>,
+);
+
 pub(crate) type RoomId = String;
+pub(crate) type MxId = String;
 pub(crate) type EventId = String;
+pub(crate) type SerializedEvent = String;
 
 impl From<r2d2::Error> for Error {
     fn from(err: r2d2::Error) -> Self {
@@ -176,8 +184,8 @@ impl Profile {
 pub struct SearchResult {
     /// The score that the full text search assigned to this event.
     pub score: f32,
-    /// The source of the event that matched a search.
-    pub event_source: String,
+    /// The serialized source of the event that matched a search.
+    pub event_source: SerializedEvent,
     /// Events that happened before our matched event.
     pub events_before: Vec<String>,
     /// Events that happened after our matched event.

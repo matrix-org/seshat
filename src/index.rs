@@ -231,7 +231,9 @@ fn add_events_to_differing_rooms() {
     index.reload().unwrap();
 
     let searcher = index.get_searcher();
-    let result = searcher.search("Test", 10, false, Some(&"!Test:room".to_string())).unwrap();
+    let result = searcher
+        .search("Test", 10, false, Some(&"!Test:room".to_string()))
+        .unwrap();
 
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].1, event_id);

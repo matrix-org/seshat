@@ -60,18 +60,18 @@ struct SearchTask {
 
 impl Task for SearchTask {
     type Output = Vec<SearchResult>;
-    type Error = ();
+    type Error = seshat::Error;
     type JsEvent = JsObject;
 
     fn perform(&self) -> Result<Self::Output, Self::Error> {
-        Ok(self.inner.search(
+        self.inner.search(
             &self.term,
             self.limit,
             self.before_limit,
             self.after_limit,
             self.order_by_recent,
             self.room_id.as_ref(),
-        ))
+        )
     }
 
     fn complete(
@@ -79,7 +79,10 @@ impl Task for SearchTask {
         mut cx: TaskContext,
         result: Result<Self::Output, Self::Error>,
     ) -> JsResult<Self::JsEvent> {
-        let mut ret = result.unwrap();
+        let mut ret = match result {
+            Ok(r) => r,
+            Err(e) => return cx.throw_type_error(e.to_string()),
+        };
 
         let count = ret.len();
         let results = JsArray::new(&mut cx, count as u32);
@@ -315,10 +318,15 @@ declare_types! {
             let (term, limit, before_limit, after_limit, order_by_recent, room_id) = parse_search_object(&mut cx, args)?;
             let mut this = cx.this();
 
-            let mut ret = {
+            let ret = {
                 let guard = cx.lock();
                 let db = &mut this.borrow_mut(&guard).0;
                 db.search(&term, limit, before_limit, after_limit, order_by_recent, room_id.as_ref())
+            };
+
+            let mut ret = match ret {
+                Ok(r) => r,
+                Err(e) => return cx.throw_type_error(e.to_string()),
             };
 
             let count = ret.len();
