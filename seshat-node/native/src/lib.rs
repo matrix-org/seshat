@@ -14,9 +14,7 @@
 
 #[macro_use]
 extern crate neon;
-use std::sync::atomic::AtomicUsize;
 use std::sync::mpsc::Receiver;
-use std::sync::{Arc, Condvar, Mutex};
 
 use neon::prelude::*;
 use neon_serde;
@@ -26,17 +24,16 @@ use seshat::{BacklogCheckpoint, Connection, Database, Event, Profile, SearchResu
 pub struct SeshatDatabase(Database);
 
 struct CommitTask {
-    last_opstamp: usize,
-    cvar: Arc<(Mutex<AtomicUsize>, Condvar)>,
+    receiver: Receiver<seshat::Result<()>>,
 }
 
 impl Task for CommitTask {
-    type Output = usize;
-    type Error = ();
-    type JsEvent = JsNumber;
+    type Output = ();
+    type Error = seshat::Error;
+    type JsEvent = JsUndefined;
 
     fn perform(&self) -> Result<Self::Output, Self::Error> {
-        Ok(Database::wait_for_commit(self.last_opstamp, &self.cvar))
+        self.receiver.recv().unwrap()
     }
 
     fn complete(
@@ -44,7 +41,10 @@ impl Task for CommitTask {
         mut cx: TaskContext,
         result: Result<Self::Output, Self::Error>,
     ) -> JsResult<Self::JsEvent> {
-        Ok(cx.number(result.unwrap() as f64))
+        match result {
+            Ok(_) => Ok(cx.undefined()),
+            Err(_) => cx.throw_error("Error writing to database"),
+        }
     }
 }
 
@@ -61,7 +61,7 @@ struct SearchTask {
 impl Task for SearchTask {
     type Output = Vec<SearchResult>;
     type Error = ();
-    type JsEvent = JsValue;
+    type JsEvent = JsObject;
 
     fn perform(&self) -> Result<Self::Output, Self::Error> {
         Ok(self.inner.search(
@@ -97,7 +97,7 @@ impl Task for SearchTask {
         search_result.set(&mut cx, "results", results)?;
         search_result.set(&mut cx, "highlights", highlights)?;
 
-        Ok(search_result.upcast())
+        Ok(search_result)
     }
 }
 
@@ -254,13 +254,13 @@ declare_types! {
             let f = cx.argument::<JsFunction>(0)?;
             let mut this = cx.this();
 
-            let (last_opstamp, cvar) = {
+            let receiver = {
                 let guard = cx.lock();
                 let db = &mut this.borrow_mut(&guard).0;
-                db.commit_get_cvar()
+                db.commit_no_wait()
             };
 
-            let task = CommitTask { last_opstamp, cvar };
+            let task = CommitTask { receiver };
             task.schedule(f);
 
             Ok(cx.undefined().upcast())
@@ -305,7 +305,7 @@ declare_types! {
             };
 
             match ret {
-                Some(r) => Ok(cx.number(r as f64).upcast()),
+                Some(_) => Ok(cx.undefined().upcast()),
                 None => Ok(cx.undefined().upcast())
             }
         }

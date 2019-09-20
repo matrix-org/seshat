@@ -89,7 +89,7 @@ pub(crate) type BacklogEventsT = (
 pub(crate) enum ThreadMessage {
     Event((Event, Profile)),
     BacklogEvents(BacklogEventsT),
-    Write,
+    Write(Sender<Result<()>>),
 }
 
 #[derive(Fail, Debug)]

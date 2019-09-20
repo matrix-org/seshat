@@ -84,8 +84,7 @@ describe('Database', function() {
 
     it('should allow events to be commited', function() {
         const db = createDb();
-        let ret = db.commitSync(true);
-        assert.equal(ret, 1);
+        db.commitSync(true);
 
         ret = db.commitSync(false);
         assert.equal(ret, undefined);
@@ -99,25 +98,20 @@ describe('Database', function() {
 
         db.commitAsync(function(err, value) {
         if (err) done(err);
-            else {
-                assert.equal(value, 1);
-                done();
-            }
+        else done();
         });
     });
 
     it('should allow events to be commited using a promise', async function() {
         const db = createDb();
-        const opstamp = await db.commit();
-        assert.equal(opstamp, 1);
+        await db.commit();
     });
 
     it('should return a search result for the stored event', async function() {
         const db = createDb();
         db.addEvent(matrixEvent);
 
-        const opstamp = await db.commit();
-        assert.equal(opstamp, 1);
+        await db.commit();
         await db.commit();
         db.reload();
 
@@ -130,8 +124,6 @@ describe('Database', function() {
         const db = createDb();
         db.addEvent(matrixEvent, matrixProfileOnlyDisplayName);
 
-        const opstamp = await db.commit();
-        assert.equal(opstamp, 1);
         await db.commit();
         await db.commit();
 
@@ -177,8 +169,7 @@ describe('Database', function() {
         db.addEvent(matrixEvent, matrixProfileOnlyDisplayName);
         db.addEvent(matrixEventRoom2, matrixProfileOnlyDisplayName);
 
-        const opstamp = await db.commit();
-        assert.equal(opstamp, 1);
+        await db.commit();
         await db.commit();
         await db.commit();
 

@@ -18,9 +18,8 @@ use rusqlite::{ToSql, NO_PARAMS};
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 use std::path::Path;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{channel, Receiver, Sender};
-use std::sync::{Arc, Condvar, Mutex};
+use std::sync::{Arc};
 use std::thread;
 use std::thread::JoinHandle;
 
@@ -78,8 +77,6 @@ pub struct Database {
     pool: r2d2::Pool<SqliteConnectionManager>,
     _write_thread: JoinHandle<()>,
     tx: Sender<ThreadMessage>,
-    condvar: Arc<(Mutex<AtomicUsize>, Condvar)>,
-    last_opstamp: usize,
     index: Index,
 }
 
@@ -129,7 +126,6 @@ impl DerefMut for Connection {
 type WriterRet = (
     JoinHandle<()>,
     Sender<ThreadMessage>,
-    Arc<(Mutex<AtomicUsize>, Condvar)>,
 );
 
 impl Database {
@@ -149,15 +145,13 @@ impl Database {
 
         let index = Database::create_index(&path)?;
         let writer = index.get_writer()?;
-        let (t_handle, tx, condvar) = Database::spawn_writer(pool.get()?, writer);
+        let (t_handle, tx) = Database::spawn_writer(pool.get()?, writer);
 
         Ok(Database {
             connection,
             pool,
             _write_thread: t_handle,
             tx,
-            condvar,
-            last_opstamp: 0,
             index,
         })
     }
@@ -228,22 +222,16 @@ impl Database {
     ) -> WriterRet {
         let (tx, rx): (_, Receiver<ThreadMessage>) = channel();
 
-        let pair = Arc::new((Mutex::new(AtomicUsize::new(0)), Condvar::new()));
-        let pair2 = pair.clone();
-
         let t_handle = thread::spawn(move || loop {
             let mut events: Vec<(Event, Profile)> = Vec::new();
-            let &(ref lock, ref cvar) = &*pair;
-
             loop {
                 let message = rx.recv();
-                let opstamp = lock.lock().unwrap();
 
                 match message {
                     Ok(m) => {
                         match m {
                             ThreadMessage::Event(e) => events.push(e),
-                            ThreadMessage::Write => {
+                            ThreadMessage::Write(sender) => {
                                 Database::write_queued_events(
                                     &connection,
                                     &mut index_writer,
@@ -251,8 +239,7 @@ impl Database {
                                 )
                                 .unwrap();
                                 // Notify that we are done with the write.
-                                opstamp.fetch_add(1, Ordering::SeqCst);
-                                cvar.notify_all();
+                                sender.send(Ok(())).unwrap_or(());
                             }
                             ThreadMessage::BacklogEvents(m) => {
                                 let (check, old_check, events, sender) = m;
@@ -270,7 +257,7 @@ impl Database {
             }
         });
 
-        (t_handle, tx, pair2)
+        (t_handle, tx)
     }
 
     /// Add an event with the given profile to the database.
@@ -291,10 +278,10 @@ impl Database {
     /// non-blocking version of this method exists in the `commit_no_wait()`
     /// method. Getting a Condvar that will signal that the commit was done is
     /// possible using the `commit_get_cvar()` method.
-    pub fn commit(&mut self) -> usize {
-        let (last_opstamp, cvar) = self.commit_get_cvar();
-        self.last_opstamp = Database::wait_for_commit(last_opstamp, &cvar);
-        self.last_opstamp
+    pub fn commit(&mut self) -> Result<()> {
+        let (sender, receiver): (_, Receiver<Result<()>>) = channel();
+        self.tx.send(ThreadMessage::Write(sender)).unwrap();
+        receiver.recv().unwrap()
     }
 
     /// Reload the database so that a search reflects the state of the last
@@ -307,30 +294,10 @@ impl Database {
 
     /// Commit the currently queued up events without waiting for confirmation
     /// that the operation is done.
-    pub fn commit_no_wait(&mut self) {
-        self.tx.send(ThreadMessage::Write).unwrap();
-    }
-
-    /// Commit the currently queued up events and get a Condvar that will be
-    /// notified when the commit operation is done.
-    pub fn commit_get_cvar(&mut self) -> (usize, Arc<(Mutex<AtomicUsize>, Condvar)>) {
-        self.tx.send(ThreadMessage::Write).unwrap();
-        (self.last_opstamp, self.condvar.clone())
-    }
-
-    /// Wait for a Convdvar returned by `commit_get_cvar()` to trigger.
-    pub fn wait_for_commit(
-        last_opstamp: usize,
-        condvar: &Arc<(Mutex<AtomicUsize>, Condvar)>,
-    ) -> usize {
-        let (ref lock, ref cvar) = **condvar;
-        let mut opstamp = lock.lock().unwrap();
-
-        while *opstamp.get_mut() == last_opstamp {
-            opstamp = cvar.wait(opstamp).unwrap();
-        }
-
-        *opstamp.get_mut()
+    pub fn commit_no_wait(&mut self) -> Receiver<Result<()>> {
+        let (sender, receiver): (_, Receiver<Result<()>>) = channel();
+        self.tx.send(ThreadMessage::Write(sender)).unwrap();
+        receiver
     }
 
     /// Add the given events from the backlog to the database.
@@ -835,10 +802,7 @@ fn load_event() {
 fn commit_a_write() {
     let tmpdir = tempdir().unwrap();
     let mut db = Database::new(&tmpdir).unwrap();
-    let opstamp = db.commit();
-    assert_eq!(opstamp, 1);
-    let opstamp = db.commit();
-    assert_eq!(opstamp, 2);
+    db.commit().unwrap();
 }
 
 #[test]
@@ -848,7 +812,7 @@ fn save_the_event_multithreaded() {
     let profile = Profile::new("Alice", "");
 
     db.add_event(EVENT.clone(), profile);
-    db.commit();
+    db.commit().unwrap();
     db.reload().unwrap();
 
     let events = Database::load_events(
@@ -872,10 +836,8 @@ fn save_and_search() {
     let profile = Profile::new("Alice", "");
 
     db.add_event(EVENT.clone(), profile);
-    let opstamp = db.commit();
+    db.commit().unwrap();
     db.reload().unwrap();
-
-    assert_eq!(opstamp, 1);
 
     let result = db.search("Test", 10, 0, 0, false, None);
     assert!(!result.is_empty());
@@ -937,7 +899,7 @@ fn duplicate_events() {
     db.add_event(EVENT.clone(), profile.clone());
     db.add_event(EVENT.clone(), profile.clone());
 
-    db.commit();
+    db.commit().unwrap();
     db.reload().unwrap();
 
     let searcher = db.index.get_searcher();
@@ -981,7 +943,7 @@ fn load_event_context() {
         db.add_event(event, profile.clone());
     }
 
-    db.commit();
+    db.commit().unwrap();
     db.reload().unwrap();
     db.reload().unwrap();
 
