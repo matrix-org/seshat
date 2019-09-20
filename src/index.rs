@@ -69,29 +69,20 @@ impl IndexSearcher {
         limit: usize,
         order_by_recent: bool,
         room_id: Option<&RoomId>,
-    ) -> Vec<(f32, EventId)> {
-        // TODO we might want to propagate those errors instead of returning
-        // empty vectors.
-
+    ) -> Result<Vec<(f32, EventId)>, tv::Error> {
         let term = if let Some(room) = room_id {
             format!("{} AND room_id:\"{}\"", term, room)
         } else {
             term.to_owned()
         };
 
-        let query = match self.query_parser.parse_query(&term) {
-            Ok(q) => q,
-            Err(_e) => return vec![],
-        };
+        let query = self.query_parser.parse_query(&term)?;
 
         if order_by_recent {
             let collector = tv::collector::TopDocs::with_limit(limit);
             let collector = collector.order_by_u64_field(self.server_timestamp_field);
 
-            let result = match self.inner.search(&query, &collector) {
-                Ok(result) => result,
-                Err(_e) => return vec![],
-            };
+            let result = self.inner.search(&query, &collector)?;
 
             let mut docs = Vec::new();
 
@@ -108,15 +99,11 @@ impl IndexSearcher {
 
                 docs.push((1.0, event_id));
             }
-            docs
+            Ok(docs)
         } else {
-            let result = match self
+            let result = self
                 .inner
-                .search(&query, &tv::collector::TopDocs::with_limit(limit))
-            {
-                Ok(result) => result,
-                Err(_e) => return vec![],
-            };
+                .search(&query, &tv::collector::TopDocs::with_limit(limit))?;
 
             let mut docs = Vec::new();
 
@@ -133,7 +120,7 @@ impl IndexSearcher {
 
                 docs.push((score, event_id));
             }
-            docs
+            Ok(docs)
         }
     }
 }
@@ -218,7 +205,7 @@ fn add_an_event() {
     index.reload().unwrap();
 
     let searcher = index.get_searcher();
-    let result = searcher.search("Test", 10, false, None);
+    let result = searcher.search("Test", 10, false, None).unwrap();
 
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].1, event_id)
@@ -244,12 +231,12 @@ fn add_events_to_differing_rooms() {
     index.reload().unwrap();
 
     let searcher = index.get_searcher();
-    let result = searcher.search("Test", 10, false, Some(&"!Test:room".to_string()));
+    let result = searcher.search("Test", 10, false, Some(&"!Test:room".to_string())).unwrap();
 
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].1, event_id);
 
-    let result = searcher.search("Test", 10, false, None);
+    let result = searcher.search("Test", 10, false, None).unwrap();
     assert_eq!(result.len(), 2);
 }
 
@@ -273,7 +260,7 @@ fn order_results_by_date() {
     index.reload().unwrap();
 
     let searcher = index.get_searcher();
-    let result = searcher.search("Test", 10, true, None);
+    let result = searcher.search("Test", 10, true, None).unwrap();
 
     assert_eq!(result.len(), 2);
     assert_eq!(result[1].1, event_id);

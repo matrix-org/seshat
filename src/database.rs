@@ -56,7 +56,7 @@ impl Searcher {
         order_by_recent: bool,
         room_id: Option<&RoomId>,
     ) -> Vec<SearchResult> {
-        let search_result = self.inner.search(term, limit, order_by_recent, room_id);
+        let search_result = self.inner.search(term, limit, order_by_recent, room_id).unwrap();
 
         if search_result.is_empty() {
             return vec![];
@@ -902,7 +902,7 @@ fn duplicate_events() {
     db.reload().unwrap();
 
     let searcher = db.index.get_searcher();
-    let result = searcher.search("Test", 10, false, None);
+    let result = searcher.search("Test", 10, false, None).unwrap();
     assert_eq!(result.len(), 1);
 }
 
