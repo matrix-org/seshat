@@ -470,12 +470,17 @@ fn add_backlog_events_helper(
                 if let Ok(p) = p.downcast::<JsObject>() {
                     parse_profile(cx, *p)?
                 } else {
-                    Profile { display_name: None, avatar_url: None }
+                    Profile {
+                        display_name: None,
+                        avatar_url: None,
+                    }
                 }
             }
-            Err(_e) => Profile { display_name: None, avatar_url: None },
+            Err(_e) => Profile {
+                display_name: None,
+                avatar_url: None,
+            },
         };
-
 
         events.push((event, profile));
     }
@@ -496,12 +501,17 @@ fn search_result_to_js<'a, C: Context<'a>>(
 ) -> Result<Handle<'a, JsObject>, neon::result::Throw> {
     let rank = cx.number(f64::from(result.score));
 
-    // TODO handle these unwraps. While it is unlikely that deserialization will
-    // fail since we control what gets inserted into the database and we
-    // previously serialized the string that gets deserialized we don't want to
-    // crash if someone else puts events into the database.
+    let source = serde_json::from_str(&result.event_source);
+    let source: serde_json::Value = match source {
+        Ok(s) => s,
+        Err(e) => {
+            return cx.throw_type_error(format!(
+                "Couldn't load the event from the store: {}",
+                e.to_string()
+            ))
+        }
+    };
 
-    let source: serde_json::Value = serde_json::from_str(&result.event_source).unwrap();
     let source = neon_serde::to_value(&mut *cx, &source)?;
 
     let object = JsObject::new(&mut *cx);
@@ -512,13 +522,21 @@ fn search_result_to_js<'a, C: Context<'a>>(
     let profile_info = JsObject::new(&mut *cx);
 
     for (i, event) in result.events_before.iter().enumerate() {
-        let js_event: serde_json::Value = serde_json::from_str(event).unwrap();
+        let js_event = serde_json::from_str(event);
+        let js_event: serde_json::Value = match js_event {
+            Ok(e) => e,
+            Err(_) => continue,
+        };
         let js_event = neon_serde::to_value(&mut *cx, &js_event)?;
         before.set(&mut *cx, i as u32, js_event)?;
     }
 
     for (i, event) in result.events_after.iter().enumerate() {
-        let js_event: serde_json::Value = serde_json::from_str(event).unwrap();
+        let js_event = serde_json::from_str(event);
+        let js_event: serde_json::Value = match js_event {
+            Ok(e) => e,
+            Err(_) => continue,
+        };
         let js_event = neon_serde::to_value(&mut *cx, &js_event)?;
         after.set(&mut *cx, i as u32, js_event)?;
     }
@@ -670,7 +688,11 @@ fn js_checkpoint_to_rust(
         .unwrap_or_else(|_| JsBoolean::new(&mut *cx, false))
         .value();
 
-    Ok(BacklogCheckpoint { room_id, token, full_crawl })
+    Ok(BacklogCheckpoint {
+        room_id,
+        token,
+        full_crawl,
+    })
 }
 
 register_module!(mut cx, { cx.export_class::<Seshat>("Seshat") });
