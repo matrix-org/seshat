@@ -85,11 +85,11 @@ class Seshat extends seshat.Seshat {
      *
      * @param  {matrixEvent} matrixEvent A Matrix event that should be added to
      * the database.
-     * @param  {matrixProfile} profile The user profile of the sender at the time
-     * the event was sent.
+     * @param  {matrixProfile} profile The user profile of the sender at the
+     * time the event was sent.
      *
-     * @return {Array.<searchResult>} The array of events that matched the search
-     * term.
+     * @return {Array.<searchResult>} The array of events that matched the
+     * search term.
      */
     addEvent(matrixEvent, profile = {}) {
         return super.addEvent(matrixEvent, profile);
@@ -163,29 +163,31 @@ class Seshat extends seshat.Seshat {
     /**
      * Search the database for events using the given search term.
      * @param  {string} term The term that is used to search the database.
-     * @param  {number} limit The maximum number of events that the search should
-     * return.
-     * @param  {number} before_limit The number of events to fetch that preceded
-     * the event that matched the search term.
+     * @param  {number} limit The maximum number of events that the search
+     * should return.
+     * @param  {number} before_limit The number of events to fetch that
+     * preceded the event that matched the search term.
      * @param  {number} after_limit The number of events to fetch that followed
      * the event that matched the search term.
      *
-     * @return {Array.<searchResult>} The array of events that matched the search
-     * term.
+     * @return {Array.<searchResult>} The array of events that matched the
+     * search term.
      */
-    searchSync(term, limit = 10, before_limit = 0, after_limit = 0, order_by_recent = false) {
-        return super.searchSync(term, limit, before_limit, after_limit, order_by_recent);
+    searchSync(term, limit = 10, before_limit = 0, after_limit = 0,
+        order_by_recent = false) {
+        return super.searchSync(term, limit, before_limit, after_limit,
+            order_by_recent);
     }
 
     /**
      * Add a batch of events from the room history to the database.
-     * @param  {array<matrixEvent>} events An array of events that will be added
-     * to the database.
+     * @param  {array<matrixEvent>} events An array of events that will be
+     * added to the database.
      * @param  {checkpoint} newCheckpoint
      * @param  {checkpoint} oldCheckPoint
      *
-     * @return {Array.<searchResult>} The array of events that matched the search
-     * term.
+     * @return {Array.<searchResult>} The array of events that matched the
+     * search term.
      */
     addBacklogEventsSync(events, newCheckpoint = null, oldCheckPoint = null) {
         return super.addBacklogEventsSync(events, newCheckpoint, oldCheckPoint);
