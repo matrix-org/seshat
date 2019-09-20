@@ -232,14 +232,13 @@ impl Database {
                         match m {
                             ThreadMessage::Event(e) => events.push(e),
                             ThreadMessage::Write(sender) => {
-                                Database::write_queued_events(
+                                let ret = Database::write_queued_events(
                                     &connection,
                                     &mut index_writer,
                                     &mut events,
-                                )
-                                .unwrap();
+                                );
                                 // Notify that we are done with the write.
-                                sender.send(Ok(())).unwrap_or(());
+                                sender.send(ret).unwrap_or(());
                             }
                             ThreadMessage::BacklogEvents(m) => {
                                 let (check, old_check, events, sender) = m;

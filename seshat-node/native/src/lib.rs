@@ -43,7 +43,7 @@ impl Task for CommitTask {
     ) -> JsResult<Self::JsEvent> {
         match result {
             Ok(_) => Ok(cx.undefined()),
-            Err(_) => cx.throw_error("Error writing to database"),
+            Err(e) => cx.throw_error(format!("Error writing to database: {}", e.to_string())),
         }
     }
 }
