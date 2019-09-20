@@ -14,12 +14,13 @@
 
 use failure::Fail;
 use std::collections::HashMap;
+use std::fmt::{Display, Formatter};
 use std::sync::mpsc::Sender;
 
+use fs_extra;
 use r2d2;
 use rusqlite;
 use tantivy;
-use fs_extra;
 
 #[cfg(test)]
 use fake::faker::internet::raw::*;
@@ -27,6 +28,37 @@ use fake::faker::internet::raw::*;
 use fake::locales::*;
 #[cfg(test)]
 use fake::{Dummy, Fake};
+
+pub enum EventType {
+    Message,
+    Name,
+    Topic,
+    Unknown(String),
+}
+
+impl<'a> From<&'a str> for EventType {
+    fn from(string: &'a str) -> EventType {
+        match string {
+            "m.room.message" => EventType::Message,
+            "m.room.name" => EventType::Name,
+            "m.room.topic" => EventType::Topic,
+            _ => EventType::Unknown(string.to_owned()),
+        }
+    }
+}
+
+impl Display for EventType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        let string = match self {
+            EventType::Message => "m.room.message",
+            EventType::Topic => "m.room.topic",
+            EventType::Name => "m.room.name",
+            EventType::Unknown(t) => t,
+        };
+
+        write!(f, "{}", string)
+    }
+}
 
 /// Struct representing a Matrix event that should be added to the database.
 #[derive(Debug, PartialEq, Default, Clone)]
