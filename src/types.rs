@@ -33,7 +33,7 @@ use fake::{Dummy, Fake};
 pub struct Event {
     /// The textual representation of a message, this part of the event will be
     /// indexed.
-    pub body: String,
+    pub content_value: String,
     /// The unique identifier of this event.
     pub event_id: String,
     /// The MXID of the user who sent this event.
@@ -153,7 +153,7 @@ impl From<fs_extra::error::Error> for Error {
 impl Event {
     #[cfg(test)]
     pub(crate) fn new(
-        body: &str,
+        content_value: &str,
         event_id: &str,
         sender: &str,
         server_ts: i64,
@@ -161,7 +161,7 @@ impl Event {
         source: &str,
     ) -> Event {
         Event {
-            body: body.to_string(),
+            content_value: content_value.to_string(),
             event_id: event_id.to_string(),
             sender: sender.to_string(),
             server_ts,

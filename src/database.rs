@@ -190,7 +190,12 @@ impl Database {
                 continue;
             }
             Database::save_event(&connection, &e, &p)?;
-            index_writer.add_event(&e.body, &e.event_id, &e.room_id, e.server_ts as u64);
+            index_writer.add_event(
+                &e.content_value,
+                &e.event_id,
+                &e.room_id,
+                e.server_ts as u64,
+            );
             ret.push(false);
         }
 
@@ -456,7 +461,7 @@ impl Database {
                 &event.sender,
                 &event.server_ts.to_string(),
                 &event.room_id,
-                &event.body,
+                &event.content_value,
                 "m.room.message",
                 &event.source,
                 &profile_id.to_string(),
@@ -624,7 +629,7 @@ impl Database {
         let db_events = stmt.query_map(event_ids, |row| {
             Ok((
                 Event {
-                    body: row.get(0)?,
+                    content_value: row.get(0)?,
                     event_id: row.get(1)?,
                     sender: row.get(2)?,
                     server_ts: row.get(3)?,

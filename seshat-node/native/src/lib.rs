@@ -693,7 +693,7 @@ fn parse_event(
         .or_else(|e| cx.throw_type_error(format!("Cannot serialize event {}", e)))?;
 
     Ok(Event {
-        body,
+        content_value: body,
         event_id,
         sender,
         server_ts: server_timestamp,
