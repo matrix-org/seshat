@@ -145,7 +145,7 @@ impl Index {
         let body_field = schemabuilder.add_text_field("body", tv::schema::TEXT);
         let topic_field = schemabuilder.add_text_field("topic", tv::schema::TEXT);
         let name_field = schemabuilder.add_text_field("name", tv::schema::TEXT);
-        let room_id_field = schemabuilder.add_text_field("room_id", tv::schema::TEXT);
+        let room_id_field = schemabuilder.add_text_field("room_id", tv::schema::STRING);
         let server_timestamp_field =
             schemabuilder.add_u64_field("server_timestamp", tv::schema::FAST);
 
