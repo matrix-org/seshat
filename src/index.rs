@@ -15,10 +15,13 @@
 use std::path::Path;
 use tantivy as tv;
 
-use crate::types::{EventId, RoomId};
+use crate::types::{Event, EventId, EventType, RoomId};
 
 #[cfg(test)]
 use tempfile::TempDir;
+
+#[cfg(test)]
+use crate::types::{EVENT, TOPIC_EVENT};
 
 pub(crate) struct Index {
     index: tv::Index,
@@ -34,6 +37,8 @@ pub(crate) struct Index {
 pub(crate) struct Writer {
     pub(crate) inner: tv::IndexWriter,
     pub(crate) body_field: tv::schema::Field,
+    pub(crate) topic_field: tv::schema::Field,
+    pub(crate) name_field: tv::schema::Field,
     pub(crate) event_id_field: tv::schema::Field,
     room_id_field: tv::schema::Field,
     server_timestamp_field: tv::schema::Field,
@@ -45,12 +50,20 @@ impl Writer {
         Ok(())
     }
 
-    pub fn add_event(&mut self, body: &str, event_id: &str, room_id: &str, server_timestamp: u64) {
+    pub fn add_event(&mut self, event: &Event) {
         let mut doc = tv::Document::default();
-        doc.add_text(self.body_field, body);
-        doc.add_text(self.event_id_field, event_id);
-        doc.add_text(self.room_id_field, room_id);
-        doc.add_u64(self.server_timestamp_field, server_timestamp);
+
+        match event.event_type {
+            EventType::Message => doc.add_text(self.body_field, &event.content_value),
+            EventType::Topic => doc.add_text(self.topic_field, &event.content_value),
+            EventType::Name => doc.add_text(self.name_field, &event.content_value),
+            _ => panic!("HWAAAAAT"),
+        }
+
+        doc.add_text(self.event_id_field, &event.event_id);
+        doc.add_text(self.room_id_field, &event.room_id);
+        doc.add_u64(self.server_timestamp_field, event.server_ts as u64);
+
         self.inner.add_document(doc);
     }
 }
@@ -185,6 +198,8 @@ impl Index {
         Ok(Writer {
             inner: self.index.writer(50_000_000)?,
             body_field: self.body_field,
+            topic_field: self.topic_field,
+            name_field: self.name_field,
             event_id_field: self.event_id_field,
             room_id_field: self.room_id_field,
             server_timestamp_field: self.server_timestamp_field,
@@ -197,15 +212,16 @@ fn add_an_event() {
     let tmpdir = TempDir::new().unwrap();
     let index = Index::new(&tmpdir).unwrap();
 
-    let event_id = "$15163622445EBvZJ:localhost";
     let mut writer = index.get_writer().unwrap();
 
-    writer.add_event("Test message", &event_id, "!Test:room", 1516362244026);
+    writer.add_event(&EVENT);
     writer.commit().unwrap();
     index.reload().unwrap();
 
     let searcher = index.get_searcher();
     let result = searcher.search("Test", 10, false, None).unwrap();
+
+    let event_id = EVENT.event_id.to_string();
 
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].1, event_id)
@@ -216,23 +232,21 @@ fn add_events_to_differing_rooms() {
     let tmpdir = TempDir::new().unwrap();
     let index = Index::new(&tmpdir).unwrap();
 
-    let event_id = "$15163622445EBvZJ:localhost";
+    let event_id = EVENT.event_id.to_string();
     let mut writer = index.get_writer().unwrap();
 
-    writer.add_event("Test message", &event_id, "!Test:room", 1516362244026);
-    writer.add_event(
-        "Test message",
-        "$16678900:localhost",
-        "!Test2:room",
-        1516362244026,
-    );
+    let mut event2 = EVENT.clone();
+    event2.room_id = "!Test2:room".to_string();
+
+    writer.add_event(&EVENT);
+    writer.add_event(&event2);
 
     writer.commit().unwrap();
     index.reload().unwrap();
 
     let searcher = index.get_searcher();
     let result = searcher
-        .search("Test", 10, false, Some(&"!Test:room".to_string()))
+        .search("Test", 10, false, Some(&EVENT.room_id))
         .unwrap();
 
     assert_eq!(result.len(), 1);
@@ -247,16 +261,14 @@ fn order_results_by_date() {
     let tmpdir = TempDir::new().unwrap();
     let index = Index::new(&tmpdir).unwrap();
 
-    let event_id = "$15163622445EBvZJ:localhost";
+    let event_id = EVENT.event_id.to_string();
     let mut writer = index.get_writer().unwrap();
 
-    writer.add_event("Test message", &event_id, "!Test:room", 1516362244026);
-    writer.add_event(
-        "Test message",
-        "$16678900:localhost",
-        "!Test2:room",
-        1516362244027,
-    );
+    let mut event2 = EVENT.clone();
+    event2.server_ts += 100;
+
+    writer.add_event(&EVENT);
+    writer.add_event(&event2);
 
     writer.commit().unwrap();
     index.reload().unwrap();

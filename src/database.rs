@@ -36,7 +36,7 @@ use crate::types::{
 };
 
 #[cfg(test)]
-use crate::types::EVENT;
+use crate::types::{EVENT, TOPIC_EVENT};
 
 /// The main entry point to the index and database.
 pub struct Searcher {
@@ -190,12 +190,7 @@ impl Database {
                 continue;
             }
             Database::save_event(&connection, &e, &p)?;
-            index_writer.add_event(
-                &e.content_value,
-                &e.event_id,
-                &e.room_id,
-                e.server_ts as u64,
-            );
+            index_writer.add_event(&e);
             ret.push(false);
         }
 
@@ -617,7 +612,7 @@ impl Database {
             .collect::<String>();
 
         let mut stmt = connection.prepare(&format!(
-            "SELECT content_value, event_id, sender, server_ts, room_id, source, display_name, avatar_url
+            "SELECT type, content_value, event_id, sender, server_ts, room_id, source, display_name, avatar_url
              FROM events
              INNER JOIN profiles on profiles.id = events.profile_id
              WHERE event_id IN (?{})
@@ -629,16 +624,17 @@ impl Database {
         let db_events = stmt.query_map(event_ids, |row| {
             Ok((
                 Event {
-                    content_value: row.get(0)?,
-                    event_id: row.get(1)?,
-                    sender: row.get(2)?,
-                    server_ts: row.get(3)?,
-                    room_id: row.get(4)?,
-                    source: row.get(5)?,
+                    event_type: row.get(0)?,
+                    content_value: row.get(1)?,
+                    event_id: row.get(2)?,
+                    sender: row.get(3)?,
+                    server_ts: row.get(4)?,
+                    room_id: row.get(5)?,
+                    source: row.get(6)?,
                 },
                 Profile {
-                    display_name: row.get(6)?,
-                    avatar_url: row.get(7)?,
+                    display_name: row.get(7)?,
+                    avatar_url: row.get(8)?,
                 },
             ))
         })?;
@@ -1066,4 +1062,20 @@ fn get_size() {
     }
     db.commit().unwrap();
     assert!(db.get_size().unwrap() > 0);
+}
+
+#[test]
+fn add_differing_events() {
+    let tmpdir = tempdir().unwrap();
+    let mut db = Database::new(tmpdir.path()).unwrap();
+    let profile = Profile::new("Alice", "");
+
+    db.add_event(EVENT.clone(), profile.clone());
+    db.add_event(TOPIC_EVENT.clone(), profile.clone());
+    db.commit().unwrap();
+    db.reload().unwrap();
+
+    let searcher = db.index.get_searcher();
+    let result = searcher.search("Test", 10, false, None).unwrap();
+    assert_eq!(result.len(), 1);
 }

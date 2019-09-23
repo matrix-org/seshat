@@ -19,7 +19,8 @@ use std::sync::mpsc::Sender;
 
 use fs_extra;
 use r2d2;
-use rusqlite;
+use rusqlite::types::{FromSql, FromSqlError, FromSqlResult, ToSqlOutput, ValueRef};
+use rusqlite::ToSql;
 use tantivy;
 
 #[cfg(test)]
@@ -29,10 +30,19 @@ use fake::locales::*;
 #[cfg(test)]
 use fake::{Dummy, Fake};
 
+/// Matrix event type enum.
+#[derive(Debug, PartialEq, Clone)]
 pub enum EventType {
+    /// Matrix room messages, coresponds to the m.room.message type, has a body
+    /// inside of the content.
     Message,
+    /// Matrix room messages, coresponds to the m.room.name type, has a name
+    /// inside of the content.
     Name,
+    /// Matrix room messages, coresponds to the m.room.topic type, has a topic
+    /// inside of the content.
     Topic,
+    /// All other event types. These won't be indexed.
     Unknown(String),
 }
 
@@ -44,6 +54,13 @@ impl<'a> From<&'a str> for EventType {
             "m.room.topic" => EventType::Topic,
             _ => EventType::Unknown(string.to_owned()),
         }
+    }
+}
+
+impl From<String> for EventType {
+    fn from(string: String) -> EventType {
+        let string: &str = string.as_ref();
+        string.into()
     }
 }
 
@@ -60,9 +77,29 @@ impl Display for EventType {
     }
 }
 
+impl ToSql for EventType {
+    fn to_sql(&self) -> rusqlite::Result<ToSqlOutput<'_>> {
+        Ok(ToSqlOutput::from(format!("{}", self)))
+    }
+}
+
+impl FromSql for EventType {
+    fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+        match value {
+            ValueRef::Text(s) => {
+                let s = std::str::from_utf8(s).map_err(|e| FromSqlError::Other(Box::new(e)))?;
+                Ok(EventType::from(s))
+            }
+            _ => Err(FromSqlError::InvalidType),
+        }
+    }
+}
+
 /// Struct representing a Matrix event that should be added to the database.
-#[derive(Debug, PartialEq, Default, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Event {
+    /// The type of the event.
+    pub event_type: EventType,
     /// The textual representation of a message, this part of the event will be
     /// indexed.
     pub content_value: String,
@@ -80,7 +117,7 @@ pub struct Event {
     pub source: String,
 }
 
-#[derive(Debug, PartialEq, Default, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 /// A checkpoint that remembers the current point in a room timeline when
 /// fetching the backlog of the room.
 pub struct BacklogCheckpoint {
@@ -98,6 +135,7 @@ impl<T> Dummy<T> for Event {
     fn dummy_with_rng<R: ?Sized>(_config: &T, _rng: &mut R) -> Self {
         let domain: String = FreeEmailProvider(EN).fake();
         Event::new(
+            "m.room.message",
             "Hello world",
             &format!("${}:{}", (0..10).fake::<u8>(), &domain),
             &format!(
@@ -185,6 +223,7 @@ impl From<fs_extra::error::Error> for Error {
 impl Event {
     #[cfg(test)]
     pub(crate) fn new(
+        event_type: &str,
         content_value: &str,
         event_id: &str,
         sender: &str,
@@ -193,6 +232,7 @@ impl Event {
         source: &str,
     ) -> Event {
         Event {
+            event_type: event_type.into(),
             content_value: content_value.to_string(),
             event_id: event_id.to_string(),
             sender: sender.to_string(),
@@ -252,13 +292,41 @@ pub(crate) static EVENT_SOURCE: &str = "{
 }";
 
 #[cfg(test)]
+pub(crate) static TOPIC_EVENT_SOURCE: &str = "{
+    content: {
+        topic: Test topic
+    },
+    event_id: $15163622448EBvZJ:localhost,
+    origin_server_ts: 1516362244050,
+    sender: @example2:localhost,
+    type: m.room.topic,
+    unsigned: {age: 43289803098},
+    user_id: @example2:localhost,
+    age: 43289803098
+}";
+
+#[cfg(test)]
 lazy_static! {
     pub(crate) static ref EVENT: Event = Event::new(
+        "m.room.message",
         "Test message",
         "$15163622445EBvZJ:localhost",
         "@example2:localhost",
         151636_2244026,
         "!test_room:localhost",
         EVENT_SOURCE
+    );
+}
+
+#[cfg(test)]
+lazy_static! {
+    pub(crate) static ref TOPIC_EVENT: Event = Event::new(
+        "m.room.topic",
+        "Test topic",
+        "$15163622445EBvZJ:localhost",
+        "@example2:localhost",
+        151636_2244038,
+        "!test_room:localhost",
+        TOPIC_EVENT_SOURCE
     );
 }
