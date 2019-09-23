@@ -70,9 +70,14 @@ impl Writer {
 
 pub(crate) struct IndexSearcher {
     pub(crate) inner: tv::LeasedItem<tv::Searcher>,
+    pub(crate) schema: tv::schema::Schema,
+    pub(crate) tokenizer: tv::tokenizer::TokenizerManager,
+    pub(crate) body_field: tv::schema::Field,
+    pub(crate) topic_field: tv::schema::Field,
+    pub(crate) name_field: tv::schema::Field,
+    pub(crate) room_id_field: tv::schema::Field,
     pub(crate) event_id_field: tv::schema::Field,
     pub(crate) server_timestamp_field: tv::schema::Field,
-    pub(crate) query_parser: tv::query::QueryParser,
 }
 
 impl IndexSearcher {
@@ -89,7 +94,20 @@ impl IndexSearcher {
             term.to_owned()
         };
 
-        let query = self.query_parser.parse_query(&term)?;
+        // TODO build the field vector dynamically depending on the search
+        // configuration.
+        let query_parser = tv::query::QueryParser::new(
+            self.schema.clone(),
+            vec![
+                self.body_field,
+                self.topic_field,
+                self.name_field,
+                self.room_id_field,
+            ],
+            self.tokenizer.clone()
+        );
+
+        let query = query_parser.parse_query(&term)?;
 
         if order_by_recent {
             let collector = tv::collector::TopDocs::with_limit(limit);
@@ -172,19 +190,17 @@ impl Index {
 
     pub fn get_searcher(&self) -> IndexSearcher {
         let searcher = self.reader.searcher();
-        let query_parser = tv::query::QueryParser::for_index(
-            &self.index,
-            vec![
-                self.body_field,
-                self.topic_field,
-                self.name_field,
-                self.room_id_field,
-            ],
-        );
+        let schema = self.index.schema();
+        let tokenizer = self.index.tokenizers().clone();
 
         IndexSearcher {
             inner: searcher,
-            query_parser,
+            schema,
+            tokenizer,
+            body_field: self.body_field,
+            topic_field: self.topic_field,
+            name_field: self.name_field,
+            room_id_field: self.room_id_field,
             event_id_field: self.event_id_field,
             server_timestamp_field: self.server_timestamp_field,
         }
