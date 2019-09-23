@@ -21,7 +21,7 @@ use fs_extra::dir;
 use neon::prelude::*;
 use neon_serde;
 use serde_json;
-use seshat::{BacklogCheckpoint, Connection, Database, Event, Profile, SearchResult, Searcher};
+use seshat::{BacklogCheckpoint, Connection, Database, Event, Profile, SearchResult, Searcher, EventType};
 
 #[no_mangle]
 pub extern "C" fn __cxa_pure_virtual() {
@@ -680,12 +680,33 @@ fn parse_event(
         .downcast::<JsObject>()
         .or_else(|_| cx.throw_type_error("Event doesn't contain any content"))?;
 
-    // TODO allow the name or topic to be stored as well.
-    let body: String = content
-        .get(&mut *cx, "body")?
+    let event_type: EventType = event
+        .get(&mut *cx, "type")?
         .downcast::<JsString>()
-        .or_else(|_| cx.throw_type_error("Event doesn't contain a valid body"))?
-        .value();
+        .or_else(|_| cx.throw_type_error("Event doesn't contain a valid type"))?
+        .value().into();
+
+    let content_value = match event_type {
+        EventType::Message => content
+            .get(&mut *cx, "body")?
+            .downcast::<JsString>()
+            .or_else(|_| cx.throw_type_error("Event doesn't contain a valid body"))?
+            .value(),
+
+        EventType::Topic => content
+            .get(&mut *cx, "topic")?
+            .downcast::<JsString>()
+            .or_else(|_| cx.throw_type_error("Event doesn't contain a valid topic"))?
+            .value(),
+
+        EventType::Name => content
+            .get(&mut *cx, "topic")?
+            .downcast::<JsString>()
+            .or_else(|_| cx.throw_type_error("Event doesn't contain a valid name"))?
+            .value(),
+        _ => return cx.throw_type_error("Unsuported event type"),
+
+    };
 
     let event_value = event.as_value(&mut *cx);
     let event_source: serde_json::Value = neon_serde::from_value(&mut *cx, event_value)?;
@@ -693,7 +714,8 @@ fn parse_event(
         .or_else(|e| cx.throw_type_error(format!("Cannot serialize event {}", e)))?;
 
     Ok(Event {
-        content_value: body,
+        event_type,
+        content_value,
         event_id,
         sender,
         server_ts: server_timestamp,

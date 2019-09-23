@@ -7,6 +7,7 @@ const assert = require('chai').assert;
 const Seshat = require('../');
 
 const matrixEvent = {
+    type: 'm.room.message',
     event_id: '$15163622445EBvZJ:localhost',
     room_id: '!TESTROOM',
     sender: '@alice:example.org',
@@ -17,6 +18,7 @@ const matrixEvent = {
 };
 
 const matrixEventRoom2 = {
+    type: 'm.room.message',
     event_id: '$15163622515EBvZJ:localhost',
     room_id: '!TESTROOM2',
     sender: '@alice:example.org',
