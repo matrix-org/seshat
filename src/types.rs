@@ -42,26 +42,6 @@ pub enum EventType {
     /// Matrix room messages, coresponds to the m.room.topic type, has a topic
     /// inside of the content.
     Topic,
-    /// All other event types. These won't be indexed.
-    Unknown(String),
-}
-
-impl<'a> From<&'a str> for EventType {
-    fn from(string: &'a str) -> EventType {
-        match string {
-            "m.room.message" => EventType::Message,
-            "m.room.name" => EventType::Name,
-            "m.room.topic" => EventType::Topic,
-            _ => EventType::Unknown(string.to_owned()),
-        }
-    }
-}
-
-impl From<String> for EventType {
-    fn from(string: String) -> EventType {
-        let string: &str = string.as_ref();
-        string.into()
-    }
 }
 
 impl Display for EventType {
@@ -70,7 +50,6 @@ impl Display for EventType {
             EventType::Message => "m.room.message",
             EventType::Topic => "m.room.topic",
             EventType::Name => "m.room.name",
-            EventType::Unknown(t) => t,
         };
 
         write!(f, "{}", string)
@@ -88,7 +67,15 @@ impl FromSql for EventType {
         match value {
             ValueRef::Text(s) => {
                 let s = std::str::from_utf8(s).map_err(|e| FromSqlError::Other(Box::new(e)))?;
-                Ok(EventType::from(s))
+
+                let e = match s {
+                    "m.room.message" => EventType::Message,
+                    "m.room.name" => EventType::Name,
+                    "m.room.topic" => EventType::Topic,
+                    _ => return Err(FromSqlError::InvalidType)
+                };
+
+                Ok(e)
             }
             _ => Err(FromSqlError::InvalidType),
         }
@@ -135,7 +122,7 @@ impl<T> Dummy<T> for Event {
     fn dummy_with_rng<R: ?Sized>(_config: &T, _rng: &mut R) -> Self {
         let domain: String = FreeEmailProvider(EN).fake();
         Event::new(
-            "m.room.message",
+            EventType::Message,
             "Hello world",
             &format!("${}:{}", (0..10).fake::<u8>(), &domain),
             &format!(
@@ -223,7 +210,7 @@ impl From<fs_extra::error::Error> for Error {
 impl Event {
     #[cfg(test)]
     pub(crate) fn new(
-        event_type: &str,
+        event_type: EventType,
         content_value: &str,
         event_id: &str,
         sender: &str,
@@ -232,7 +219,7 @@ impl Event {
         source: &str,
     ) -> Event {
         Event {
-            event_type: event_type.into(),
+            event_type: event_type.clone(),
             content_value: content_value.to_string(),
             event_id: event_id.to_string(),
             sender: sender.to_string(),
@@ -360,7 +347,7 @@ pub(crate) static TOPIC_EVENT_SOURCE: &str = "{
 #[cfg(test)]
 lazy_static! {
     pub(crate) static ref EVENT: Event = Event::new(
-        "m.room.message",
+        EventType::Message,
         "Test message",
         "$15163622445EBvZJ:localhost",
         "@example2:localhost",
@@ -373,7 +360,7 @@ lazy_static! {
 #[cfg(test)]
 lazy_static! {
     pub(crate) static ref TOPIC_EVENT: Event = Event::new(
-        "m.room.topic",
+        EventType::Topic,
         "Test topic",
         "$15163622445EBvZJ:localhost",
         "@example2:localhost",

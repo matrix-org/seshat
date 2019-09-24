@@ -21,7 +21,7 @@ use crate::types::{Event, EventId, EventType, SearchConfig};
 use tempfile::TempDir;
 
 #[cfg(test)]
-use crate::types::{EVENT, TOPIC_EVENT};
+use crate::types::EVENT;
 
 pub(crate) struct Index {
     index: tv::Index,
@@ -57,7 +57,6 @@ impl Writer {
             EventType::Message => doc.add_text(self.body_field, &event.content_value),
             EventType::Topic => doc.add_text(self.topic_field, &event.content_value),
             EventType::Name => doc.add_text(self.name_field, &event.content_value),
-            _ => panic!("HWAAAAAT"),
         }
 
         doc.add_text(self.event_id_field, &event.event_id);

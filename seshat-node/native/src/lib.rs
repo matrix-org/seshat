@@ -667,12 +667,18 @@ fn parse_event(
         .downcast::<JsObject>()
         .or_else(|_| cx.throw_type_error("Event doesn't contain any content"))?;
 
-    let event_type: EventType = event
+    let event_type = event
         .get(&mut *cx, "type")?
         .downcast::<JsString>()
         .or_else(|_| cx.throw_type_error("Event doesn't contain a valid type"))?
-        .value()
-        .into();
+        .value();
+
+    let event_type: EventType = match event_type.as_ref() {
+        "m.room.message" => EventType::Message,
+        "m.room.name" => EventType::Name,
+        "m.room.topic" => EventType::Topic,
+        _ => return cx.throw_type_error("Unsuported event type"),
+    };
 
     let content_value = match event_type {
         EventType::Message => content
@@ -692,7 +698,6 @@ fn parse_event(
             .downcast::<JsString>()
             .or_else(|_| cx.throw_type_error("Event doesn't contain a valid name"))?
             .value(),
-        _ => return cx.throw_type_error("Unsuported event type"),
     };
 
     let event_value = event.as_value(&mut *cx);
