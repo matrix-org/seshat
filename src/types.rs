@@ -277,6 +277,58 @@ pub struct SearchResult {
     pub profile_info: HashMap<String, Profile>,
 }
 
+#[derive(Debug, PartialEq, Clone)]
+pub struct SearchConfig {
+    pub limit: usize,
+    pub before_limit: usize,
+    pub after_limit: usize,
+    pub order_by_recent: bool,
+    pub room_id: Option<RoomId>,
+}
+
+impl SearchConfig {
+    pub fn new() -> Self {
+        Default::default()
+    }
+
+    pub fn for_room<'a>(&'a mut self, room_id: &str) -> &'a mut Self {
+        self.room_id = Some(room_id.to_owned());
+        self
+    }
+
+    pub fn limit<'a>(&'a mut self, limit: usize) -> &'a mut Self {
+        self.limit = limit;
+        self
+    }
+
+    pub fn before_limit<'a>(&'a mut self, limit: usize) -> &'a mut Self {
+        self.before_limit = limit;
+        self
+    }
+
+    pub fn after_limit<'a>(&'a mut self, limit: usize) -> &'a mut Self {
+        self.after_limit = limit;
+        self
+    }
+
+    pub fn order_by_recent<'a>(&'a mut self, recent: bool) -> &'a mut Self {
+        self.order_by_recent = recent;
+        self
+    }
+}
+
+impl Default for SearchConfig {
+    fn default() -> Self {
+        SearchConfig {
+            limit: 10,
+            before_limit: 0,
+            after_limit: 0,
+            order_by_recent: false,
+            room_id: None,
+        }
+    }
+}
+
 #[cfg(test)]
 pub(crate) static EVENT_SOURCE: &str = "{
     content: {

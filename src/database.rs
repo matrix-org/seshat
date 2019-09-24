@@ -31,7 +31,7 @@ use tempfile::tempdir;
 
 use crate::index::{Index, IndexSearcher, Writer};
 use crate::types::{
-    BacklogCheckpoint, Event, EventContext, EventId, Profile, Result, RoomId, SearchResult,
+    BacklogCheckpoint, Event, EventContext, EventId, Profile, Result, SearchConfig, SearchResult,
     ThreadMessage,
 };
 
@@ -49,16 +49,8 @@ impl Searcher {
     /// # Arguments
     ///
     /// * `term` - The search term that should be used to search the index.
-    pub fn search(
-        &self,
-        term: &str,
-        limit: usize,
-        before_limit: usize,
-        after_limit: usize,
-        order_by_recent: bool,
-        room_id: Option<&RoomId>,
-    ) -> Result<Vec<SearchResult>> {
-        let search_result = self.inner.search(term, limit, order_by_recent, room_id)?;
+    pub fn search(&self, term: &str, config: &SearchConfig) -> Result<Vec<SearchResult>> {
+        let search_result = self.inner.search(term, config)?;
 
         if search_result.is_empty() {
             return Ok(vec![]);
@@ -67,8 +59,8 @@ impl Searcher {
         Ok(Database::load_events(
             &self.database,
             &search_result,
-            before_limit,
-            after_limit,
+            config.before_limit,
+            config.after_limit,
         )?)
     }
 }
@@ -669,24 +661,9 @@ impl Database {
     /// # Arguments
     ///
     /// * `term` - The search term that should be used to search the index.
-    pub fn search(
-        &self,
-        term: &str,
-        limit: usize,
-        before_limit: usize,
-        after_limit: usize,
-        order_by_recent: bool,
-        room_id: Option<&RoomId>,
-    ) -> Result<Vec<SearchResult>> {
+    pub fn search(&self, term: &str, config: &SearchConfig) -> Result<Vec<SearchResult>> {
         let searcher = self.get_searcher();
-        searcher.search(
-            term,
-            limit,
-            before_limit,
-            after_limit,
-            order_by_recent,
-            room_id,
-        )
+        searcher.search(term, config)
     }
 
     /// Get a searcher that can be used to perform a search.
@@ -856,7 +833,7 @@ fn save_and_search() {
     db.commit().unwrap();
     db.reload().unwrap();
 
-    let result = db.search("Test", 10, 0, 0, false, None).unwrap();
+    let result = db.search("Test", &Default::default()).unwrap();
     assert!(!result.is_empty());
     assert_eq!(result[0].event_source, EVENT.source);
 }
@@ -920,7 +897,7 @@ fn duplicate_events() {
     db.reload().unwrap();
 
     let searcher = db.index.get_searcher();
-    let result = searcher.search("Test", 10, false, None).unwrap();
+    let result = searcher.search("Test", &Default::default()).unwrap();
     assert_eq!(result.len(), 1);
 }
 
@@ -1076,6 +1053,6 @@ fn add_differing_events() {
     db.reload().unwrap();
 
     let searcher = db.index.get_searcher();
-    let result = searcher.search("Test", 10, false, None).unwrap();
+    let result = searcher.search("Test", &SearchConfig::new()).unwrap();
     assert_eq!(result.len(), 1);
 }

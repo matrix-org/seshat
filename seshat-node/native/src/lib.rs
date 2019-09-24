@@ -14,14 +14,17 @@
 
 #[macro_use]
 extern crate neon;
+use fs_extra::dir;
 use std::path::PathBuf;
 use std::sync::mpsc::Receiver;
-use fs_extra::dir;
 
 use neon::prelude::*;
 use neon_serde;
 use serde_json;
-use seshat::{BacklogCheckpoint, Connection, Database, Event, Profile, SearchResult, Searcher, EventType};
+use seshat::{
+    BacklogCheckpoint, Connection, Database, Event, EventType, Profile, SearchConfig, SearchResult,
+    Searcher,
+};
 
 #[no_mangle]
 pub extern "C" fn __cxa_pure_virtual() {
@@ -58,11 +61,7 @@ impl Task for CommitTask {
 struct SearchTask {
     inner: Searcher,
     term: String,
-    limit: usize,
-    before_limit: usize,
-    after_limit: usize,
-    order_by_recent: bool,
-    room_id: Option<String>,
+    config: SearchConfig,
 }
 
 impl Task for SearchTask {
@@ -71,14 +70,7 @@ impl Task for SearchTask {
     type JsEvent = JsObject;
 
     fn perform(&self) -> Result<Self::Output, Self::Error> {
-        self.inner.search(
-            &self.term,
-            self.limit,
-            self.before_limit,
-            self.after_limit,
-            self.order_by_recent,
-            self.room_id.as_ref(),
-        )
+        self.inner.search(&self.term, &self.config)
     }
 
     fn complete(
@@ -365,13 +357,13 @@ declare_types! {
 
         method searchSync(mut cx) {
             let args = cx.argument::<JsObject>(0)?;
-            let (term, limit, before_limit, after_limit, order_by_recent, room_id) = parse_search_object(&mut cx, args)?;
+            let (term, config) = parse_search_object(&mut cx, args)?;
             let mut this = cx.this();
 
             let ret = {
                 let guard = cx.lock();
                 let db = &mut this.borrow_mut(&guard).0;
-                db.search(&term, limit, before_limit, after_limit, order_by_recent, room_id.as_ref())
+                db.search(&term, &config)
             };
 
             let mut ret = match ret {
@@ -402,7 +394,7 @@ declare_types! {
             let args = cx.argument::<JsObject>(0)?;
             let f = cx.argument::<JsFunction>(1)?;
 
-            let (term, limit, before_limit, after_limit, order_by_recent, room_id) = parse_search_object(&mut cx, args)?;
+            let (term, config) = parse_search_object(&mut cx, args)?;
 
             let mut this = cx.this();
 
@@ -415,11 +407,7 @@ declare_types! {
             let task = SearchTask {
                 inner: searcher,
                 term,
-                limit,
-                before_limit,
-                after_limit,
-                order_by_recent,
-                room_id
+                config
             };
             task.schedule(f);
 
@@ -428,12 +416,10 @@ declare_types! {
     }
 }
 
-type SearchArgs = (String, usize, usize, usize, bool, Option<String>);
-
 fn parse_search_object(
     cx: &mut CallContext<Seshat>,
     argument: Handle<JsObject>,
-) -> Result<SearchArgs, neon::result::Throw> {
+) -> Result<(String, SearchConfig), neon::result::Throw> {
     let term = argument
         .get(&mut *cx, "search_term")?
         .downcast::<JsString>()
@@ -477,14 +463,15 @@ fn parse_search_object(
         Err(_e) => None,
     };
 
-    Ok((
-        term,
+    let config = SearchConfig {
         limit,
         before_limit,
         after_limit,
         order_by_recent,
         room_id,
-    ))
+    };
+
+    Ok((term, config))
 }
 
 fn parse_checkpoint(
@@ -684,7 +671,8 @@ fn parse_event(
         .get(&mut *cx, "type")?
         .downcast::<JsString>()
         .or_else(|_| cx.throw_type_error("Event doesn't contain a valid type"))?
-        .value().into();
+        .value()
+        .into();
 
     let content_value = match event_type {
         EventType::Message => content
@@ -705,7 +693,6 @@ fn parse_event(
             .or_else(|_| cx.throw_type_error("Event doesn't contain a valid name"))?
             .value(),
         _ => return cx.throw_type_error("Unsuported event type"),
-
     };
 
     let event_value = event.as_value(&mut *cx);

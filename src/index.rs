@@ -15,7 +15,7 @@
 use std::path::Path;
 use tantivy as tv;
 
-use crate::types::{Event, EventId, EventType, RoomId};
+use crate::types::{Event, EventId, EventType, SearchConfig};
 
 #[cfg(test)]
 use tempfile::TempDir;
@@ -84,11 +84,9 @@ impl IndexSearcher {
     pub fn search(
         &self,
         term: &str,
-        limit: usize,
-        order_by_recent: bool,
-        room_id: Option<&RoomId>,
+        config: &SearchConfig,
     ) -> Result<Vec<(f32, EventId)>, tv::Error> {
-        let term = if let Some(room) = room_id {
+        let term = if let Some(room) = &config.room_id {
             format!("{} AND room_id:\"{}\"", term, room)
         } else {
             term.to_owned()
@@ -104,13 +102,13 @@ impl IndexSearcher {
                 self.name_field,
                 self.room_id_field,
             ],
-            self.tokenizer.clone()
+            self.tokenizer.clone(),
         );
 
         let query = query_parser.parse_query(&term)?;
 
-        if order_by_recent {
-            let collector = tv::collector::TopDocs::with_limit(limit);
+        if config.order_by_recent {
+            let collector = tv::collector::TopDocs::with_limit(config.limit);
             let collector = collector.order_by_u64_field(self.server_timestamp_field);
 
             let result = self.inner.search(&query, &collector)?;
@@ -134,7 +132,7 @@ impl IndexSearcher {
         } else {
             let result = self
                 .inner
-                .search(&query, &tv::collector::TopDocs::with_limit(limit))?;
+                .search(&query, &tv::collector::TopDocs::with_limit(config.limit))?;
 
             let mut docs = Vec::new();
 
@@ -235,7 +233,7 @@ fn add_an_event() {
     index.reload().unwrap();
 
     let searcher = index.get_searcher();
-    let result = searcher.search("Test", 10, false, None).unwrap();
+    let result = searcher.search("Test", &Default::default()).unwrap();
 
     let event_id = EVENT.event_id.to_string();
 
@@ -262,13 +260,13 @@ fn add_events_to_differing_rooms() {
 
     let searcher = index.get_searcher();
     let result = searcher
-        .search("Test", 10, false, Some(&EVENT.room_id))
+        .search("Test", &SearchConfig::new().for_room(&EVENT.room_id))
         .unwrap();
 
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].1, event_id);
 
-    let result = searcher.search("Test", 10, false, None).unwrap();
+    let result = searcher.search("Test", &Default::default()).unwrap();
     assert_eq!(result.len(), 2);
 }
 
@@ -290,7 +288,11 @@ fn order_results_by_date() {
     index.reload().unwrap();
 
     let searcher = index.get_searcher();
-    let result = searcher.search("Test", 10, true, None).unwrap();
+    let config = SearchConfig {
+        order_by_recent: true,
+        ..Default::default()
+    };
+    let result = searcher.search("Test", &config).unwrap();
 
     assert_eq!(result.len(), 2);
     assert_eq!(result[1].1, event_id);

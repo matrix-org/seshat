@@ -14,7 +14,7 @@
 
 //! Seshat - a full text search library for Matrix clients.
 
-#![deny(missing_docs)]
+#![warn(missing_docs)]
 
 #[cfg(test)]
 #[macro_use]
@@ -28,4 +28,6 @@ pub use database::Connection;
 pub use database::Database;
 pub use database::Searcher;
 
-pub use types::{BacklogCheckpoint, Error, Event, EventType, Profile, Result, SearchResult};
+pub use types::{
+    BacklogCheckpoint, Error, Event, EventType, Profile, Result, SearchConfig, SearchResult,
+};
