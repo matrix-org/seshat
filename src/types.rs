@@ -31,7 +31,7 @@ use fake::locales::*;
 use fake::{Dummy, Fake};
 
 /// Matrix event type enum.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub enum EventType {
     /// Matrix room messages, coresponds to the m.room.message type, has a body
     /// inside of the content.
@@ -72,7 +72,7 @@ impl FromSql for EventType {
                     "m.room.message" => EventType::Message,
                     "m.room.name" => EventType::Name,
                     "m.room.topic" => EventType::Topic,
-                    _ => return Err(FromSqlError::InvalidType)
+                    _ => return Err(FromSqlError::InvalidType),
                 };
 
                 Ok(e)
@@ -266,11 +266,12 @@ pub struct SearchResult {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct SearchConfig {
-    pub limit: usize,
-    pub before_limit: usize,
-    pub after_limit: usize,
-    pub order_by_recent: bool,
-    pub room_id: Option<RoomId>,
+    pub(crate) limit: usize,
+    pub(crate) before_limit: usize,
+    pub(crate) after_limit: usize,
+    pub(crate) order_by_recent: bool,
+    pub(crate) room_id: Option<RoomId>,
+    pub(crate) keys: Vec<EventType>,
 }
 
 impl SearchConfig {
@@ -302,6 +303,14 @@ impl SearchConfig {
         self.order_by_recent = recent;
         self
     }
+
+    pub fn with_key<'a>(&'a mut self, key: EventType) -> &'a mut Self {
+        self.keys.push(key);
+        self.keys.sort();
+        self.keys.dedup();
+
+        self
+    }
 }
 
 impl Default for SearchConfig {
@@ -312,6 +321,7 @@ impl Default for SearchConfig {
             after_limit: 0,
             order_by_recent: false,
             room_id: None,
+            keys: Vec::new(),
         }
     }
 }

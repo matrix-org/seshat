@@ -85,24 +85,33 @@ impl IndexSearcher {
         term: &str,
         config: &SearchConfig,
     ) -> Result<Vec<(f32, EventId)>, tv::Error> {
+        let mut keys = Vec::new();
+
         let term = if let Some(room) = &config.room_id {
+            keys.push(self.room_id_field);
             format!("{} AND room_id:\"{}\"", term, room)
         } else {
             term.to_owned()
         };
 
-        // TODO build the field vector dynamically depending on the search
-        // configuration.
-        let query_parser = tv::query::QueryParser::new(
-            self.schema.clone(),
-            vec![
+        if config.keys.is_empty() {
+            keys.append(&mut vec![
                 self.body_field,
                 self.topic_field,
                 self.name_field,
-                self.room_id_field,
-            ],
-            self.tokenizer.clone(),
-        );
+            ]);
+        } else {
+            for key in config.keys.iter() {
+                match key {
+                    EventType::Message => keys.push(self.body_field),
+                    EventType::Topic => keys.push(self.topic_field),
+                    EventType::Name => keys.push(self.name_field),
+                }
+            }
+        }
+
+        let query_parser =
+            tv::query::QueryParser::new(self.schema.clone(), keys, self.tokenizer.clone());
 
         let query = query_parser.parse_query(&term)?;
 
