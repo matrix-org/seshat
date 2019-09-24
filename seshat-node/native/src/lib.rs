@@ -456,7 +456,23 @@ fn parse_search_object(
         if let Ok(r) = r.downcast::<JsString>() {
             config.for_room(&r.value());
         }
-    };
+    }
+
+    if let Ok(k) = argument.get(&mut *cx, "keys") {
+        if let Ok(k) = k.downcast::<JsArray>() {
+            let mut keys: Vec<Handle<JsValue>> = k.to_vec(&mut *cx)?;
+
+            for key in keys.drain(..) {
+                let key = key.downcast::<JsString>().or_throw(&mut *cx)?.value();
+                match key.as_ref() {
+                    "content.body" => config.with_key(EventType::Message),
+                    "content.topic" => config.with_key(EventType::Topic),
+                    "content.name" => config.with_key(EventType::Name),
+                    _ => return cx.throw_type_error(format!("Invalid search key {}", key)),
+                };
+            }
+        }
+    }
 
     Ok((term, config))
 }

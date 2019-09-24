@@ -17,6 +17,17 @@ const matrixEvent = {
     origin_server_ts: 1516362244026,
 };
 
+const topicEvent = {
+    type: 'm.room.topic',
+    event_id: '$15163622445EBvZE:localhost',
+    room_id: '!TESTROOM',
+    sender: '@alice:example.org',
+    content: {
+        topic: 'Test topic',
+    },
+    origin_server_ts: 1516362244026,
+};
+
 const matrixEventRoom2 = {
     type: 'm.room.message',
     event_id: '$15163622515EBvZJ:localhost',
@@ -191,6 +202,36 @@ describe('Database', function() {
         await db.commit();
         let size = await db.getSize();
         assert.isAbove(size, 0)
+    });
+
+    it('should allow us to search with a specific key', async function() {
+        const db = createDb();
+        db.addEvent(matrixEvent, matrixProfileOnlyDisplayName);
+
+        await db.commit();
+        db.reload();
+
+        let results = await db.search({
+            search_term: 'Test',
+            keys: ["content.topic"]
+        });
+        assert.equal(results.count, 0);
+
+        db.addEvent(topicEvent);
+        await db.commit();
+        db.reload();
+
+        results = await db.search({
+            search_term: 'Test',
+            keys: ["content.topic"]
+        });
+        assert.equal(results.count, 1);
+        assert.deepEqual(results.results[0].result, topicEvent);
+
+        results = await db.search({
+            search_term: 'Test',
+        });
+        assert.equal(results.count, 2);
     });
 
     it('should throw an error when adding events with missing fields.', function() {
