@@ -31,3 +31,6 @@ pub use database::Searcher;
 pub use types::{
     BacklogCheckpoint, Error, Event, EventType, Profile, Result, SearchConfig, SearchResult,
 };
+
+#[cfg(test)]
+pub use types::{EVENT, TOPIC_EVENT, TOPIC_EVENT_SOURCE, EVENT_SOURCE};

@@ -36,7 +36,7 @@ use crate::types::{
 };
 
 #[cfg(test)]
-use crate::types::{EVENT, TOPIC_EVENT};
+use crate::{EVENT, TOPIC_EVENT, EventType};
 
 /// The main entry point to the index and database.
 pub struct Searcher {
@@ -824,53 +824,6 @@ fn save_the_event_multithreaded() {
 }
 
 #[test]
-fn save_and_search() {
-    let tmpdir = tempdir().unwrap();
-    let mut db = Database::new(tmpdir.path()).unwrap();
-    let profile = Profile::new("Alice", "");
-
-    db.add_event(EVENT.clone(), profile);
-    db.commit().unwrap();
-    db.reload().unwrap();
-
-    let result = db.search("Test", &Default::default()).unwrap();
-    assert!(!result.is_empty());
-    assert_eq!(result[0].event_source, EVENT.source);
-}
-
-#[test]
-fn duplicate_empty_profiles() {
-    let tmpdir = tempdir().unwrap();
-    let db = Database::new(tmpdir.path()).unwrap();
-    let profile = Profile {
-        display_name: None,
-        avatar_url: None,
-    };
-    let user_id = "@alice.example.org";
-
-    let first_id = Database::save_profile(&db.connection, user_id, &profile).unwrap();
-    let second_id = Database::save_profile(&db.connection, user_id, &profile).unwrap();
-
-    assert_eq!(first_id, second_id);
-
-    let mut stmt = db
-        .connection
-        .prepare("SELECT id FROM profiles WHERE user_id=?1")
-        .unwrap();
-
-    let profile_ids = stmt.query_map(&[user_id], |row| row.get(0)).unwrap();
-
-    let mut id_count = 0;
-
-    for row in profile_ids {
-        let _profile_id: i64 = row.unwrap();
-        id_count += 1;
-    }
-
-    assert_eq!(id_count, 1);
-}
-
-#[test]
 fn load_a_profile() {
     let tmpdir = tempdir().unwrap();
     let db = Database::new(tmpdir.path()).unwrap();
@@ -882,23 +835,6 @@ fn load_a_profile() {
     let loaded_profile = Database::load_profile(&db.connection, profile_id).unwrap();
 
     assert_eq!(profile, loaded_profile);
-}
-
-#[test]
-fn duplicate_events() {
-    let tmpdir = tempdir().unwrap();
-    let mut db = Database::new(tmpdir.path()).unwrap();
-    let profile = Profile::new("Alice", "");
-
-    db.add_event(EVENT.clone(), profile.clone());
-    db.add_event(EVENT.clone(), profile.clone());
-
-    db.commit().unwrap();
-    db.reload().unwrap();
-
-    let searcher = db.index.get_searcher();
-    let result = searcher.search("Test", &Default::default()).unwrap();
-    assert_eq!(result.len(), 1);
 }
 
 #[test]
@@ -986,73 +922,33 @@ fn save_and_load_checkpoints() {
 }
 
 #[test]
-fn save_and_search_backlog_events() {
+fn duplicate_empty_profiles() {
     let tmpdir = tempdir().unwrap();
-    let mut db = Database::new(tmpdir.path()).unwrap();
-    let profile = Profile::new("Alice", "");
-
-    let mut events = Vec::new();
-
-    for i in 1..6 {
-        let mut event: Event = Faker.fake();
-        event.server_ts = EVENT.server_ts - i;
-        event.source = format!("Hello before event {}", i);
-        events.push((event, profile.clone()));
-    }
-
-    let checkpoint = BacklogCheckpoint {
-        room_id: "!test:room".to_string(),
-        token: "1234".to_string(),
-        full_crawl: false,
+    let db = Database::new(tmpdir.path()).unwrap();
+    let profile = Profile {
+        display_name: None,
+        avatar_url: None,
     };
+    let user_id = "@alice.example.org";
 
-    let receiver = db.add_backlog_events(events, Some(checkpoint.clone()), None);
-    let ret = receiver.recv().unwrap();
-    assert!(ret.is_ok());
-    let connection = db.get_connection().unwrap();
+    let first_id = Database::save_profile(&db.connection, user_id, &profile).unwrap();
+    let second_id = Database::save_profile(&db.connection, user_id, &profile).unwrap();
 
-    let checkpoints = connection.load_checkpoints().unwrap();
-    assert!(checkpoints.contains(&checkpoint));
-}
+    assert_eq!(first_id, second_id);
 
-#[test]
-fn get_size() {
-    let tmpdir = tempdir().unwrap();
-    let mut db = Database::new(tmpdir.path()).unwrap();
+    let mut stmt = db
+        .connection
+        .prepare("SELECT id FROM profiles WHERE user_id=?1")
+        .unwrap();
 
-    let profile = Profile::new("Alice", "");
+    let profile_ids = stmt.query_map(&[user_id], |row| row.get(0)).unwrap();
 
-    db.add_event(EVENT.clone(), profile.clone());
+    let mut id_count = 0;
 
-    let mut before_event = None;
-
-    for i in 1..6 {
-        let mut event: Event = Faker.fake();
-        event.server_ts = EVENT.server_ts - i;
-        event.source = format!("Hello before event {}", i);
-
-        if before_event.is_none() {
-            before_event = Some(event.clone());
-        }
-
-        db.add_event(event, profile.clone());
+    for row in profile_ids {
+        let _profile_id: i64 = row.unwrap();
+        id_count += 1;
     }
-    db.commit().unwrap();
-    assert!(db.get_size().unwrap() > 0);
-}
 
-#[test]
-fn add_differing_events() {
-    let tmpdir = tempdir().unwrap();
-    let mut db = Database::new(tmpdir.path()).unwrap();
-    let profile = Profile::new("Alice", "");
-
-    db.add_event(EVENT.clone(), profile.clone());
-    db.add_event(TOPIC_EVENT.clone(), profile.clone());
-    db.commit().unwrap();
-    db.reload().unwrap();
-
-    let searcher = db.index.get_searcher();
-    let result = searcher.search("Test", &SearchConfig::new()).unwrap();
-    assert_eq!(result.len(), 2);
+    assert_eq!(id_count, 1);
 }

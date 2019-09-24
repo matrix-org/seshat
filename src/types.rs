@@ -208,8 +208,7 @@ impl From<fs_extra::error::Error> for Error {
 }
 
 impl Event {
-    #[cfg(test)]
-    pub(crate) fn new(
+    pub fn new(
         event_type: EventType,
         content_value: &str,
         event_id: &str,
@@ -240,7 +239,7 @@ pub struct Profile {
 }
 
 impl Profile {
-    #[cfg(test)]
+    // Create a new profile.
     pub fn new(display_name: &str, avatar_url: &str) -> Profile {
         Profile {
             display_name: Some(display_name.to_string()),
@@ -279,32 +278,32 @@ impl SearchConfig {
         Default::default()
     }
 
-    pub fn for_room<'a>(&'a mut self, room_id: &str) -> &'a mut Self {
+    pub fn for_room(&mut self, room_id: &str) -> &mut Self {
         self.room_id = Some(room_id.to_owned());
         self
     }
 
-    pub fn limit<'a>(&'a mut self, limit: usize) -> &'a mut Self {
+    pub fn limit(&mut self, limit: usize) -> &mut Self {
         self.limit = limit;
         self
     }
 
-    pub fn before_limit<'a>(&'a mut self, limit: usize) -> &'a mut Self {
+    pub fn before_limit(&mut self, limit: usize) -> &mut Self {
         self.before_limit = limit;
         self
     }
 
-    pub fn after_limit<'a>(&'a mut self, limit: usize) -> &'a mut Self {
+    pub fn after_limit(&mut self, limit: usize) -> &mut Self {
         self.after_limit = limit;
         self
     }
 
-    pub fn order_by_recent<'a>(&'a mut self, recent: bool) -> &'a mut Self {
+    pub fn order_by_recent(&mut self, recent: bool) -> &mut Self {
         self.order_by_recent = recent;
         self
     }
 
-    pub fn with_key<'a>(&'a mut self, key: EventType) -> &'a mut Self {
+    pub fn with_key(&mut self, key: EventType) -> &mut Self {
         self.keys.push(key);
         self.keys.sort();
         self.keys.dedup();
@@ -327,7 +326,7 @@ impl Default for SearchConfig {
 }
 
 #[cfg(test)]
-pub(crate) static EVENT_SOURCE: &str = "{
+pub static EVENT_SOURCE: &str = "{
     content: {
         body: Test message, msgtype: m.text
     },
@@ -341,7 +340,7 @@ pub(crate) static EVENT_SOURCE: &str = "{
 }";
 
 #[cfg(test)]
-pub(crate) static TOPIC_EVENT_SOURCE: &str = "{
+pub static TOPIC_EVENT_SOURCE: &str = "{
     content: {
         topic: Test topic
     },
@@ -356,7 +355,7 @@ pub(crate) static TOPIC_EVENT_SOURCE: &str = "{
 
 #[cfg(test)]
 lazy_static! {
-    pub(crate) static ref EVENT: Event = Event::new(
+    pub static ref EVENT: Event = Event::new(
         EventType::Message,
         "Test message",
         "$15163622445EBvZJ:localhost",
@@ -369,7 +368,7 @@ lazy_static! {
 
 #[cfg(test)]
 lazy_static! {
-    pub(crate) static ref TOPIC_EVENT: Event = Event::new(
+    pub static ref TOPIC_EVENT: Event = Event::new(
         EventType::Topic,
         "Test topic",
         "$15163622445EBvZE:localhost",
