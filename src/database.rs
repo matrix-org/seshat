@@ -1054,5 +1054,5 @@ fn add_differing_events() {
 
     let searcher = db.index.get_searcher();
     let result = searcher.search("Test", &SearchConfig::new()).unwrap();
-    assert_eq!(result.len(), 1);
+    assert_eq!(result.len(), 2);
 }

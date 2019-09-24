@@ -372,7 +372,7 @@ lazy_static! {
     pub(crate) static ref TOPIC_EVENT: Event = Event::new(
         EventType::Topic,
         "Test topic",
-        "$15163622445EBvZJ:localhost",
+        "$15163622445EBvZE:localhost",
         "@example2:localhost",
         151636_2244038,
         "!test_room:localhost",
