@@ -426,49 +426,36 @@ fn parse_search_object(
         .or_throw(&mut *cx)?
         .value();
 
-    let limit: usize = argument
-        .get(&mut *cx, "limit")?
-        .downcast::<JsNumber>()
-        .unwrap_or_else(|_| JsNumber::new(&mut *cx, 10))
-        .value() as usize;
+    let mut config = SearchConfig::new();
 
-    let before_limit: usize = argument
-        .get(&mut *cx, "before_limit")?
-        .downcast::<JsNumber>()
-        .unwrap_or_else(|_| JsNumber::new(&mut *cx, 0))
-        .value() as usize;
-
-    let after_limit: usize = argument
-        .get(&mut *cx, "before_limit")?
-        .downcast::<JsNumber>()
-        .unwrap_or_else(|_| JsNumber::new(&mut *cx, 0))
-        .value() as usize;
-
-    let order_by_recent: bool = argument
-        .get(&mut *cx, "order_by_recent")?
-        .downcast::<JsBoolean>()
-        .unwrap_or_else(|_| JsBoolean::new(&mut *cx, false))
-        .value();
-
-    let room_id = argument.get(&mut *cx, "room_id");
-
-    let room_id: Option<String> = match room_id {
-        Ok(r) => {
-            if let Ok(r) = r.downcast::<JsString>() {
-                Some(r.value())
-            } else {
-                None
-            }
+    if let Ok(v) = argument.get(&mut *cx, "limit") {
+        if let Ok(v) = v.downcast::<JsNumber>() {
+            config.limit(v.value() as usize);
         }
-        Err(_e) => None,
-    };
+    }
 
-    let config = SearchConfig {
-        limit,
-        before_limit,
-        after_limit,
-        order_by_recent,
-        room_id,
+    if let Ok(v) = argument.get(&mut *cx, "before_limit") {
+        if let Ok(v) = v.downcast::<JsNumber>() {
+            config.before_limit(v.value() as usize);
+        }
+    }
+
+    if let Ok(v) = argument.get(&mut *cx, "after_limit") {
+        if let Ok(v) = v.downcast::<JsNumber>() {
+            config.after_limit(v.value() as usize);
+        }
+    }
+
+    if let Ok(v) = argument.get(&mut *cx, "order_by_recent") {
+        if let Ok(v) = v.downcast::<JsBoolean>() {
+            config.order_by_recent(v.value());
+        }
+    }
+
+    if let Ok(r) = argument.get(&mut *cx, "room_id") {
+        if let Ok(r) = r.downcast::<JsString>() {
+            config.for_room(&r.value());
+        }
     };
 
     Ok((term, config))
