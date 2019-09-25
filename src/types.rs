@@ -325,6 +325,83 @@ impl Default for SearchConfig {
     }
 }
 
+#[derive(Debug, PartialEq, Clone)]
+pub enum Language {
+    Arabic,
+    Danish,
+    Dutch,
+    English,
+    Finnish,
+    French,
+    German,
+    Greek,
+    Hungarian,
+    Italian,
+    Portuguese,
+    Romanian,
+    Russian,
+    Spanish,
+    Swedish,
+    Tamil,
+    Turkish,
+    Japanese,
+    Unknown,
+}
+
+impl Language {
+    pub (crate) fn as_tokenizer_name(&self) -> String {
+        match self {
+            Language::Unknown => "default".to_owned(),
+            lang => format!("seshat_{:?}", lang)
+        }
+    }
+
+    pub (crate) fn as_tantivy(&self) -> tantivy::tokenizer::Language {
+        match self {
+            Language::Arabic => tantivy::tokenizer::Language::Arabic,
+            Language::Danish => tantivy::tokenizer::Language::Danish,
+            Language::Dutch => tantivy::tokenizer::Language::Dutch,
+            Language::English => tantivy::tokenizer::Language::English,
+            Language::Finnish => tantivy::tokenizer::Language::Finnish,
+            Language::French => tantivy::tokenizer::Language::French,
+            Language::German => tantivy::tokenizer::Language::German,
+            Language::Greek => tantivy::tokenizer::Language::Greek,
+            Language::Hungarian => tantivy::tokenizer::Language::Hungarian,
+            Language::Italian => tantivy::tokenizer::Language::Italian,
+            Language::Portuguese => tantivy::tokenizer::Language::Portuguese,
+            Language::Romanian => tantivy::tokenizer::Language::Romanian,
+            Language::Russian => tantivy::tokenizer::Language::Russian,
+            Language::Spanish => tantivy::tokenizer::Language::Spanish,
+            Language::Swedish => tantivy::tokenizer::Language::Swedish,
+            Language::Tamil => tantivy::tokenizer::Language::Tamil,
+            Language::Turkish => tantivy::tokenizer::Language::Turkish,
+            _ => panic!("Unsuported language by tantivy")
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct Config {
+    pub(crate) language: Language
+}
+
+impl Config {
+    pub fn new() -> Self {
+        Default::default()
+    }
+
+    pub fn set_language(&mut self, language: &Language) -> &mut Self {
+        self.language = language.clone();
+        self
+    }
+}
+
+impl Default for Config {
+    fn default() -> Config {
+        Config { language: Language::English }
+    }
+}
+
 #[cfg(test)]
 pub static EVENT_SOURCE: &str = "{
     content: {

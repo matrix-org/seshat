@@ -32,12 +32,12 @@ use tempfile::tempdir;
 
 use crate::index::{Index, IndexSearcher, Writer};
 use crate::types::{
-    BacklogCheckpoint, Event, EventContext, EventId, Profile, Result, SearchConfig, SearchResult,
-    ThreadMessage,
+    BacklogCheckpoint, Config, Event, EventContext, EventId, Profile, Result,
+    SearchConfig, SearchResult, ThreadMessage,
 };
 
 #[cfg(test)]
-use crate::{EVENT, TOPIC_EVENT, EventType};
+use crate::{EVENT};
 
 /// The main entry point to the index and database.
 pub struct Searcher {
@@ -133,6 +133,20 @@ impl Database {
     where
         PathBuf: std::convert::From<P>,
     {
+        Database::new_with_config(path, &Config::new())
+    }
+
+    /// Create a new Seshat database or open an existing one with the given
+    /// configuration.
+    /// # Arguments
+    ///
+    /// * `path` - The directory where the database will be stored in. This
+    /// should be an empty directory if a new database should be created.
+    /// * `config` - Configuration that changes the behaviour of the database.
+    pub fn new_with_config<P: AsRef<Path>>(path: P, config: &Config) -> Result<Database>
+    where
+        PathBuf: std::convert::From<P>,
+    {
         let db_path = path.as_ref().join("events.db");
         let manager = SqliteConnectionManager::file(&db_path);
         let pool = r2d2::Pool::new(manager)?;
@@ -141,7 +155,7 @@ impl Database {
 
         Database::create_tables(&connection)?;
 
-        let index = Database::create_index(&path)?;
+        let index = Database::create_index(&path, &config)?;
         let writer = index.get_writer()?;
         let (t_handle, tx) = Database::spawn_writer(pool.get()?, writer);
 
@@ -166,8 +180,8 @@ impl Database {
         self.path.as_path()
     }
 
-    fn create_index<P: AsRef<Path>>(path: &P) -> Result<Index> {
-        Ok(Index::new(path)?)
+    fn create_index<P: AsRef<Path>>(path: &P, config: &Config) -> Result<Index> {
+        Ok(Index::new(path, &config.language)?)
     }
 
     fn write_events_helper(

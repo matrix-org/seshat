@@ -14,8 +14,9 @@
 
 use std::path::Path;
 use tantivy as tv;
+use tantivy::tokenizer::Tokenizer;
 
-use crate::types::{Event, EventId, EventType, SearchConfig};
+use crate::types::{Event, EventId, EventType, SearchConfig, Language};
 
 #[cfg(test)]
 use tempfile::TempDir;
@@ -163,12 +164,15 @@ impl IndexSearcher {
 }
 
 impl Index {
-    pub fn new<P: AsRef<Path>>(path: P) -> Result<Index, tv::Error> {
+    pub fn new<P: AsRef<Path>>(path: P, language: &Language) -> Result<Index, tv::Error> {
+        let tokenizer_name = language.as_tokenizer_name();
+
+        let text_field_options = Index::create_text_options(&tokenizer_name);
         let mut schemabuilder = tv::schema::Schema::builder();
 
-        let body_field = schemabuilder.add_text_field("body", tv::schema::TEXT);
-        let topic_field = schemabuilder.add_text_field("topic", tv::schema::TEXT);
-        let name_field = schemabuilder.add_text_field("name", tv::schema::TEXT);
+        let body_field = schemabuilder.add_text_field("body", text_field_options.clone());
+        let topic_field = schemabuilder.add_text_field("topic", text_field_options.clone());
+        let name_field = schemabuilder.add_text_field("name", text_field_options);
         let room_id_field = schemabuilder.add_text_field("room_id", tv::schema::STRING);
         let server_timestamp_field =
             schemabuilder.add_u64_field("server_timestamp", tv::schema::FAST);
@@ -182,6 +186,18 @@ impl Index {
         let index = tv::Index::open_or_create(index_dir, schema)?;
         let reader = index.reader()?;
 
+        match language {
+            Language::Unknown => (),
+            Language::Japanese => panic!("Japanese is not implemented"),
+            _ => {
+                let tokenizer = tv::tokenizer::SimpleTokenizer
+                    .filter(tv::tokenizer::RemoveLongFilter::limit(40))
+                    .filter(tv::tokenizer::LowerCaser)
+                    .filter(tv::tokenizer::Stemmer::new(language.as_tantivy()));
+                index.tokenizers().register(&tokenizer_name, tokenizer);
+            }
+        }
+
         Ok(Index {
             index,
             reader,
@@ -192,6 +208,14 @@ impl Index {
             room_id_field,
             server_timestamp_field,
         })
+    }
+
+    fn create_text_options(tokenizer: &str) -> tv::schema::TextOptions {
+        let indexing = tv::schema::TextFieldIndexing::default()
+            .set_tokenizer(tokenizer)
+            .set_index_option(tv::schema::IndexRecordOption::WithFreqsAndPositions);
+        tv::schema::TextOptions::default()
+            .set_indexing_options(indexing)
     }
 
     pub fn get_searcher(&self) -> IndexSearcher {
@@ -232,7 +256,7 @@ impl Index {
 #[test]
 fn add_an_event() {
     let tmpdir = TempDir::new().unwrap();
-    let index = Index::new(&tmpdir).unwrap();
+    let index = Index::new(&tmpdir, &Language::English).unwrap();
 
     let mut writer = index.get_writer().unwrap();
 
@@ -252,7 +276,7 @@ fn add_an_event() {
 #[test]
 fn add_events_to_differing_rooms() {
     let tmpdir = TempDir::new().unwrap();
-    let index = Index::new(&tmpdir).unwrap();
+    let index = Index::new(&tmpdir, &Language::English).unwrap();
 
     let event_id = EVENT.event_id.to_string();
     let mut writer = index.get_writer().unwrap();
@@ -281,7 +305,7 @@ fn add_events_to_differing_rooms() {
 #[test]
 fn order_results_by_date() {
     let tmpdir = TempDir::new().unwrap();
-    let index = Index::new(&tmpdir).unwrap();
+    let index = Index::new(&tmpdir, &Language::English).unwrap();
 
     let event_id = EVENT.event_id.to_string();
     let mut writer = index.get_writer().unwrap();
@@ -304,4 +328,30 @@ fn order_results_by_date() {
 
     assert_eq!(result.len(), 2);
     assert_eq!(result[1].1, event_id);
+}
+
+#[test]
+fn switch_languages() {
+    let tmpdir = TempDir::new().unwrap();
+    let index = Index::new(&tmpdir, &Language::English).unwrap();
+
+    let mut writer = index.get_writer().unwrap();
+
+    writer.add_event(&EVENT);
+    writer.commit().unwrap();
+    index.reload().unwrap();
+
+    let searcher = index.get_searcher();
+    let result = searcher.search("Test", &Default::default()).unwrap();
+
+    let event_id = EVENT.event_id.to_string();
+
+    assert_eq!(result.len(), 1);
+    assert_eq!(result[0].1, event_id);
+
+    drop(index);
+
+    let index = Index::new(&tmpdir, &Language::German);
+
+    assert!(index.is_err())
 }
