@@ -30,16 +30,16 @@ use fake::locales::*;
 #[cfg(test)]
 use fake::{Dummy, Fake};
 
-/// Matrix event type enum.
+/// Matrix event types.
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub enum EventType {
-    /// Matrix room messages, coresponds to the m.room.message type, has a body
+    /// Matrix room messages, corresponds to the m.room.message type, has a body
     /// inside of the content.
     Message,
-    /// Matrix room messages, coresponds to the m.room.name type, has a name
+    /// Matrix room messages, corresponds to the m.room.name type, has a name
     /// inside of the content.
     Name,
-    /// Matrix room messages, coresponds to the m.room.topic type, has a topic
+    /// Matrix room messages, corresponds to the m.room.topic type, has a topic
     /// inside of the content.
     Topic,
 }
@@ -82,7 +82,7 @@ impl FromSql for EventType {
     }
 }
 
-/// Struct representing a Matrix event that should be added to the database.
+/// Matrix event that can be added to the database.
 #[derive(Debug, PartialEq, Clone)]
 pub struct Event {
     /// The type of the event.
@@ -94,12 +94,12 @@ pub struct Event {
     pub event_id: String,
     /// The MXID of the user who sent this event.
     pub sender: String,
-    /// Timestamp in milliseconds on the originating homeserver when this event
+    /// Timestamp in milliseconds on the originating Homeserver when this event
     /// was sent.
     pub server_ts: i64,
     /// The ID of the room associated with this event.
     pub room_id: String,
-    /// The serialized json string of the event. This string will be returned
+    /// The serialized JSON string of the event. This string will be returned
     /// by a search later on.
     pub source: String,
 }
@@ -208,6 +208,18 @@ impl From<fs_extra::error::Error> for Error {
 }
 
 impl Event {
+    /// Create a new event.
+    /// # Arguments
+    ///
+    /// * `event_type` - The type of the event.
+    /// * `content_value` - The plain text value of the content, body for a
+    /// message event, topic for a topic event and name for a name event.
+    /// * `event_id` - The unique identifier of the event.
+    /// * `sender` - The unique identifier of the event author.
+    /// * `server_ts` - The timestamp of the event.
+    /// * `room_id` - The unique identifier of the room that the event belongs
+    /// to.
+    /// * `source` - The serialized version of the event.
     pub fn new(
         event_type: EventType,
         content_value: &str,
@@ -240,6 +252,10 @@ pub struct Profile {
 
 impl Profile {
     // Create a new profile.
+    /// # Arguments
+    ///
+    /// * `display_name` - The human readable name of the user.
+    /// * `avatar_url` - The URL of the avatar of the user.
     pub fn new(display_name: &str, avatar_url: &str) -> Profile {
         Profile {
             display_name: Some(display_name.to_string()),
@@ -259,11 +275,15 @@ pub struct SearchResult {
     pub events_before: Vec<String>,
     /// Events that happened after our matched event.
     pub events_after: Vec<String>,
-    /// The profile os the sender of the matched event.
+    /// The profile of the sender of the matched event.
     pub profile_info: HashMap<String, Profile>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
+/// Search configuration
+/// A search configuration allows users to limit the search to a specific room
+/// or limit the search to specific event types.
+/// The search result can be configured in various ways as well.
 pub struct SearchConfig {
     pub(crate) limit: usize,
     pub(crate) before_limit: usize,
@@ -274,35 +294,75 @@ pub struct SearchConfig {
 }
 
 impl SearchConfig {
+    /// Create a new default search configuration.
     pub fn new() -> Self {
         Default::default()
     }
 
+    /// Limit the search to a specific room.
+    /// The default is to search all rooms.
+    /// # Arguments
+    ///
+    /// * `room_id` - The unique id of the room.
     pub fn for_room(&mut self, room_id: &str) -> &mut Self {
         self.room_id = Some(room_id.to_owned());
         self
     }
 
+    /// Limit the number of events that will be returned in the search result.
+    /// The default for the limit is 10.
+    /// # Arguments
+    ///
+    /// * `limit` - The max number of events to return in the search result.
     pub fn limit(&mut self, limit: usize) -> &mut Self {
         self.limit = limit;
         self
     }
 
+    /// Limit the number of events that happened before our matching event in
+    /// the search result.
+    /// The default for the limit is 0.
+    /// # Arguments
+    ///
+    /// * `limit` - The max number of contextual events to return in the search
+    /// result.
     pub fn before_limit(&mut self, limit: usize) -> &mut Self {
         self.before_limit = limit;
         self
     }
 
+    /// Limit the number of events that happened after our matching event in
+    /// the search result.
+    /// The default for the limit is 0.
+    /// # Arguments
+    ///
+    /// * `limit` - The max number of contextual events to return in the search
+    /// result.
     pub fn after_limit(&mut self, limit: usize) -> &mut Self {
         self.after_limit = limit;
         self
     }
 
-    pub fn order_by_recent(&mut self, recent: bool) -> &mut Self {
-        self.order_by_recent = recent;
+    /// Should the matching events be ordered by recency. The default is to
+    /// order them by the search score.
+    /// # Arguments
+    ///
+    /// * `order_by_recent` - Flag to determine if we should order by recency.
+    /// result.
+    pub fn order_by_recent(&mut self, order_by_recent: bool) -> &mut Self {
+        self.order_by_recent = order_by_recent;
         self
     }
 
+    /// Set the event types that should be used as search keys.
+    ///
+    /// This limits which events will be searched for. This method can be called
+    /// multiple times to add multiple event types. The default is to search all
+    /// event types.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - The event type that should be included in the search.
     pub fn with_key(&mut self, key: EventType) -> &mut Self {
         self.keys.push(key);
         self.keys.sort();
