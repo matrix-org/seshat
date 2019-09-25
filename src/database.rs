@@ -23,6 +23,7 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::Arc;
 use std::thread;
 use std::thread::JoinHandle;
+use std::fs;
 
 #[cfg(test)]
 use fake::{Fake, Faker};
@@ -712,6 +713,15 @@ impl Database {
     pub fn get_connection(&mut self) -> Result<Connection> {
         let connection = self.pool.get()?;
         Ok(Connection(connection))
+    }
+
+    // TODO we need allow users to run this somehow in a separate thread.
+    /// Delete the database.
+    /// Warning: This will delete the whole path that was provided at the
+    /// database creation time.
+    pub fn delete(self) -> std::io::Result<()> {
+        fs::remove_dir_all(self.path)?;
+        Ok(())
     }
 }
 
