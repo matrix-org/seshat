@@ -729,7 +729,6 @@ impl Database {
         Ok(Connection(connection))
     }
 
-    // TODO we need allow users to run this somehow in a separate thread.
     /// Delete the database.
     /// Warning: This will delete the whole path that was provided at the
     /// database creation time.
