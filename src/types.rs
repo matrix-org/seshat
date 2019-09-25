@@ -483,7 +483,7 @@ impl Config {
 
 impl Default for Config {
     fn default() -> Config {
-        Config { language: Language::English }
+        Config { language: Language::Unknown }
     }
 }
 
