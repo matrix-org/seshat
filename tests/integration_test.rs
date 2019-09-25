@@ -3,6 +3,7 @@ extern crate lazy_static;
 
 use seshat::{Event, Database, Profile, BacklogCheckpoint, SearchConfig, EventType};
 
+use std::path::Path;
 use tempfile::tempdir;
 
 use fake::faker::internet::raw::*;
@@ -211,4 +212,17 @@ fn search_with_specific_key() {
     let result = searcher.search("Test", &SearchConfig::new().with_key(EventType::Topic)).unwrap();
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].event_source, TOPIC_EVENT.source)
+}
+
+#[test]
+fn delete() {
+    let tmpdir = tempdir().unwrap();
+    let path: &Path = tmpdir.path();
+
+    assert!(path.exists());
+
+    let db = Database::new(tmpdir.path()).unwrap();
+    db.delete().unwrap();
+
+    assert!(!path.exists());
 }
