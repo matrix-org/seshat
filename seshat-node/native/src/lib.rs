@@ -22,8 +22,8 @@ use neon::prelude::*;
 use neon_serde;
 use serde_json;
 use seshat::{
-    BacklogCheckpoint, Connection, Database, Event, EventType, Profile, SearchConfig, SearchResult,
-    Searcher,
+    BacklogCheckpoint, Config, Connection, Database, Event, EventType, Language, Profile,
+    SearchConfig, SearchResult, Searcher,
 };
 
 #[no_mangle]
@@ -200,8 +200,25 @@ declare_types! {
     pub class Seshat for SeshatDatabase {
         init(mut cx) {
             let db_path: String = cx.argument::<JsString>(0)?.value();
+            let mut config = Config::new();
 
-            let db = match Database::new(&db_path) {
+            if let Some(c) =  cx.argument_opt(1) {
+                let c = c.downcast::<JsObject>().or_throw(&mut cx)?;
+
+                if let Ok(l) = c.get(&mut cx, "language") {
+                    if let Ok(l) = l.downcast::<JsString>() {
+                        let language = Language::from(l.value().as_ref());
+                        match language {
+                            Language::Unknown => return cx.throw_type_error(
+                                format!("Unsuported language: {}", l.value())
+                            ),
+                            _ => {config.set_language(&language);}
+                        }
+                    }
+                }
+            }
+
+            let db = match Database::new_with_config(&db_path, &config) {
                 Ok(db) => db,
                 Err(e) => {
                     let message = format!("Error opening the database: {:?}", e);
