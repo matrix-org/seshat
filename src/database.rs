@@ -32,7 +32,7 @@ use tempfile::tempdir;
 
 use crate::index::{Index, IndexSearcher, Writer};
 use crate::types::{
-    BacklogCheckpoint, Config, Event, EventContext, EventId, Profile, Result,
+    BacklogCheckpoint, Config, Event, EventContext, EventId, Language, Profile, Result,
     SearchConfig, SearchResult, ThreadMessage,
 };
 

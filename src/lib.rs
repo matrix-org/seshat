@@ -29,7 +29,8 @@ pub use database::Database;
 pub use database::Searcher;
 
 pub use types::{
-    BacklogCheckpoint, Error, Event, EventType, Profile, Result, SearchConfig, SearchResult,
+    BacklogCheckpoint, Config, Error, Event, EventType, Language, Profile, Result, SearchConfig,
+    SearchResult,
 };
 
 #[cfg(test)]
