@@ -440,6 +440,31 @@ impl Language {
     }
 }
 
+impl From<&str> for Language {
+    fn from(string: &str) -> Self {
+        match string.to_lowercase().as_ref() {
+            "arabic" => Language::Arabic,
+            "danish" => Language::Danish,
+            "dutch" => Language::Dutch,
+            "english" => Language::English,
+            "finnish" => Language::Finnish,
+            "french" => Language::French,
+            "german" => Language::German,
+            "greek" => Language::Greek,
+            "hungarian" => Language::Hungarian,
+            "italian" => Language::Italian,
+            "portuguese" => Language::Portuguese,
+            "romanian" => Language::Romanian,
+            "russian" => Language::Russian,
+            "spanish" => Language::Spanish,
+            "swedish" => Language::Swedish,
+            "tamil" => Language::Tamil,
+            "turkish" => Language::Turkish,
+            _ => Language::Unknown
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Clone)]
 pub struct Config {
     pub(crate) language: Language
