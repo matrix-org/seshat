@@ -234,6 +234,22 @@ describe('Database', function() {
         assert.equal(results.count, 2);
     });
 
+    it('should allow us to create a db with a specific language', async function() {
+        const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'seshat-'));
+        expect(() => new Seshat(tempDir, {language: "unknown"})).to.throw('Unsuported language: unknown');
+
+        const db = new Seshat(tempDir, {language: "german"});
+
+        db.addEvent(matrixEvent, matrixProfileOnlyDisplayName);
+        await db.commit();
+        db.reload();
+
+        results = await db.search({
+            search_term: 'Test',
+        });
+        assert.equal(results.count, 1);
+    });
+
     it('should throw an error when adding events with missing fields.', function() {
         delete matrixEvent.content;
         expect(() => db.addEvent(matrixEvent, matrixProfile)).to.throw('Event doesn\'t contain any content');
