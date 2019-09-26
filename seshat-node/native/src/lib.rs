@@ -31,7 +31,7 @@ pub extern "C" fn __cxa_pure_virtual() {
     loop {}
 }
 
-pub struct SeshatDatabase(Database);
+pub struct SeshatDatabase(Option<Database>);
 
 struct CommitTask {
     receiver: Receiver<seshat::Result<()>>,
@@ -227,7 +227,7 @@ declare_types! {
             };
 
             Ok(
-                SeshatDatabase(db)
+                SeshatDatabase(Some(db))
            )
         }
 
@@ -258,12 +258,16 @@ declare_types! {
             let connection = {
                 let guard = cx.lock();
                 let db = &mut this.borrow_mut(&guard).0;
-                db.get_connection()
+
+                db.as_mut().map_or_else(|| Err("Database has been deleted"), |db| Ok(db.get_connection()))
             };
 
             let connection = match connection {
-                Ok(c) => c,
-                Err(e) => return cx.throw_type_error(format!("Unable to get a database connection {}", e.to_string())),
+                Ok(c) => match c {
+                    Ok(c) => c,
+                    Err(e) => return cx.throw_type_error(format!("Unable to get a database connection {}", e.to_string())),
+                },
+                Err(e) => return cx.throw_type_error(e),
             };
 
             let task = LoadCheckPointsTask { connection };
@@ -284,14 +288,17 @@ declare_types! {
                 None => Profile { display_name: None, avatar_url: None },
             };
 
-            {
+            let ret = {
                 let this = cx.this();
                 let guard = cx.lock();
                 let db = &this.borrow(&guard).0;
-                db.add_event(event, profile);
-            }
+                db.as_ref().map_or_else(|| Err("Database has been deleted"), |db| Ok(db.add_event(event, profile)))
+            };
 
-            Ok(cx.undefined().upcast())
+            match ret {
+                Ok(_) => Ok(cx.undefined().upcast()),
+                Err(e) => cx.throw_type_error(e),
+            }
         }
 
         method commitAsync(mut cx) {
@@ -301,7 +308,12 @@ declare_types! {
             let receiver = {
                 let guard = cx.lock();
                 let db = &mut this.borrow_mut(&guard).0;
-                db.commit_no_wait()
+                db.as_mut().map_or_else(|| Err("Database has been deleted"), |db| Ok(db.commit_no_wait()))
+            };
+
+            let receiver = match receiver {
+                Ok(r) => r,
+                Err(e) => return cx.throw_type_error(e),
             };
 
             let task = CommitTask { receiver };
@@ -316,15 +328,18 @@ declare_types! {
             let ret = {
                 let guard = cx.lock();
                 let db = &mut this.borrow_mut(&guard).0;
-                db.reload()
+                db.as_mut().map_or_else(|| Err("Database has been deleted"), |db| Ok(db.reload()))
             };
 
             match ret {
-                Ok(()) => Ok(cx.undefined().upcast()),
-                Err(e) => {
-                    let message = format!("Error opening the database: {:?}", e);
-                    panic!(message)
-                }
+                Ok(r) => match r {
+                    Ok(()) => Ok(cx.undefined().upcast()),
+                    Err(e) => {
+                        let message = format!("Error opening the database: {:?}", e);
+                        cx.throw_type_error(message)
+                    }
+                },
+                Err(e) => cx.throw_type_error(e),
             }
         }
 
@@ -336,7 +351,12 @@ declare_types! {
             let path = {
                 let guard = cx.lock();
                 let db = &mut this.borrow_mut(&guard).0;
-                db.get_path().to_path_buf()
+                db.as_ref().map_or_else(|| Err("Database has been deleted"), |db| Ok(db.get_path().to_path_buf()))
+            };
+
+            let path = match path {
+                Ok(p) => p,
+                Err(e) => return cx.throw_type_error(e),
             };
 
             let task = GetSizeTask { path };
@@ -359,11 +379,15 @@ declare_types! {
                 let db = &mut this.borrow_mut(&guard).0;
 
                 if wait {
-                    Some(db.commit())
+                    db.as_mut().map_or_else(|| Err("Database has been deleted"), |db| Ok(Some(db.commit())))
                 } else {
-                    db.commit_no_wait();
-                    None
+                    db.as_mut().map_or_else(|| Err("Database has been deleted"), |db| { db.commit_no_wait(); Ok(None) } )
                 }
+            };
+
+            let ret = match ret {
+                Ok(r) => r,
+                Err(e) => return cx.throw_type_error(e),
             };
 
             match ret {
@@ -380,7 +404,12 @@ declare_types! {
             let ret = {
                 let guard = cx.lock();
                 let db = &mut this.borrow_mut(&guard).0;
-                db.search(&term, &config)
+                db.as_ref().map_or_else(|| Err("Database has been deleted"), |db| Ok(db.search(&term, &config)))
+            };
+
+            let ret = match ret {
+                Ok(r) => r,
+                Err(e) => return cx.throw_type_error(e),
             };
 
             let mut ret = match ret {
@@ -418,7 +447,12 @@ declare_types! {
             let searcher = {
                 let guard = cx.lock();
                 let db = &mut this.borrow_mut(&guard).0;
-                db.get_searcher()
+                db.as_ref().map_or_else(|| Err("Database has been deleted"), |db| Ok(db.get_searcher()))
+            };
+
+            let searcher = match searcher {
+                Ok(s) => s,
+                Err(e) => return cx.throw_type_error(e.to_string()),
             };
 
             let task = SearchTask {
@@ -554,7 +588,12 @@ fn add_backlog_events_helper(
         let this = cx.this();
         let guard = cx.lock();
         let db = &this.borrow(&guard).0;
-        db.add_backlog_events(events, new_checkpoint, old_checkpoint)
+        db.as_ref().map_or_else(|| Err("Database has been deleted"), |db| Ok(db.add_backlog_events(events, new_checkpoint, old_checkpoint)))
+    };
+
+    let receiver = match receiver {
+        Ok(r) => r,
+        Err(e) => return cx.throw_type_error(e),
     };
 
     Ok(receiver)
