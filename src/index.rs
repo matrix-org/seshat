@@ -17,12 +17,14 @@ use tantivy as tv;
 use tantivy::tokenizer::Tokenizer;
 
 use crate::types::{Event, EventId, EventType, Language, SearchConfig};
+use crate::japanese_tokenizer::TinySegmenterTokenizer;
 
 #[cfg(test)]
 use tempfile::TempDir;
 
 #[cfg(test)]
-use crate::types::EVENT;
+use crate::types::{EVENT, JAPANESE_EVENTS};
+
 
 pub(crate) struct Index {
     index: tv::Index,
@@ -188,7 +190,9 @@ impl Index {
 
         match language {
             Language::Unknown => (),
-            Language::Japanese => panic!("Japanese is not implemented"),
+            Language::Japanese => {
+                index.tokenizers().register(&tokenizer_name, TinySegmenterTokenizer::new());
+            },
             _ => {
                 let tokenizer = tv::tokenizer::SimpleTokenizer
                     .filter(tv::tokenizer::RemoveLongFilter::limit(40))

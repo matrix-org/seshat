@@ -23,6 +23,7 @@ extern crate lazy_static;
 mod database;
 mod index;
 mod types;
+mod japanese_tokenizer;
 
 pub use database::Connection;
 pub use database::Database;

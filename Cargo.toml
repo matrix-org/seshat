@@ -8,6 +8,7 @@ description = "A matrix message logger with full text search support"
 
 [dependencies]
 tantivy = { git = "https://github.com/tantivy-search/tantivy" }
+tinysegmenter = "0.1"
 rusqlite = "0.20"
 fs_extra = "1.1.0"
 r2d2_sqlite = "0.12"
