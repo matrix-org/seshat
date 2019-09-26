@@ -542,3 +542,27 @@ lazy_static! {
         TOPIC_EVENT_SOURCE
     );
 }
+
+#[cfg(test)]
+lazy_static! {
+    pub static ref JAPANESE_EVENTS: Vec<Event> = vec! [
+        Event::new(
+            EventType::Message,
+            "日本語の本文",
+            "$15163622445EBvZE:localhost",
+            "@example2:localhost",
+            151636_2244038,
+            "!test_room:localhost",
+            ""
+        ),
+        Event::new(
+            EventType::Message,
+            "ルダの伝説 時のオカリナ",
+            "$15163622445ZERuD:localhost",
+            "@example2:localhost",
+            151636_2244063,
+            "!test_room:localhost",
+            ""
+        ),
+    ];
+}

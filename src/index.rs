@@ -358,3 +358,26 @@ fn switch_languages() {
 
     assert!(index.is_err())
 }
+
+#[test]
+fn japanese_tokenizer() {
+    let tmpdir = TempDir::new().unwrap();
+    let index = Index::new(&tmpdir, &Language::Japanese).unwrap();
+
+    let mut writer = index.get_writer().unwrap();
+
+    for event in JAPANESE_EVENTS.iter() {
+        writer.add_event(event);
+    }
+
+    writer.commit().unwrap();
+    index.reload().unwrap();
+
+    let searcher = index.get_searcher();
+    let result = searcher.search("伝説", &Default::default()).unwrap();
+
+    let event_id = JAPANESE_EVENTS[1].event_id.to_string();
+
+    assert_eq!(result.len(), 1);
+    assert_eq!(result[0].1, event_id);
+}
