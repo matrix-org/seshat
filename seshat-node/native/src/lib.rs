@@ -196,6 +196,31 @@ impl Task for GetSizeTask {
     }
 }
 
+struct DeleteTask {
+    db_path : PathBuf
+}
+
+impl Task for DeleteTask {
+    type Output = ();
+    type Error = std::io::Error;
+    type JsEvent = JsUndefined;
+
+    fn perform(&self) -> Result<Self::Output, Self::Error> {
+        std::fs::remove_dir_all(self.db_path.clone())
+    }
+
+    fn complete(
+        self,
+        mut cx: TaskContext,
+        result: Result<Self::Output, Self::Error>,
+    ) -> JsResult<Self::JsEvent> {
+        match result {
+            Ok(_) => Ok(cx.undefined()),
+            Err(e) => cx.throw_type_error(e.to_string()),
+        }
+    }
+}
+
 declare_types! {
     pub class Seshat for SeshatDatabase {
         init(mut cx) {
@@ -363,7 +388,6 @@ declare_types! {
             task.schedule(f);
 
             Ok(cx.undefined().upcast())
-
         }
 
         method commitSync(mut cx) {
@@ -460,6 +484,30 @@ declare_types! {
                 term,
                 config
             };
+            task.schedule(f);
+
+            Ok(cx.undefined().upcast())
+        }
+
+        method delete(mut cx) {
+            let f = cx.argument::<JsFunction>(0)?;
+
+            let mut this = cx.this();
+
+            let db = {
+                let guard = cx.lock();
+                let db = &mut this.borrow_mut(&guard).0;
+                db.take()
+            };
+
+            let db = match db {
+                Some(db) => db,
+                None => return cx.throw_type_error("Database has been deleted")
+            };
+
+            let path = db.get_path();
+
+            let task = DeleteTask { db_path: path.to_path_buf() };
             task.schedule(f);
 
             Ok(cx.undefined().upcast())

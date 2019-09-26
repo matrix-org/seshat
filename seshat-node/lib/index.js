@@ -232,6 +232,15 @@ class Seshat extends seshat.Seshat {
             });
         });
     }
+
+    async delete() {
+        return new Promise((resolve) => {
+            super.delete((err, res) => {
+                if (err) reject(err);
+                else resolve(res);
+            });
+        });
+    }
 }
 
 module.exports = Seshat;
