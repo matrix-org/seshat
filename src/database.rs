@@ -17,13 +17,13 @@ use r2d2::PooledConnection;
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::{ToSql, NO_PARAMS};
 use std::collections::HashMap;
+use std::fs;
 use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::Arc;
 use std::thread;
 use std::thread::JoinHandle;
-use std::fs;
 
 #[cfg(test)]
 use fake::{Fake, Faker};
@@ -37,7 +37,7 @@ use crate::types::{
 };
 
 #[cfg(test)]
-use crate::{EVENT};
+use crate::EVENT;
 
 /// The main entry point to the index and database.
 pub struct Searcher {

@@ -16,7 +16,7 @@ use std::path::Path;
 use tantivy as tv;
 use tantivy::tokenizer::Tokenizer;
 
-use crate::types::{Event, EventId, EventType, SearchConfig, Language};
+use crate::types::{Event, EventId, EventType, Language, SearchConfig};
 
 #[cfg(test)]
 use tempfile::TempDir;
@@ -214,8 +214,7 @@ impl Index {
         let indexing = tv::schema::TextFieldIndexing::default()
             .set_tokenizer(tokenizer)
             .set_index_option(tv::schema::IndexRecordOption::WithFreqsAndPositions);
-        tv::schema::TextOptions::default()
-            .set_indexing_options(indexing)
+        tv::schema::TextOptions::default().set_indexing_options(indexing)
     }
 
     pub fn get_searcher(&self) -> IndexSearcher {

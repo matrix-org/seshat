@@ -409,14 +409,14 @@ pub enum Language {
 }
 
 impl Language {
-    pub (crate) fn as_tokenizer_name(&self) -> String {
+    pub(crate) fn as_tokenizer_name(&self) -> String {
         match self {
             Language::Unknown => "default".to_owned(),
-            lang => format!("seshat_{:?}", lang)
+            lang => format!("seshat_{:?}", lang),
         }
     }
 
-    pub (crate) fn as_tantivy(&self) -> tantivy::tokenizer::Language {
+    pub(crate) fn as_tantivy(&self) -> tantivy::tokenizer::Language {
         match self {
             Language::Arabic => tantivy::tokenizer::Language::Arabic,
             Language::Danish => tantivy::tokenizer::Language::Danish,
@@ -435,7 +435,7 @@ impl Language {
             Language::Swedish => tantivy::tokenizer::Language::Swedish,
             Language::Tamil => tantivy::tokenizer::Language::Tamil,
             Language::Turkish => tantivy::tokenizer::Language::Turkish,
-            _ => panic!("Unsuported language by tantivy")
+            _ => panic!("Unsuported language by tantivy"),
         }
     }
 }
@@ -460,14 +460,14 @@ impl From<&str> for Language {
             "swedish" => Language::Swedish,
             "tamil" => Language::Tamil,
             "turkish" => Language::Turkish,
-            _ => Language::Unknown
+            _ => Language::Unknown,
         }
     }
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Config {
-    pub(crate) language: Language
+    pub(crate) language: Language,
 }
 
 impl Config {
@@ -483,7 +483,9 @@ impl Config {
 
 impl Default for Config {
     fn default() -> Config {
-        Config { language: Language::Unknown }
+        Config {
+            language: Language::Unknown,
+        }
     }
 }
 

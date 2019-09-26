@@ -197,7 +197,7 @@ impl Task for GetSizeTask {
 }
 
 struct DeleteTask {
-    db_path : PathBuf
+    db_path: PathBuf,
 }
 
 impl Task for DeleteTask {
@@ -636,7 +636,10 @@ fn add_backlog_events_helper(
         let this = cx.this();
         let guard = cx.lock();
         let db = &this.borrow(&guard).0;
-        db.as_ref().map_or_else(|| Err("Database has been deleted"), |db| Ok(db.add_backlog_events(events, new_checkpoint, old_checkpoint)))
+        db.as_ref().map_or_else(
+            || Err("Database has been deleted"),
+            |db| Ok(db.add_backlog_events(events, new_checkpoint, old_checkpoint)),
+        )
     };
 
     let receiver = match receiver {

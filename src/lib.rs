@@ -34,4 +34,4 @@ pub use types::{
 };
 
 #[cfg(test)]
-pub use types::{EVENT, TOPIC_EVENT, TOPIC_EVENT_SOURCE, EVENT_SOURCE};
+pub use types::{EVENT, EVENT_SOURCE, TOPIC_EVENT, TOPIC_EVENT_SOURCE};

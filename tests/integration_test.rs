@@ -1,7 +1,7 @@
 #[macro_use]
 extern crate lazy_static;
 
-use seshat::{Event, Database, Profile, BacklogCheckpoint, SearchConfig, EventType};
+use seshat::{BacklogCheckpoint, Database, Event, EventType, Profile, SearchConfig};
 
 use std::path::Path;
 use tempfile::tempdir;
@@ -9,7 +9,6 @@ use tempfile::tempdir;
 use fake::faker::internet::raw::*;
 use fake::locales::*;
 use fake::Fake;
-
 
 pub static EVENT_SOURCE: &str = "{
     content: {
@@ -78,7 +77,6 @@ fn fake_event() -> Event {
         EVENT_SOURCE,
     )
 }
-
 
 #[test]
 fn create_db() {
@@ -201,7 +199,9 @@ fn search_with_specific_key() {
     db.commit().unwrap();
     db.reload().unwrap();
 
-    let result = searcher.search("Test", &SearchConfig::new().with_key(EventType::Topic)).unwrap();
+    let result = searcher
+        .search("Test", &SearchConfig::new().with_key(EventType::Topic))
+        .unwrap();
     assert!(result.is_empty());
 
     db.add_event(TOPIC_EVENT.clone(), profile.clone());
@@ -209,7 +209,9 @@ fn search_with_specific_key() {
     db.reload().unwrap();
 
     let searcher = db.get_searcher();
-    let result = searcher.search("Test", &SearchConfig::new().with_key(EventType::Topic)).unwrap();
+    let result = searcher
+        .search("Test", &SearchConfig::new().with_key(EventType::Topic))
+        .unwrap();
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].event_source, TOPIC_EVENT.source)
 }
