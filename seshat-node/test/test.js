@@ -250,6 +250,19 @@ describe('Database', function() {
         assert.equal(results.count, 1);
     });
 
+    it('should allow us to delete the db', async function() {
+        const db = createDb();
+        db.addEvent(matrixEvent, matrixProfileOnlyDisplayName);
+
+        db.addEvent(matrixEvent, matrixProfileOnlyDisplayName);
+        await db.commit();
+        db.reload();
+
+        await db.delete()
+
+        expect(() => db.addEvent(matrixEvent, matrixProfileOnlyDisplayName)).to.throw('Database has been deleted');
+    });
+
     it('should throw an error when adding events with missing fields.', function() {
         delete matrixEvent.content;
         expect(() => db.addEvent(matrixEvent, matrixProfile)).to.throw('Event doesn\'t contain any content');
