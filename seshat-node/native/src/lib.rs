@@ -190,7 +190,7 @@ impl Task for IsEmptyTask {
     ) -> JsResult<Self::JsEvent> {
         match result {
             Ok(r) => Ok(JsBoolean::new(&mut cx, r)),
-            Err(e) => return cx.throw_type_error(e.to_string()),
+            Err(e) => cx.throw_type_error(e.to_string()),
         }
     }
 }
@@ -341,7 +341,7 @@ declare_types! {
                 let this = cx.this();
                 let guard = cx.lock();
                 let db = &this.borrow(&guard).0;
-                db.as_ref().map_or_else(|| Err("Database has been deleted"), |db| Ok(db.add_event(event, profile)))
+                db.as_ref().map_or_else(|| Err("Database has been deleted"), |db| { db.add_event(event, profile); Ok(()) } )
             };
 
             match ret {
