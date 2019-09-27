@@ -34,5 +34,7 @@ pub use types::{
     SearchResult,
 };
 
+pub use std::sync::mpsc::Receiver;
+
 #[cfg(test)]
 pub use types::{EVENT, EVENT_SOURCE, TOPIC_EVENT, TOPIC_EVENT_SOURCE};
