@@ -553,7 +553,7 @@ lazy_static! {
 
 #[cfg(test)]
 lazy_static! {
-    pub static ref JAPANESE_EVENTS: Vec<Event> = vec! [
+    pub static ref JAPANESE_EVENTS: Vec<Event> = vec![
         Event::new(
             EventType::Message,
             "日本語の本文",

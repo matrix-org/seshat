@@ -22,15 +22,15 @@ extern crate lazy_static;
 
 mod database;
 mod index;
-mod types;
 mod japanese_tokenizer;
+mod types;
 
 pub use database::Connection;
 pub use database::Database;
 pub use database::Searcher;
 
 pub use types::{
-    CrawlerCheckpoint, Config, Error, Event, EventType, Language, Profile, Result, SearchConfig,
+    Config, CrawlerCheckpoint, Error, Event, EventType, Language, Profile, Result, SearchConfig,
     SearchResult,
 };
 

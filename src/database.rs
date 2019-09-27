@@ -32,8 +32,8 @@ use tempfile::tempdir;
 
 use crate::index::{Index, IndexSearcher, Writer};
 use crate::types::{
-    CrawlerCheckpoint, Config, Event, EventContext, EventId, Profile, Result,
-    SearchConfig, SearchResult, ThreadMessage,
+    Config, CrawlerCheckpoint, Event, EventContext, EventId, Profile, Result, SearchConfig,
+    SearchResult, ThreadMessage,
 };
 
 #[cfg(test)]
@@ -109,11 +109,8 @@ impl Connection {
     /// Is the database empty.
     /// Returns true if the database is empty, false otherwise.
     pub fn is_empty(&self) -> Result<bool> {
-        let event_count: i64 = self.query_row(
-            "SELECT COUNT(*) FROM events",
-            NO_PARAMS,
-            |row| row.get(0)
-        )?;
+        let event_count: i64 =
+            self.query_row("SELECT COUNT(*) FROM events", NO_PARAMS, |row| row.get(0))?;
 
         Ok(event_count == 0)
     }
