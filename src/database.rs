@@ -105,6 +105,18 @@ impl Connection {
         }
         Ok(checkpoints)
     }
+
+    /// Is the database empty.
+    /// Returns true if the database is empty, false otherwise.
+    pub fn is_empty(&self) -> Result<bool> {
+        let event_count: i64 = self.query_row(
+            "SELECT COUNT(*) FROM events",
+            NO_PARAMS,
+            |row| row.get(0)
+        )?;
+
+        Ok(event_count == 0)
+    }
 }
 
 impl Deref for Connection {
@@ -974,4 +986,17 @@ fn duplicate_empty_profiles() {
     }
 
     assert_eq!(id_count, 1);
+}
+
+#[test]
+fn is_empty() {
+    let tmpdir = tempdir().unwrap();
+    let mut db = Database::new(tmpdir.path()).unwrap();
+    let connection = db.get_connection().unwrap();
+    assert!(connection.is_empty().unwrap());
+
+    let profile = Profile::new("Alice", "");
+    db.add_event(EVENT.clone(), profile.clone());
+    db.commit().unwrap();
+    assert!(!connection.is_empty().unwrap());
 }
