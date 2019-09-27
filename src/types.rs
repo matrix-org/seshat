@@ -386,6 +386,7 @@ impl Default for SearchConfig {
 }
 
 #[derive(Debug, PartialEq, Clone)]
+#[allow(missing_docs)]
 pub enum Language {
     Arabic,
     Danish,
@@ -466,15 +467,22 @@ impl From<&str> for Language {
 }
 
 #[derive(Debug, PartialEq, Clone)]
+/// Configuration for the seshat database.
 pub struct Config {
     pub(crate) language: Language,
 }
 
 impl Config {
+    /// Create a new default Seshat database configuration.
     pub fn new() -> Self {
         Default::default()
     }
 
+    /// Set the indexing language.
+    ///
+    /// # Arguments
+    ///
+    /// * `language` - The language that will be used to index messages.
     pub fn set_language(&mut self, language: &Language) -> &mut Self {
         self.language = language.clone();
         self
