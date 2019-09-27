@@ -181,18 +181,26 @@ class Seshat extends seshat.Seshat {
 
     /**
      * Add a batch of events from the room history to the database.
+     *
      * @param  {array<matrixEvent>} events An array of events that will be
      * added to the database.
      * @param  {checkpoint} newCheckpoint
      * @param  {checkpoint} oldCheckPoint
-     *
-     * @return {Array.<searchResult>} The array of events that matched the
-     * search term.
      */
     addHistoricEventsSync(events, newCheckpoint = null, oldCheckPoint = null) {
         return super.addHistoricEventsSync(events, newCheckpoint, oldCheckPoint);
     }
 
+    /**
+     * Add a batch of events from the room history to the database.
+     * @param  {array<matrixEvent>} events An array of events that will be
+     * added to the database.
+     * @param  {checkpoint} newCheckpoint
+     * @param  {checkpoint} oldCheckPoint
+     *
+     * @return {Promise<>} A promise that will resolve to when the events have
+     * been added to the database.
+     */
     async addHistoricEvents(events, newCheckpoint = null, oldCheckPoint = null) {
         return new Promise((resolve, reject) => {
             super.addHistoricEvents(
@@ -207,14 +215,35 @@ class Seshat extends seshat.Seshat {
         });
     }
 
+    /**
+     * Add a message crawler checkpoint.
+     * @param  {checkpoint} checkpoint
+     *
+     * @return {Promise<>} A promise that will resolve when the checkpoint has
+     * been stored in the database.
+     */
     async addCrawlerCheckpoint(checkpoint) {
         return this.addHistoricEvents([], checkpoint);
     }
 
+    /**
+     * Remove a message crawler checkpoint.
+     * @param  {checkpoint} checkpoint
+     *
+     * @return {Promise<>} A promise that will resolve when the checkpoint has
+     * been removed from the database.
+     */
     async removeCrawlerCheckpoint(checkpoint) {
         return this.addHistoricEvents([], null, checkpoint);
     }
 
+    /**
+     * Load the stored crawler checkpoints.
+     * @param  {checkpoint} checkpoint
+     *
+     * @return {Promise<Array.<checkpoint>>} A promise that will resolve to an
+     * array of checkpoints when they are loaded from the database.
+     */
     async loadCheckpoints() {
         return new Promise((resolve) => {
             super.loadCheckpoints((err, res) => {
@@ -224,6 +253,13 @@ class Seshat extends seshat.Seshat {
         });
     }
 
+    /**
+     * Load the stored crawler checkpoints.
+     * @param  {checkpoint} checkpoint
+     *
+     * @return {Promise<Array.<checkpoint>>} A promise that will resolve to an
+     * array of checkpoints when they are loaded from the database.
+     */
     async getSize() {
         return new Promise((resolve) => {
             super.getSize((err, res) => {
@@ -233,6 +269,11 @@ class Seshat extends seshat.Seshat {
         });
     }
 
+    /**
+     * Delete the Seshat database.
+     * @return {Promise<>} A promise that will resolve when the database has
+     * been deleted.
+     */
     async delete() {
         return new Promise((resolve) => {
             super.delete((err, res) => {
