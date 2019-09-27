@@ -16,14 +16,13 @@
 extern crate neon;
 use fs_extra::dir;
 use std::path::PathBuf;
-use std::sync::mpsc::Receiver;
 
 use neon::prelude::*;
 use neon_serde;
 use serde_json;
 use seshat::{
-    CrawlerCheckpoint, Config, Connection, Database, Event, EventType, Language, Profile,
-    SearchConfig, SearchResult, Searcher,
+    Config, Connection, CrawlerCheckpoint, Database, Event, EventType, Language, Profile,
+    SearchConfig, SearchResult, Searcher, Receiver
 };
 
 #[no_mangle]
@@ -282,7 +281,7 @@ declare_types! {
         }
 
         method addHistoricEventsSync(mut cx) {
-            let receiver = add_backlog_events_helper(&mut cx)?;
+            let receiver = add_historic_events_helper(&mut cx)?;
             let ret = receiver.recv().unwrap();
 
             match ret {
@@ -293,7 +292,7 @@ declare_types! {
 
         method addHistoricEvents(mut cx) {
             let f = cx.argument::<JsFunction>(3)?;
-            let receiver = add_backlog_events_helper(&mut cx)?;
+            let receiver = add_historic_events_helper(&mut cx)?;
 
             let task = AddBacklogTask { receiver };
             task.schedule(f);
@@ -642,7 +641,7 @@ fn parse_checkpoint(
     }
 }
 
-fn add_backlog_events_helper(
+fn add_historic_events_helper(
     cx: &mut CallContext<Seshat>,
 ) -> Result<Receiver<seshat::Result<bool>>, neon::result::Throw> {
     let js_events = cx.argument::<JsArray>(0)?;
@@ -688,7 +687,7 @@ fn add_backlog_events_helper(
         let db = &this.borrow(&guard).0;
         db.as_ref().map_or_else(
             || Err("Database has been deleted"),
-            |db| Ok(db.add_backlog_events(events, new_checkpoint, old_checkpoint)),
+            |db| Ok(db.add_historic_events(events, new_checkpoint, old_checkpoint)),
         )
     };
 

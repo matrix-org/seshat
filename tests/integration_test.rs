@@ -117,7 +117,7 @@ fn duplicate_events() {
 }
 
 #[test]
-fn save_and_search_backlog_events() {
+fn save_and_search_historic_events() {
     let tmpdir = tempdir().unwrap();
     let mut db = Database::new(tmpdir.path()).unwrap();
     let profile = Profile::new("Alice", "");
@@ -137,7 +137,7 @@ fn save_and_search_backlog_events() {
         full_crawl: false,
     };
 
-    let receiver = db.add_backlog_events(events, Some(checkpoint.clone()), None);
+    let receiver = db.add_historic_events(events, Some(checkpoint.clone()), None);
     let ret = receiver.recv().unwrap();
     assert!(ret.is_ok());
     let connection = db.get_connection().unwrap();

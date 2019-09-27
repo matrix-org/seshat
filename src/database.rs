@@ -227,7 +227,7 @@ impl Database {
         Ok(())
     }
 
-    fn write_backlog_events(
+    fn write_historic_events(
         connection: &mut rusqlite::Connection,
         index_writer: &mut Writer,
         message: (
@@ -240,7 +240,7 @@ impl Database {
         let transaction = connection.transaction()?;
 
         let ret = Database::write_events_helper(&transaction, index_writer, &mut events)?;
-        Database::replace_backlog_checkpoint(
+        Database::replace_crawler_checkpoint(
             &transaction,
             new_checkpoint.as_ref(),
             old_checkpoint.as_ref(),
@@ -276,9 +276,9 @@ impl Database {
                                 // Notify that we are done with the write.
                                 sender.send(ret).unwrap_or(());
                             }
-                            ThreadMessage::BacklogEvents(m) => {
+                            ThreadMessage::HistoricEvents(m) => {
                                 let (check, old_check, events, sender) = m;
-                                let ret = Database::write_backlog_events(
+                                let ret = Database::write_historic_events(
                                     &mut connection,
                                     &mut index_writer,
                                     (check, old_check, events),
@@ -335,16 +335,16 @@ impl Database {
         receiver
     }
 
-    /// Add the given events from the backlog to the database.
+    /// Add the given events from the room history to the database.
     /// # Arguments
     ///
     /// * `events` - The events that will be added.
     /// * `new_checkpoint` - A checkpoint that states where we need to continue
-    /// fetching events from the backlog. This checkpoint will be persisted in
-    /// the database.
+    /// fetching events from the room history. This checkpoint will be
+    /// persisted in the database.
     /// * `old_checkpoint` - The checkpoint that was used to fetch the given
     /// events. This checkpoint will be removed from the database.
-    pub fn add_backlog_events(
+    pub fn add_historic_events(
         &self,
         events: Vec<(Event, Profile)>,
         new_checkpoint: Option<CrawlerCheckpoint>,
@@ -352,7 +352,7 @@ impl Database {
     ) -> Receiver<Result<bool>> {
         let (sender, receiver): (_, Receiver<Result<bool>>) = channel();
         let payload = (new_checkpoint, old_checkpoint, events, sender);
-        let message = ThreadMessage::BacklogEvents(payload);
+        let message = ThreadMessage::HistoricEvents(payload);
         self.tx.send(message).unwrap();
 
         receiver
@@ -702,7 +702,7 @@ impl Database {
         }
     }
 
-    pub(crate) fn replace_backlog_checkpoint(
+    pub(crate) fn replace_crawler_checkpoint(
         connection: &rusqlite::Connection,
         new: Option<&CrawlerCheckpoint>,
         old: Option<&CrawlerCheckpoint>,
@@ -934,7 +934,7 @@ fn save_and_load_checkpoints() {
     let mut connection = db.get_connection().unwrap();
     let transaction = connection.transaction().unwrap();
 
-    Database::replace_backlog_checkpoint(&transaction, Some(&checkpoint), None).unwrap();
+    Database::replace_crawler_checkpoint(&transaction, Some(&checkpoint), None).unwrap();
     transaction.commit().unwrap();
 
     let checkpoints = connection.load_checkpoints().unwrap();
@@ -947,7 +947,7 @@ fn save_and_load_checkpoints() {
         full_crawl: false,
     };
 
-    Database::replace_backlog_checkpoint(&connection, Some(&new_checkpoint), Some(&checkpoint))
+    Database::replace_crawler_checkpoint(&connection, Some(&new_checkpoint), Some(&checkpoint))
         .unwrap();
 
     let checkpoints = connection.load_checkpoints().unwrap();

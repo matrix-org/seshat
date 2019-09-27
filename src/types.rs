@@ -106,12 +106,12 @@ pub struct Event {
 
 #[derive(Debug, PartialEq, Clone)]
 /// A checkpoint that remembers the current point in a room timeline when
-/// fetching the backlog of the room.
+/// fetching the history of the room.
 pub struct CrawlerCheckpoint {
     /// The unique id of the room that this checkpoint belongs to.
     pub room_id: String,
     /// The token that can be used to go further back in the event timeline of
-    /// the room and fetch more messages from the backlog.
+    /// the room and fetch more messages from the room history.
     pub token: String,
     /// Is this a checkpoint for a complete crawl of the message history.
     pub full_crawl: bool,
@@ -137,7 +137,7 @@ impl<T> Dummy<T> for Event {
     }
 }
 
-pub(crate) type BacklogEventsT = (
+pub(crate) type HistoricEventsT = (
     Option<CrawlerCheckpoint>,
     Option<CrawlerCheckpoint>,
     Vec<(Event, Profile)>,
@@ -146,7 +146,7 @@ pub(crate) type BacklogEventsT = (
 
 pub(crate) enum ThreadMessage {
     Event((Event, Profile)),
-    BacklogEvents(BacklogEventsT),
+    HistoricEvents(HistoricEventsT),
     Write(Sender<Result<()>>),
 }
 
