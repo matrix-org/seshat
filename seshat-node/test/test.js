@@ -263,6 +263,16 @@ describe('Database', function() {
         expect(() => db.addEvent(matrixEvent, matrixProfileOnlyDisplayName)).to.throw('Database has been deleted');
     });
 
+    it('should allow us to check if the db is empty', async function() {
+        const db = createDb();
+        assert(await db.isEmpty());
+
+        db.addEvent(matrixEvent, matrixProfileOnlyDisplayName);
+        await db.commit();
+
+        assert(!await db.isEmpty());
+    });
+
     it('should throw an error when adding events with missing fields.', function() {
         delete matrixEvent.content;
         expect(() => db.addEvent(matrixEvent, matrixProfile)).to.throw('Event doesn\'t contain any content');

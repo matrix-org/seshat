@@ -282,6 +282,21 @@ class Seshat extends seshat.Seshat {
             });
         });
     }
+
+    /**
+     * Delete the Seshat database.
+     * @return {Promise<boolean>} A promise that will resolve to true if the
+     * database is empty, that is it doesn't contain any events, false
+     * otherwise.
+     */
+    async isEmpty() {
+        return new Promise((resolve) => {
+            super.isEmpty((err, res) => {
+                if (err) reject(err);
+                else resolve(res);
+            });
+        });
+    }
 }
 
 module.exports = Seshat;

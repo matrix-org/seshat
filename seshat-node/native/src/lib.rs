@@ -171,6 +171,31 @@ impl Task for LoadCheckPointsTask {
     }
 }
 
+struct IsEmptyTask {
+    connection: Connection,
+}
+
+impl Task for IsEmptyTask {
+    type Output = bool;
+    type Error = seshat::Error;
+    type JsEvent = JsBoolean;
+
+    fn perform(&self) -> Result<Self::Output, Self::Error> {
+        self.connection.is_empty()
+    }
+
+    fn complete(
+        self,
+        mut cx: TaskContext,
+        result: Result<Self::Output, Self::Error>,
+    ) -> JsResult<Self::JsEvent> {
+        match result {
+            Ok(r) => Ok(JsBoolean::new(&mut cx, r)),
+            Err(e) => return cx.throw_type_error(e.to_string()),
+        }
+    }
+}
+
 struct GetSizeTask {
     path: PathBuf,
 }
@@ -385,6 +410,31 @@ declare_types! {
             };
 
             let task = GetSizeTask { path };
+            task.schedule(f);
+
+            Ok(cx.undefined().upcast())
+        }
+
+        method isEmpty(mut cx) {
+            let f = cx.argument::<JsFunction>(0)?;
+            let mut this = cx.this();
+
+            let connection = {
+                let guard = cx.lock();
+                let db = &mut this.borrow_mut(&guard).0;
+
+                db.as_mut().map_or_else(|| Err("Database has been deleted"), |db| Ok(db.get_connection()))
+            };
+
+            let connection = match connection {
+                Ok(c) => match c {
+                    Ok(c) => c,
+                    Err(e) => return cx.throw_type_error(format!("Unable to get a database connection {}", e.to_string())),
+                },
+                Err(e) => return cx.throw_type_error(e),
+            };
+
+            let task = IsEmptyTask { connection };
             task.schedule(f);
 
             Ok(cx.undefined().upcast())
