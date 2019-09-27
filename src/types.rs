@@ -107,7 +107,7 @@ pub struct Event {
 #[derive(Debug, PartialEq, Clone)]
 /// A checkpoint that remembers the current point in a room timeline when
 /// fetching the backlog of the room.
-pub struct BacklogCheckpoint {
+pub struct CrawlerCheckpoint {
     /// The unique id of the room that this checkpoint belongs to.
     pub room_id: String,
     /// The token that can be used to go further back in the event timeline of
@@ -138,8 +138,8 @@ impl<T> Dummy<T> for Event {
 }
 
 pub(crate) type BacklogEventsT = (
-    Option<BacklogCheckpoint>,
-    Option<BacklogCheckpoint>,
+    Option<CrawlerCheckpoint>,
+    Option<CrawlerCheckpoint>,
     Vec<(Event, Profile)>,
     Sender<Result<bool>>,
 );

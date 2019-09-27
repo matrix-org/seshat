@@ -32,7 +32,7 @@ use tempfile::tempdir;
 
 use crate::index::{Index, IndexSearcher, Writer};
 use crate::types::{
-    BacklogCheckpoint, Config, Event, EventContext, EventId, Profile, Result,
+    CrawlerCheckpoint, Config, Event, EventContext, EventId, Profile, Result,
     SearchConfig, SearchResult, ThreadMessage,
 };
 
@@ -84,13 +84,13 @@ pub struct Database {
 pub struct Connection(PooledConnection<SqliteConnectionManager>);
 
 impl Connection {
-    /// Load all the previously stored backlog checkpoints from the database.
+    /// Load all the previously stored crawler checkpoints from the database.
     /// # Arguments
-    pub fn load_checkpoints(&self) -> Result<Vec<BacklogCheckpoint>> {
-        let mut stmt = self.prepare("SELECT room_id, token, full_crawl FROM backlogcheckpoints")?;
+    pub fn load_checkpoints(&self) -> Result<Vec<CrawlerCheckpoint>> {
+        let mut stmt = self.prepare("SELECT room_id, token, full_crawl FROM crawlercheckpoints")?;
 
         let rows = stmt.query_map(NO_PARAMS, |row| {
-            Ok(BacklogCheckpoint {
+            Ok(CrawlerCheckpoint {
                 room_id: row.get(0)?,
                 token: row.get(1)?,
                 full_crawl: row.get(2)?,
@@ -100,7 +100,7 @@ impl Connection {
         let mut checkpoints = Vec::new();
 
         for row in rows {
-            let checkpoint: BacklogCheckpoint = row?;
+            let checkpoint: CrawlerCheckpoint = row?;
             checkpoints.push(checkpoint);
         }
         Ok(checkpoints)
@@ -231,8 +231,8 @@ impl Database {
         connection: &mut rusqlite::Connection,
         index_writer: &mut Writer,
         message: (
-            Option<BacklogCheckpoint>,
-            Option<BacklogCheckpoint>,
+            Option<CrawlerCheckpoint>,
+            Option<CrawlerCheckpoint>,
             Vec<(Event, Profile)>,
         ),
     ) -> Result<bool> {
@@ -347,8 +347,8 @@ impl Database {
     pub fn add_backlog_events(
         &self,
         events: Vec<(Event, Profile)>,
-        new_checkpoint: Option<BacklogCheckpoint>,
-        old_checkpoint: Option<BacklogCheckpoint>,
+        new_checkpoint: Option<CrawlerCheckpoint>,
+        old_checkpoint: Option<CrawlerCheckpoint>,
     ) -> Receiver<Result<bool>> {
         let (sender, receiver): (_, Receiver<Result<bool>>) = channel();
         let payload = (new_checkpoint, old_checkpoint, events, sender);
@@ -388,7 +388,7 @@ impl Database {
         )?;
 
         conn.execute(
-            "CREATE TABLE IF NOT EXISTS backlogcheckpoints (
+            "CREATE TABLE IF NOT EXISTS crawlercheckpoints (
                 id INTEGER NOT NULL PRIMARY KEY,
                 room_id TEXT NOT NULL,
                 token TEXT NOT NULL,
@@ -704,12 +704,12 @@ impl Database {
 
     pub(crate) fn replace_backlog_checkpoint(
         connection: &rusqlite::Connection,
-        new: Option<&BacklogCheckpoint>,
-        old: Option<&BacklogCheckpoint>,
+        new: Option<&CrawlerCheckpoint>,
+        old: Option<&CrawlerCheckpoint>,
     ) -> Result<()> {
         if let Some(checkpoint) = new {
             connection.execute(
-                "INSERT OR IGNORE INTO backlogcheckpoints (room_id, token, full_crawl)
+                "INSERT OR IGNORE INTO crawlercheckpoints (room_id, token, full_crawl)
                 VALUES(?1, ?2, ?3)",
                 &[
                     &checkpoint.room_id,
@@ -721,7 +721,7 @@ impl Database {
 
         if let Some(checkpoint) = old {
             connection.execute(
-                "DELETE FROM backlogcheckpoints
+                "DELETE FROM crawlercheckpoints
                 WHERE (room_id=?1 AND token=?2 AND full_crawl=?3)",
                 &[
                     &checkpoint.room_id,
@@ -925,7 +925,7 @@ fn save_and_load_checkpoints() {
     let tmpdir = tempdir().unwrap();
     let mut db = Database::new(tmpdir.path()).unwrap();
 
-    let checkpoint = BacklogCheckpoint {
+    let checkpoint = CrawlerCheckpoint {
         room_id: "!test:room".to_string(),
         token: "1234".to_string(),
         full_crawl: false,
@@ -941,7 +941,7 @@ fn save_and_load_checkpoints() {
 
     assert!(checkpoints.contains(&checkpoint));
 
-    let new_checkpoint = BacklogCheckpoint {
+    let new_checkpoint = CrawlerCheckpoint {
         room_id: "!test:room".to_string(),
         token: "12345".to_string(),
         full_crawl: false,

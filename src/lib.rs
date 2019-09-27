@@ -30,7 +30,7 @@ pub use database::Database;
 pub use database::Searcher;
 
 pub use types::{
-    BacklogCheckpoint, Config, Error, Event, EventType, Language, Profile, Result, SearchConfig,
+    CrawlerCheckpoint, Config, Error, Event, EventType, Language, Profile, Result, SearchConfig,
     SearchResult,
 };
 

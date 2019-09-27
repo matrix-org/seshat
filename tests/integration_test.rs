@@ -1,7 +1,7 @@
 #[macro_use]
 extern crate lazy_static;
 
-use seshat::{BacklogCheckpoint, Database, Event, EventType, Profile, SearchConfig};
+use seshat::{CrawlerCheckpoint, Database, Event, EventType, Profile, SearchConfig};
 
 use std::path::Path;
 use tempfile::tempdir;
@@ -131,7 +131,7 @@ fn save_and_search_backlog_events() {
         events.push((event, profile.clone()));
     }
 
-    let checkpoint = BacklogCheckpoint {
+    let checkpoint = CrawlerCheckpoint {
         room_id: "!test:room".to_string(),
         token: "1234".to_string(),
         full_crawl: false,

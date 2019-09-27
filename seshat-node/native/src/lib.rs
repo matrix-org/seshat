@@ -22,7 +22,7 @@ use neon::prelude::*;
 use neon_serde;
 use serde_json;
 use seshat::{
-    BacklogCheckpoint, Config, Connection, Database, Event, EventType, Language, Profile,
+    CrawlerCheckpoint, Config, Connection, Database, Event, EventType, Language, Profile,
     SearchConfig, SearchResult, Searcher,
 };
 
@@ -133,7 +133,7 @@ struct LoadCheckPointsTask {
 }
 
 impl Task for LoadCheckPointsTask {
-    type Output = Vec<BacklogCheckpoint>;
+    type Output = Vec<CrawlerCheckpoint>;
     type Error = seshat::Error;
     type JsEvent = JsArray;
 
@@ -629,7 +629,7 @@ fn parse_search_object(
 fn parse_checkpoint(
     cx: &mut CallContext<Seshat>,
     argument: Option<Handle<JsValue>>,
-) -> Result<Option<BacklogCheckpoint>, neon::result::Throw> {
+) -> Result<Option<CrawlerCheckpoint>, neon::result::Throw> {
     match argument {
         Some(c) => match c.downcast::<JsObject>() {
             Ok(object) => Ok(Some(js_checkpoint_to_rust(cx, *object)?)),
@@ -649,10 +649,10 @@ fn add_backlog_events_helper(
     let mut js_events: Vec<Handle<JsValue>> = js_events.to_vec(cx)?;
 
     let js_checkpoint = cx.argument_opt(1);
-    let new_checkpoint: Option<BacklogCheckpoint> = parse_checkpoint(cx, js_checkpoint)?;
+    let new_checkpoint: Option<CrawlerCheckpoint> = parse_checkpoint(cx, js_checkpoint)?;
 
     let js_checkpoint = cx.argument_opt(2);
-    let old_checkpoint: Option<BacklogCheckpoint> = parse_checkpoint(cx, js_checkpoint)?;
+    let old_checkpoint: Option<CrawlerCheckpoint> = parse_checkpoint(cx, js_checkpoint)?;
 
     let mut events: Vec<(Event, Profile)> = Vec::new();
 
@@ -903,7 +903,7 @@ fn parse_profile(
 fn js_checkpoint_to_rust(
     cx: &mut CallContext<Seshat>,
     object: JsObject,
-) -> Result<BacklogCheckpoint, neon::result::Throw> {
+) -> Result<CrawlerCheckpoint, neon::result::Throw> {
     let room_id = object
         .get(&mut *cx, "room_id")?
         .downcast::<JsString>()
@@ -920,7 +920,7 @@ fn js_checkpoint_to_rust(
         .unwrap_or_else(|_| JsBoolean::new(&mut *cx, false))
         .value();
 
-    Ok(BacklogCheckpoint {
+    Ok(CrawlerCheckpoint {
         room_id,
         token,
         full_crawl,
