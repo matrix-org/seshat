@@ -256,7 +256,7 @@ declare_types! {
            )
         }
 
-        method addBacklogEventsSync(mut cx) {
+        method addHistoricEventsSync(mut cx) {
             let receiver = add_backlog_events_helper(&mut cx)?;
             let ret = receiver.recv().unwrap();
 
@@ -266,7 +266,7 @@ declare_types! {
             }
         }
 
-        method addBacklogEvents(mut cx) {
+        method addHistoricEvents(mut cx) {
             let f = cx.argument::<JsFunction>(3)?;
             let receiver = add_backlog_events_helper(&mut cx)?;
 

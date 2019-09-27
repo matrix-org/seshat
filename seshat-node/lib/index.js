@@ -189,13 +189,13 @@ class Seshat extends seshat.Seshat {
      * @return {Array.<searchResult>} The array of events that matched the
      * search term.
      */
-    addBacklogEventsSync(events, newCheckpoint = null, oldCheckPoint = null) {
-        return super.addBacklogEventsSync(events, newCheckpoint, oldCheckPoint);
+    addHistoricEventsSync(events, newCheckpoint = null, oldCheckPoint = null) {
+        return super.addHistoricEventsSync(events, newCheckpoint, oldCheckPoint);
     }
 
-    async addBacklogEvents(events, newCheckpoint = null, oldCheckPoint = null) {
+    async addHistoricEvents(events, newCheckpoint = null, oldCheckPoint = null) {
         return new Promise((resolve, reject) => {
-            super.addBacklogEvents(
+            super.addHistoricEvents(
                 events,
                 newCheckpoint,
                 oldCheckPoint,
@@ -207,12 +207,12 @@ class Seshat extends seshat.Seshat {
         });
     }
 
-    async addBacklogCheckpoint(checkpoint) {
-        return this.addBacklogEvents([], checkpoint);
+    async addCrawlerCheckpoint(checkpoint) {
+        return this.addHistoricEvents([], checkpoint);
     }
 
-    async removeBacklogCheckpoint(checkpoint) {
-        return this.addBacklogEvents([], null, checkpoint);
+    async removeCrawlerCheckpoint(checkpoint) {
+        return this.addHistoricEvents([], null, checkpoint);
     }
 
     async loadCheckpoints() {
