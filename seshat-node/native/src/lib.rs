@@ -853,7 +853,7 @@ fn parse_event(
             .value(),
 
         EventType::Name => content
-            .get(&mut *cx, "topic")?
+            .get(&mut *cx, "name")?
             .downcast::<JsString>()
             .or_else(|_| cx.throw_type_error("Event doesn't contain a valid name"))?
             .value(),
