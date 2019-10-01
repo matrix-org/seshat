@@ -334,7 +334,7 @@ declare_types! {
                     let p = p.downcast::<JsObject>().or_throw(&mut cx)?;
                     parse_profile(&mut cx, *p)?
                 },
-                None => Profile { display_name: None, avatar_url: None },
+                None => Profile { displayname: None, avatar_url: None },
             };
 
             let ret = {
@@ -667,13 +667,13 @@ fn add_historic_events_helper(
                     parse_profile(cx, *p)?
                 } else {
                     Profile {
-                        display_name: None,
+                        displayname: None,
                         avatar_url: None,
                     }
                 }
             }
             Err(_e) => Profile {
-                display_name: None,
+                displayname: None,
                 avatar_url: None,
             },
         };
@@ -770,13 +770,13 @@ fn profile_to_js<'a, C: Context<'a>>(
 
     let js_sender = JsString::new(&mut *cx, sender);
 
-    match profile.display_name {
+    match profile.displayname {
         Some(name) => {
             let js_name = JsString::new(&mut *cx, name);
-            js_profile.set(&mut *cx, "display_name", js_name)?;
+            js_profile.set(&mut *cx, "displayname", js_name)?;
         }
         None => {
-            js_profile.set(&mut *cx, "display_name", JsNull::new())?;
+            js_profile.set(&mut *cx, "displayname", JsNull::new())?;
         }
     };
 
@@ -879,8 +879,8 @@ fn parse_profile(
     cx: &mut CallContext<Seshat>,
     profile: JsObject,
 ) -> Result<Profile, neon::result::Throw> {
-    let display_name: Option<String> = match profile
-        .get(&mut *cx, "display_name")?
+    let displayname: Option<String> = match profile
+        .get(&mut *cx, "displayname")?
         .downcast::<JsString>()
     {
         Ok(s) => Some(s.value()),
@@ -894,7 +894,7 @@ fn parse_profile(
         };
 
     Ok(Profile {
-        display_name,
+        displayname,
         avatar_url,
     })
 }

@@ -39,7 +39,7 @@ const seshat = require('../native');
 /**
  * @typedef matrixProfile
  * @type {Object}
- * @property {string} display_name The users display name, if one is set.
+ * @property {string} displayname The users display name, if one is set.
  * @property {string} avatar_url The users avatar url, if one is set.
  */
 

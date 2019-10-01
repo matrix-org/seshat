@@ -360,9 +360,9 @@ impl Database {
             "CREATE TABLE IF NOT EXISTS profiles (
                 id INTEGER NOT NULL PRIMARY KEY,
                 user_id TEXT NOT NULL,
-                display_name TEXT NOT NULL,
+                displayname TEXT NOT NULL,
                 avatar_url TEXT NOT NULL,
-                UNIQUE(user_id,display_name,avatar_url)
+                UNIQUE(user_id,displayname,avatar_url)
             )",
             NO_PARAMS,
         )?;
@@ -408,29 +408,29 @@ impl Database {
         user_id: &str,
         profile: &Profile,
     ) -> Result<i64> {
-        let display_name = profile.display_name.as_ref();
+        let displayname = profile.displayname.as_ref();
         let avatar_url = profile.avatar_url.as_ref();
 
         // unwrap_or_default doesn't work on references sadly.
-        let display_name = if let Some(d) = display_name { d } else { "" };
+        let displayname = if let Some(d) = displayname { d } else { "" };
 
         let avatar_url = if let Some(a) = avatar_url { a } else { "" };
 
         connection.execute(
             "
             INSERT OR IGNORE INTO profiles (
-                user_id, display_name, avatar_url
+                user_id, displayname, avatar_url
             ) VALUES(?1, ?2, ?3)",
-            &[user_id, display_name, avatar_url],
+            &[user_id, displayname, avatar_url],
         )?;
 
         let profile_id: i64 = connection.query_row(
             "
             SELECT id FROM profiles WHERE (
                 user_id=?1
-                and display_name=?2
+                and displayname=?2
                 and avatar_url=?3)",
-            &[user_id, display_name, avatar_url],
+            &[user_id, displayname, avatar_url],
             |row| row.get(0),
         )?;
 
@@ -443,11 +443,11 @@ impl Database {
         profile_id: i64,
     ) -> Result<Profile> {
         let profile = connection.query_row(
-            "SELECT display_name, avatar_url FROM profiles WHERE id=?1",
+            "SELECT displayname, avatar_url FROM profiles WHERE id=?1",
             &[profile_id],
             |row| {
                 Ok(Profile {
-                    display_name: row.get(0)?,
+                    displayname: row.get(0)?,
                     avatar_url: row.get(1)?,
                 })
             },
@@ -526,7 +526,7 @@ impl Database {
             vec![]
         } else {
             let mut stmt = connection.prepare(
-                "SELECT source, sender, display_name, avatar_url
+                "SELECT source, sender, displayname, avatar_url
                  FROM events
                  INNER JOIN profiles on profiles.id = events.profile_id
                  WHERE (
@@ -548,7 +548,7 @@ impl Database {
                         row.get(0),
                         row.get(1),
                         Profile {
-                            display_name: row.get(2)?,
+                            displayname: row.get(2)?,
                             avatar_url: row.get(3)?,
                         },
                     ))
@@ -569,7 +569,7 @@ impl Database {
             vec![]
         } else {
             let mut stmt = connection.prepare(
-                "SELECT source, sender, display_name, avatar_url
+                "SELECT source, sender, displayname, avatar_url
                  FROM events
                  INNER JOIN profiles on profiles.id = events.profile_id
                  WHERE (
@@ -591,7 +591,7 @@ impl Database {
                         row.get(0),
                         row.get(1),
                         Profile {
-                            display_name: row.get(2)?,
+                            displayname: row.get(2)?,
                             avatar_url: row.get(3)?,
                         },
                     ))
@@ -628,7 +628,7 @@ impl Database {
             .collect::<String>();
 
         let mut stmt = connection.prepare(&format!(
-            "SELECT type, content_value, event_id, sender, server_ts, room_id, source, display_name, avatar_url
+            "SELECT type, content_value, event_id, sender, server_ts, room_id, source, displayname, avatar_url
              FROM events
              INNER JOIN profiles on profiles.id = events.profile_id
              WHERE event_id IN (?{})
@@ -649,7 +649,7 @@ impl Database {
                     source: row.get(6)?,
                 },
                 Profile {
-                    display_name: row.get(7)?,
+                    displayname: row.get(7)?,
                     avatar_url: row.get(8)?,
                 },
             ))
@@ -778,7 +778,7 @@ fn store_empty_profile() {
     let db = Database::new(tmpdir.path()).unwrap();
 
     let profile = Profile {
-        display_name: None,
+        displayname: None,
         avatar_url: None,
     };
     let id = Database::save_profile(&db.connection, "@alice.example.org", &profile);
@@ -958,7 +958,7 @@ fn duplicate_empty_profiles() {
     let tmpdir = tempdir().unwrap();
     let db = Database::new(tmpdir.path()).unwrap();
     let profile = Profile {
-        display_name: None,
+        displayname: None,
         avatar_url: None,
     };
     let user_id = "@alice.example.org";

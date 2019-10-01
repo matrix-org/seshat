@@ -40,12 +40,12 @@ const matrixEventRoom2 = {
 };
 
 const matrixProfile = {
-    display_name: 'Alice (from wonderland)',
+    displayname: 'Alice (from wonderland)',
     avatar_url: '',
 };
 
 const matrixProfileOnlyDisplayName = {
-    display_name: 'Alice (from wonderland)',
+    displayname: 'Alice (from wonderland)',
 };
 
 const badEvent = {

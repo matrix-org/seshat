@@ -245,7 +245,7 @@ impl Event {
 #[derive(Debug, PartialEq, Default, Clone)]
 pub struct Profile {
     /// The users display name if one is set.
-    pub display_name: Option<String>,
+    pub displayname: Option<String>,
     /// The user's avatar URL if they have set one.
     pub avatar_url: Option<String>,
 }
@@ -254,11 +254,11 @@ impl Profile {
     // Create a new profile.
     /// # Arguments
     ///
-    /// * `display_name` - The human readable name of the user.
+    /// * `displayname` - The human readable name of the user.
     /// * `avatar_url` - The URL of the avatar of the user.
-    pub fn new(display_name: &str, avatar_url: &str) -> Profile {
+    pub fn new(displayname: &str, avatar_url: &str) -> Profile {
         Profile {
-            display_name: Some(display_name.to_string()),
+            displayname: Some(displayname.to_string()),
             avatar_url: Some(avatar_url.to_string()),
         }
     }
