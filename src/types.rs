@@ -288,7 +288,7 @@ pub struct SearchConfig {
     pub(crate) limit: usize,
     pub(crate) before_limit: usize,
     pub(crate) after_limit: usize,
-    pub(crate) order_by_recent: bool,
+    pub(crate) order_by_recency: bool,
     pub(crate) room_id: Option<RoomId>,
     pub(crate) keys: Vec<EventType>,
 }
@@ -347,10 +347,10 @@ impl SearchConfig {
     /// order them by the search score.
     /// # Arguments
     ///
-    /// * `order_by_recent` - Flag to determine if we should order by recency.
+    /// * `order_by_recency` - Flag to determine if we should order by recency.
     /// result.
-    pub fn order_by_recent(&mut self, order_by_recent: bool) -> &mut Self {
-        self.order_by_recent = order_by_recent;
+    pub fn order_by_recency(&mut self, order_by_recency: bool) -> &mut Self {
+        self.order_by_recency = order_by_recency;
         self
     }
 
@@ -378,7 +378,7 @@ impl Default for SearchConfig {
             limit: 10,
             before_limit: 0,
             after_limit: 0,
-            order_by_recent: false,
+            order_by_recency: false,
             room_id: None,
             keys: Vec::new(),
         }

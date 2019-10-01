@@ -117,7 +117,7 @@ impl IndexSearcher {
 
         let query = query_parser.parse_query(&term)?;
 
-        if config.order_by_recent {
+        if config.order_by_recency {
             let collector = tv::collector::TopDocs::with_limit(config.limit);
             let collector = collector.order_by_u64_field(self.server_timestamp_field);
 
@@ -325,7 +325,7 @@ fn order_results_by_date() {
 
     let searcher = index.get_searcher();
     let config = SearchConfig {
-        order_by_recent: true,
+        order_by_recency: true,
         ..Default::default()
     };
     let result = searcher.search("Test", &config).unwrap();

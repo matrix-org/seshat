@@ -169,14 +169,16 @@ class Seshat extends seshat.Seshat {
      * preceded the event that matched the search term.
      * @param  {number} after_limit The number of events to fetch that followed
      * the event that matched the search term.
+     * @param  {boolean} order_by_recency Should the search results be ordered
+     * by event recency.
      *
      * @return {Array.<searchResult>} The array of events that matched the
      * search term.
      */
     searchSync(term, limit = 10, before_limit = 0, after_limit = 0,
-        order_by_recent = false) {
+        order_by_recency = false) {
         return super.searchSync(term, limit, before_limit, after_limit,
-            order_by_recent);
+            order_by_recency);
     }
 
     /**

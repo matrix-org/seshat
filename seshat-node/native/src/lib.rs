@@ -594,9 +594,9 @@ fn parse_search_object(
         }
     }
 
-    if let Ok(v) = argument.get(&mut *cx, "order_by_recent") {
+    if let Ok(v) = argument.get(&mut *cx, "order_by_recency") {
         if let Ok(v) = v.downcast::<JsBoolean>() {
-            config.order_by_recent(v.value());
+            config.order_by_recency(v.value());
         }
     }
 
