@@ -148,6 +148,8 @@ class Seshat extends seshat.Seshat {
      * preceded the event that matched the search term.
      * @param  {number} args.after_limit The number of events to fetch that
      * followed the event that matched the search term.
+     * @param  {boolean} args.order_by_recency Should the search results be
+     * ordered by event recency.
      *
      * @return {Promise<Array.<searchResult>>} The array of events that matched
      * the search term.
@@ -162,6 +164,7 @@ class Seshat extends seshat.Seshat {
 
     /**
      * Search the database for events using the given search term.
+     *
      * @param  {string} term The term that is used to search the database.
      * @param  {number} limit The maximum number of events that the search
      * should return.
@@ -188,22 +191,28 @@ class Seshat extends seshat.Seshat {
      * added to the database.
      * @param  {checkpoint} newCheckpoint
      * @param  {checkpoint} oldCheckPoint
+     *
+     * @return {boolean} True if the added events were already in the store,
+     * false otherwise.
      */
     addHistoricEventsSync(events, newCheckpoint = null, oldCheckPoint = null) {
-        return super.addHistoricEventsSync(events, newCheckpoint, oldCheckPoint);
+        return super.addHistoricEventsSync(events, newCheckpoint,
+            oldCheckPoint);
     }
 
     /**
      * Add a batch of events from the room history to the database.
+     *
      * @param  {array<matrixEvent>} events An array of events that will be
      * added to the database.
      * @param  {checkpoint} newCheckpoint
      * @param  {checkpoint} oldCheckPoint
      *
-     * @return {Promise<>} A promise that will resolve to when the events have
-     * been added to the database.
+     * @return {Promise<boolean>} A promise that will resolve to true if all
+     * the events have already been added to the database, false otherwise.
      */
-    async addHistoricEvents(events, newCheckpoint = null, oldCheckPoint = null) {
+    async addHistoricEvents(events, newCheckpoint = null,
+        oldCheckPoint = null) {
         return new Promise((resolve, reject) => {
             super.addHistoricEvents(
                 events,
@@ -219,9 +228,10 @@ class Seshat extends seshat.Seshat {
 
     /**
      * Add a message crawler checkpoint.
+     *
      * @param  {checkpoint} checkpoint
      *
-     * @return {Promise<>} A promise that will resolve when the checkpoint has
+     * @return {Promise} A promise that will resolve when the checkpoint has
      * been stored in the database.
      */
     async addCrawlerCheckpoint(checkpoint) {
@@ -232,7 +242,7 @@ class Seshat extends seshat.Seshat {
      * Remove a message crawler checkpoint.
      * @param  {checkpoint} checkpoint
      *
-     * @return {Promise<>} A promise that will resolve when the checkpoint has
+     * @return {Promise} A promise that will resolve when the checkpoint has
      * been removed from the database.
      */
     async removeCrawlerCheckpoint(checkpoint) {
@@ -273,7 +283,8 @@ class Seshat extends seshat.Seshat {
 
     /**
      * Delete the Seshat database.
-     * @return {Promise<>} A promise that will resolve when the database has
+     *
+     * @return {Promise} A promise that will resolve when the database has
      * been deleted.
      */
     async delete() {
@@ -287,6 +298,7 @@ class Seshat extends seshat.Seshat {
 
     /**
      * Delete the Seshat database.
+     *
      * @return {Promise<boolean>} A promise that will resolve to true if the
      * database is empty, that is it doesn't contain any events, false
      * otherwise.
