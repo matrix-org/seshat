@@ -47,7 +47,7 @@ const seshat = require('../native');
 /**
  * @typedef checkpoint
  * @type {Object}
- * @property {string} room_id The unique id of the room that this checkpoint
+ * @property {string} roomId The unique id of the room that this checkpoint
  * belongs to.
  * @property {string} token The token that can be used to fetch more events for
  * the given room.

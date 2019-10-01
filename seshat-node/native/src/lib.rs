@@ -159,7 +159,7 @@ impl Task for LoadCheckPointsTask {
             let token = JsString::new(&mut cx, c.token);
             let full_crawl = JsBoolean::new(&mut cx, c.full_crawl);
 
-            js_checkpoint.set(&mut cx, "room_id", room_id)?;
+            js_checkpoint.set(&mut cx, "roomId", room_id)?;
             js_checkpoint.set(&mut cx, "token", token)?;
             js_checkpoint.set(&mut cx, "full_crawl", full_crawl)?;
 
@@ -600,7 +600,7 @@ fn parse_search_object(
         }
     }
 
-    if let Ok(r) = argument.get(&mut *cx, "room_id") {
+    if let Ok(r) = argument.get(&mut *cx, "roomId") {
         if let Ok(r) = r.downcast::<JsString>() {
             config.for_room(&r.value());
         }
@@ -904,7 +904,7 @@ fn js_checkpoint_to_rust(
     object: JsObject,
 ) -> Result<CrawlerCheckpoint, neon::result::Throw> {
     let room_id = object
-        .get(&mut *cx, "room_id")?
+        .get(&mut *cx, "roomId")?
         .downcast::<JsString>()
         .or_throw(&mut *cx)?
         .value();

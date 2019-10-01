@@ -70,7 +70,7 @@ const exampleEvents = [
 ]
 
 const checkPoint = {
-    room_id: '!TESTROOM',
+    roomId: '!TESTROOM',
     token: '1234',
     full_crawl: false,
 }
@@ -188,7 +188,7 @@ describe('Database', function() {
 
         const results = await db.search({
             search_term: 'Test',
-            room_id: '!TESTROOM',
+            roomId: '!TESTROOM',
         });
         assert.equal(results.count, 1);
         assert.deepEqual(results.results[0].result, matrixEvent);
