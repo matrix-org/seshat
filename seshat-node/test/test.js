@@ -28,6 +28,17 @@ const topicEvent = {
     origin_server_ts: 1516362244026,
 };
 
+const nameEvent = {
+    type: 'm.room.name',
+    event_id: '$15163622445EBvZN:localhost',
+    room_id: '!TESTROOM',
+    sender: '@alice:example.org',
+    content: {
+        name: 'Test room',
+    },
+    origin_server_ts: 1516362244068,
+};
+
 const matrixEventRoom2 = {
     type: 'm.room.message',
     event_id: '$15163622515EBvZJ:localhost',
@@ -202,6 +213,16 @@ describe('Database', function() {
         await db.commit();
         let size = await db.getSize();
         assert.isAbove(size, 0)
+    });
+
+    it('should allow us to add different event types', async function() {
+        const db = createDb();
+        db.addEvent(matrixEvent, matrixProfileOnlyDisplayName);
+        db.addEvent(topicEvent, matrixProfileOnlyDisplayName);
+        db.addEvent(nameEvent, matrixProfileOnlyDisplayName);
+
+        await db.commit();
+        db.reload();
     });
 
     it('should allow us to search with a specific key', async function() {
