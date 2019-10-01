@@ -161,7 +161,7 @@ impl Task for LoadCheckPointsTask {
 
             js_checkpoint.set(&mut cx, "roomId", room_id)?;
             js_checkpoint.set(&mut cx, "token", token)?;
-            js_checkpoint.set(&mut cx, "full_crawl", full_crawl)?;
+            js_checkpoint.set(&mut cx, "fullCrawl", full_crawl)?;
 
             ret.set(&mut cx, i as u32, js_checkpoint)?;
         }
@@ -914,7 +914,7 @@ fn js_checkpoint_to_rust(
         .or_throw(&mut *cx)?
         .value();
     let full_crawl: bool = object
-        .get(&mut *cx, "full_crawl")?
+        .get(&mut *cx, "fullCrawl")?
         .downcast::<JsBoolean>()
         .unwrap_or_else(|_| JsBoolean::new(&mut *cx, false))
         .value();

@@ -72,7 +72,7 @@ const exampleEvents = [
 const checkPoint = {
     roomId: '!TESTROOM',
     token: '1234',
-    full_crawl: false,
+    fullCrawl: false,
 }
 
 describe('Database', function() {
