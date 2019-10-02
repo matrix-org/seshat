@@ -244,6 +244,22 @@ describe('Database', function() {
         assert.deepEqual(results.results[2].result, beforeMatrixEvent);
     });
 
+    it('should sort the search results by rank by default', async function() {
+        const db = createDb();
+        db.addEvent(matrixEvent, matrixProfileOnlyDisplayName);
+        db.addEvent(laterMatrixEvent, matrixProfileOnlyDisplayName);
+        db.addEvent(beforeMatrixEvent, matrixProfileOnlyDisplayName);
+
+        await db.commit();
+        db.reload();
+
+        const results = await db.search({search_term: 'Test'});
+        assert.equal(results.count, 3);
+        console.log(results);
+        assert(results.results[0].rank <= results.results[1].rank);
+        assert(results.results[1].rank <= results.results[2].rank);
+    });
+
     it('should allow us to get the size of the database', async function() {
         const db = createDb();
         db.addEvent(matrixEvent, matrixProfileOnlyDisplayName);
