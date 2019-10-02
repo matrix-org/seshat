@@ -255,7 +255,6 @@ describe('Database', function() {
 
         const results = await db.search({search_term: 'Test'});
         assert.equal(results.count, 3);
-        console.log(results);
         assert(results.results[0].rank <= results.results[1].rank);
         assert(results.results[1].rank <= results.results[2].rank);
     });
