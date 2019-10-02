@@ -8,13 +8,35 @@ const Seshat = require('../');
 
 const matrixEvent = {
     type: 'm.room.message',
-    event_id: '$15163622445EBvZJ:localhost',
+    event_id: '$15163622445EBvZB:localhost',
     room_id: '!TESTROOM',
     sender: '@alice:example.org',
     content: {
         body: 'Test message',
     },
     origin_server_ts: 1516362244026,
+};
+
+const beforeMatrixEvent = {
+    type: 'm.room.message',
+    event_id: '$15163622445EBvFA:localhost',
+    room_id: '!TESTROOM',
+    sender: '@alice:example.org',
+    content: {
+        body: 'Another test message before on',
+    },
+    origin_server_ts: 1516352244100,
+};
+
+const laterMatrixEvent = {
+    type: 'm.room.message',
+    event_id: '$15163622445EBvFC:localhost',
+    room_id: '!TESTROOM',
+    sender: '@alice:example.org',
+    content: {
+        body: 'Another test message later on',
+    },
+    origin_server_ts: 1516372244100,
 };
 
 const topicEvent = {
@@ -136,7 +158,6 @@ describe('Database', function() {
         db.addEvent(matrixEvent);
 
         await db.commit();
-        await db.commit();
         db.reload();
 
         const results = db.searchSync({search_term:'Test'});
@@ -149,7 +170,7 @@ describe('Database', function() {
         db.addEvent(matrixEvent, matrixProfileOnlyDisplayName);
 
         await db.commit();
-        await db.commit();
+        db.reload();
 
         const results = await db.search({search_term: 'Test'});
         // console.log(results)
@@ -194,8 +215,7 @@ describe('Database', function() {
         db.addEvent(matrixEventRoom2, matrixProfileOnlyDisplayName);
 
         await db.commit();
-        await db.commit();
-        await db.commit();
+        db.reload();
 
         const results = await db.search({
             search_term: 'Test',
@@ -203,6 +223,25 @@ describe('Database', function() {
         });
         assert.equal(results.count, 1);
         assert.deepEqual(results.results[0].result, matrixEvent);
+    });
+
+    it('should allow us to sort the search results by recency', async function() {
+        const db = createDb();
+        db.addEvent(matrixEvent, matrixProfileOnlyDisplayName);
+        db.addEvent(laterMatrixEvent, matrixProfileOnlyDisplayName);
+        db.addEvent(beforeMatrixEvent, matrixProfileOnlyDisplayName);
+
+        await db.commit();
+        db.reload();
+
+        const results = await db.search({
+            search_term: 'Test',
+            order_by_recency: true
+        });
+        assert.equal(results.count, 3);
+        assert.deepEqual(results.results[0].result, laterMatrixEvent);
+        assert.deepEqual(results.results[1].result, matrixEvent);
+        assert.deepEqual(results.results[2].result, beforeMatrixEvent);
     });
 
     it('should allow us to get the size of the database', async function() {
