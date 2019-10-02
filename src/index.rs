@@ -33,7 +33,6 @@ pub(crate) struct Index {
     name_field: tv::schema::Field,
     event_id_field: tv::schema::Field,
     room_id_field: tv::schema::Field,
-    server_timestamp_field: tv::schema::Field,
 }
 
 pub(crate) struct Writer {
@@ -43,7 +42,6 @@ pub(crate) struct Writer {
     pub(crate) name_field: tv::schema::Field,
     pub(crate) event_id_field: tv::schema::Field,
     room_id_field: tv::schema::Field,
-    server_timestamp_field: tv::schema::Field,
 }
 
 impl Writer {
@@ -63,7 +61,6 @@ impl Writer {
 
         doc.add_text(self.event_id_field, &event.event_id);
         doc.add_text(self.room_id_field, &event.room_id);
-        doc.add_u64(self.server_timestamp_field, event.server_ts as u64);
 
         self.inner.add_document(doc);
     }
@@ -78,7 +75,6 @@ pub(crate) struct IndexSearcher {
     pub(crate) name_field: tv::schema::Field,
     pub(crate) room_id_field: tv::schema::Field,
     pub(crate) event_id_field: tv::schema::Field,
-    pub(crate) server_timestamp_field: tv::schema::Field,
 }
 
 impl IndexSearcher {
@@ -117,50 +113,26 @@ impl IndexSearcher {
 
         let query = query_parser.parse_query(&term)?;
 
-        if config.order_by_recency {
-            let collector = tv::collector::TopDocs::with_limit(config.limit);
-            let collector = collector.order_by_u64_field(self.server_timestamp_field);
+        let result = self
+            .inner
+            .search(&query, &tv::collector::TopDocs::with_limit(config.limit))?;
 
-            let result = self.inner.search(&query, &collector)?;
+        let mut docs = Vec::new();
 
-            let mut docs = Vec::new();
+        for (score, docaddress) in result {
+            let doc = match self.inner.doc(docaddress) {
+                Ok(d) => d,
+                Err(_e) => continue,
+            };
 
-            for (_, docaddress) in result {
-                let doc = match self.inner.doc(docaddress) {
-                    Ok(d) => d,
-                    Err(_e) => continue,
-                };
+            let event_id: EventId = match doc.get_first(self.event_id_field) {
+                Some(s) => s.text().unwrap().to_owned(),
+                None => continue,
+            };
 
-                let event_id: EventId = match doc.get_first(self.event_id_field) {
-                    Some(s) => s.text().unwrap().to_owned(),
-                    None => continue,
-                };
-
-                docs.push((1.0, event_id));
-            }
-            Ok(docs)
-        } else {
-            let result = self
-                .inner
-                .search(&query, &tv::collector::TopDocs::with_limit(config.limit))?;
-
-            let mut docs = Vec::new();
-
-            for (score, docaddress) in result {
-                let doc = match self.inner.doc(docaddress) {
-                    Ok(d) => d,
-                    Err(_e) => continue,
-                };
-
-                let event_id: EventId = match doc.get_first(self.event_id_field) {
-                    Some(s) => s.text().unwrap().to_owned(),
-                    None => continue,
-                };
-
-                docs.push((score, event_id));
-            }
-            Ok(docs)
+            docs.push((score, event_id));
         }
+        Ok(docs)
     }
 }
 
@@ -175,8 +147,6 @@ impl Index {
         let topic_field = schemabuilder.add_text_field("topic", text_field_options.clone());
         let name_field = schemabuilder.add_text_field("name", text_field_options);
         let room_id_field = schemabuilder.add_text_field("room_id", tv::schema::STRING);
-        let server_timestamp_field =
-            schemabuilder.add_u64_field("server_timestamp", tv::schema::FAST);
 
         let event_id_field = schemabuilder.add_text_field("event_id", tv::schema::STORED);
 
@@ -211,7 +181,6 @@ impl Index {
             name_field,
             event_id_field,
             room_id_field,
-            server_timestamp_field,
         })
     }
 
@@ -236,7 +205,6 @@ impl Index {
             name_field: self.name_field,
             room_id_field: self.room_id_field,
             event_id_field: self.event_id_field,
-            server_timestamp_field: self.server_timestamp_field,
         }
     }
 
@@ -252,7 +220,6 @@ impl Index {
             name_field: self.name_field,
             event_id_field: self.event_id_field,
             room_id_field: self.room_id_field,
-            server_timestamp_field: self.server_timestamp_field,
         })
     }
 }
@@ -304,34 +271,6 @@ fn add_events_to_differing_rooms() {
 
     let result = searcher.search("Test", &Default::default()).unwrap();
     assert_eq!(result.len(), 2);
-}
-
-#[test]
-fn order_results_by_date() {
-    let tmpdir = TempDir::new().unwrap();
-    let index = Index::new(&tmpdir, &Language::English).unwrap();
-
-    let event_id = EVENT.event_id.to_string();
-    let mut writer = index.get_writer().unwrap();
-
-    let mut event2 = EVENT.clone();
-    event2.server_ts += 100;
-
-    writer.add_event(&EVENT);
-    writer.add_event(&event2);
-
-    writer.commit().unwrap();
-    index.reload().unwrap();
-
-    let searcher = index.get_searcher();
-    let config = SearchConfig {
-        order_by_recency: true,
-        ..Default::default()
-    };
-    let result = searcher.search("Test", &config).unwrap();
-
-    assert_eq!(result.len(), 2);
-    assert_eq!(result[1].1, event_id);
 }
 
 #[test]
