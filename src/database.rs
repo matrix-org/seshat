@@ -651,7 +651,17 @@ impl Database {
             ))?
         };
 
-        let (scores, event_ids): (Vec<f32>, Vec<String>) = search_result.iter().cloned().unzip();
+        let (mut scores, event_ids): (HashMap<String, f32>, Vec<String>) = {
+            let mut s = HashMap::new();
+            let mut e = Vec::new();
+
+            for (score, id) in search_result {
+                e.push(id.clone());
+                s.insert(id.clone(), *score);
+            }
+            (s, e)
+        };
+
         let db_events = stmt.query_map(event_ids, |row| {
             Ok((
                 Event {
@@ -671,8 +681,6 @@ impl Database {
         })?;
 
         let mut events = Vec::new();
-        let i = 0;
-
         for row in db_events {
             let (event, profile): (Event, Profile) = row?;
             let (before, after, profiles) =
@@ -682,7 +690,7 @@ impl Database {
             profiles.insert(event.sender.clone(), profile);
 
             let result = SearchResult {
-                score: scores[i],
+                score: scores.remove(&event.event_id).unwrap(),
                 event_source: event.source,
                 events_before: before,
                 events_after: after,
@@ -922,6 +930,7 @@ fn load_event_context() {
         db.add_event(event, profile.clone());
     }
 
+    db.commit().unwrap();
     db.commit().unwrap();
     db.reload().unwrap();
     db.reload().unwrap();
