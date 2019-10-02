@@ -62,6 +62,7 @@ impl Searcher {
             &search_result,
             config.before_limit,
             config.after_limit,
+            config.order_by_recency,
         )?)
     }
 }
@@ -617,6 +618,7 @@ impl Database {
         search_result: &[(f32, EventId)],
         before_limit: usize,
         after_limit: usize,
+        order_by_recency: bool,
     ) -> rusqlite::Result<Vec<SearchResult>> {
         if search_result.is_empty() {
             return Ok(vec![]);
@@ -627,14 +629,27 @@ impl Database {
             .take(event_num - 1)
             .collect::<String>();
 
-        let mut stmt = connection.prepare(&format!(
-            "SELECT type, content_value, event_id, sender, server_ts, room_id, source, displayname, avatar_url
-             FROM events
-             INNER JOIN profiles on profiles.id = events.profile_id
-             WHERE event_id IN (?{})
-             ",
-            &parameter_str
-        ))?;
+        let mut stmt = if order_by_recency {
+            connection.prepare(&format!(
+                "SELECT type, content_value, event_id, sender, server_ts, room_id, source, displayname, avatar_url
+                 FROM events
+                 INNER JOIN profiles on profiles.id = events.profile_id
+                 WHERE event_id IN (?{})
+                 ORDER BY server_ts DESC
+                 ",
+                &parameter_str
+            ))?
+
+        } else {
+            connection.prepare(&format!(
+                "SELECT type, content_value, event_id, sender, server_ts, room_id, source, displayname, avatar_url
+                 FROM events
+                 INNER JOIN profiles on profiles.id = events.profile_id
+                 WHERE event_id IN (?{})
+                 ",
+                &parameter_str
+            ))?
+        };
 
         let (scores, event_ids): (Vec<f32>, Vec<String>) = search_result.iter().cloned().unzip();
         let db_events = stmt.query_map(event_ids, |row| {
@@ -818,6 +833,7 @@ fn load_event() {
         ],
         0,
         0,
+        false,
     )
     .unwrap();
 
@@ -849,6 +865,7 @@ fn save_the_event_multithreaded() {
         ],
         0,
         0,
+        false,
     )
     .unwrap();
 
