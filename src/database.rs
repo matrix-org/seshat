@@ -16,6 +16,7 @@ use fs_extra::dir;
 use r2d2::PooledConnection;
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::{ToSql, NO_PARAMS};
+use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::fs;
 use std::ops::{Deref, DerefMut};
@@ -639,7 +640,6 @@ impl Database {
                  ",
                 &parameter_str
             ))?
-
         } else {
             connection.prepare(&format!(
                 "SELECT type, content_value, event_id, sender, server_ts, room_id, source, displayname, avatar_url
@@ -697,6 +697,16 @@ impl Database {
                 profile_info: profiles,
             };
             events.push(result);
+        }
+
+        // Sqlite orders by recency for us, but if we score by rank sqlite will
+        // mess up our order, resort our events here.
+        if !order_by_recency {
+            events.sort_by(|a, b| {
+                a.score
+                    .partial_cmp(&b.score)
+                    .unwrap_or_else(|| Ordering::Equal)
+            });
         }
 
         Ok(events)
