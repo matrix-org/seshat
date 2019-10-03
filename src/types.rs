@@ -454,6 +454,7 @@ impl From<&str> for Language {
             "greek" => Language::Greek,
             "hungarian" => Language::Hungarian,
             "italian" => Language::Italian,
+            "japanese" => Language::Japanese,
             "portuguese" => Language::Portuguese,
             "romanian" => Language::Romanian,
             "russian" => Language::Russian,
