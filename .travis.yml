@@ -18,7 +18,7 @@ matrix:
 cache: cargo
 
 before_install:
-  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then
+  - if [[ "$TRAVIS_OS_NAME" == "windows" ]]; then
     export NVS_HOME=$ProgramData/nvs;
     git clone --single-branch https://github.com/jasongin/nvs $NVS_HOME;
     source $NVS_HOME/nvs.sh;
