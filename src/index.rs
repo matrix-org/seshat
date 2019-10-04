@@ -88,6 +88,8 @@ impl IndexSearcher {
         let term = if let Some(room) = &config.room_id {
             keys.push(self.room_id_field);
             format!("+room_id:\"{}\" {}", room, term)
+        } else if term.is_empty() {
+            "*".to_owned()
         } else {
             term.to_owned()
         };
