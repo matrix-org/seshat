@@ -155,9 +155,10 @@ class Seshat extends seshat.Seshat {
      * the search term.
      */
     async search(args) {
-        return new Promise((resolve) => {
+        return new Promise((resolve, reject) => {
             this.searchAsync(args, (err, res) => {
-                resolve(res);
+                if (err) reject(err);
+                else resolve(res);
             });
         });
     }
@@ -257,7 +258,7 @@ class Seshat extends seshat.Seshat {
      * array of checkpoints when they are loaded from the database.
      */
     async loadCheckpoints() {
-        return new Promise((resolve) => {
+        return new Promise((resolve, reject) => {
             super.loadCheckpoints((err, res) => {
                 if (err) reject(err);
                 else resolve(res);
@@ -273,7 +274,7 @@ class Seshat extends seshat.Seshat {
      * array of checkpoints when they are loaded from the database.
      */
     async getSize() {
-        return new Promise((resolve) => {
+        return new Promise((resolve, reject) => {
             super.getSize((err, res) => {
                 if (err) reject(err);
                 else resolve(res);
@@ -288,7 +289,7 @@ class Seshat extends seshat.Seshat {
      * been deleted.
      */
     async delete() {
-        return new Promise((resolve) => {
+        return new Promise((resolve, reject) => {
             super.delete((err, res) => {
                 if (err) reject(err);
                 else resolve(res);
@@ -304,7 +305,7 @@ class Seshat extends seshat.Seshat {
      * otherwise.
      */
     async isEmpty() {
-        return new Promise((resolve) => {
+        return new Promise((resolve, reject) => {
             super.isEmpty((err, res) => {
                 if (err) reject(err);
                 else resolve(res);
