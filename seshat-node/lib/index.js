@@ -63,6 +63,10 @@ const seshat = require('../native');
  *
  * @param {string} path The path where the database should be stored. If a
  * database already exist in the given folder the database will be reused.
+ * @param {object} config Additional configuration for the database.
+ * database already exist in the given folder the database will be reused.
+ * @param  {string} config.language The language that the database should use
+ * for indexing. Picking the correct indexing language may improve the search.
  *
  * @constructor
  *
