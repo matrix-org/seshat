@@ -18,8 +18,16 @@ matrix:
 cache: cargo
 
 before_install:
-  - nvm install $TRAVIS_NODE_VERSION
-  - nvm use ${TRAVIS_NODE_VERSION}
+  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then
+    export NVS_HOME=$ProgramData/nvs;
+    git clone --single-branch https://github.com/jasongin/nvs $NVS_HOME;
+    source $NVS_HOME/nvs.sh;
+    nvs --version;
+    nvs add $TRAVIS_NODE_VERSION && nvs use $TRAVIS_NODE_VERSION;
+    else
+    nvm install $TRAVIS_NODE_VERSION;
+    nvm use ${TRAVIS_NODE_VERSION};
+    fi
   - node -v
   - npm -v
   - npm i -g yarn@latest neon-cli@latest
