@@ -600,7 +600,7 @@ fn parse_search_object(
         }
     }
 
-    if let Ok(r) = argument.get(&mut *cx, "roomId") {
+    if let Ok(r) = argument.get(&mut *cx, "room_id") {
         if let Ok(r) = r.downcast::<JsString>() {
             config.for_room(&r.value());
         }

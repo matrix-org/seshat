@@ -219,7 +219,7 @@ describe('Database', function() {
 
         const results = await db.search({
             search_term: 'Test',
-            roomId: '!TESTROOM',
+            room_id: '!TESTROOM',
         });
         assert.equal(results.count, 1);
         assert.deepEqual(results.results[0].result, matrixEvent);
