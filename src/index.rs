@@ -87,7 +87,7 @@ impl IndexSearcher {
 
         let term = if let Some(room) = &config.room_id {
             keys.push(self.room_id_field);
-            format!("{} AND room_id:\"{}\"", term, room)
+            format!("+room_id:\"{}\" {}", room, term)
         } else {
             term.to_owned()
         };
