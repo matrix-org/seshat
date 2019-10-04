@@ -17,7 +17,7 @@
     "nyc": "^14.1.1"
   },
   "scripts": {
-    "install": "neon build",
+    "install": "neon build --release",
     "test": "nyc mocha",
     "lint": "eslint lib/index.js"
   }
