@@ -113,8 +113,10 @@ impl Connection {
     pub fn is_empty(&self) -> Result<bool> {
         let event_count: i64 =
             self.query_row("SELECT COUNT(*) FROM events", NO_PARAMS, |row| row.get(0))?;
+        let checkpoint_count: i64 =
+            self.query_row("SELECT COUNT(*) FROM crawlercheckpoints", NO_PARAMS, |row| row.get(0))?;
 
-        Ok(event_count == 0)
+        Ok(event_count == 0 && checkpoint_count == 0)
     }
 }
 
