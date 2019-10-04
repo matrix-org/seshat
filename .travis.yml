@@ -34,7 +34,6 @@ before_install:
   - node -v
   - npm -v
   - npm i -g yarn@latest neon-cli@latest
-  - npm install
 
 script:
   - cargo test
