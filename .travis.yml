@@ -24,6 +24,9 @@ before_install:
     source $NVS_HOME/nvs.sh;
     nvs --version;
     nvs add $TRAVIS_NODE_VERSION && nvs use $TRAVIS_NODE_VERSION;
+    choco install sqlite3
+    cd C:\ProgramData\chocolatey\lib\SQLite\tools
+    lib /def:sqlite3.def /out:sqlite3.lib
     else
     nvm install $TRAVIS_NODE_VERSION;
     nvm use ${TRAVIS_NODE_VERSION};
