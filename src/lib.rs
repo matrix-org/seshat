@@ -31,7 +31,7 @@ pub use database::Searcher;
 
 pub use types::{
     Config, CrawlerCheckpoint, Error, Event, EventType, Language, Profile, Result, SearchConfig,
-    SearchResult,
+    SearchResult, CheckpointDirection
 };
 
 pub use std::sync::mpsc::Receiver;

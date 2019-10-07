@@ -1,7 +1,7 @@
 #[macro_use]
 extern crate lazy_static;
 
-use seshat::{CrawlerCheckpoint, Database, Event, EventType, Profile, SearchConfig};
+use seshat::{CrawlerCheckpoint, CheckpointDirection, Database, Event, EventType, Profile, SearchConfig};
 
 use std::path::Path;
 use tempfile::tempdir;
@@ -135,6 +135,7 @@ fn save_and_search_historic_events() {
         room_id: "!test:room".to_string(),
         token: "1234".to_string(),
         full_crawl: false,
+        direction: CheckpointDirection::Backwards,
     };
 
     let receiver = db.add_historic_events(events, Some(checkpoint.clone()), None);

@@ -33,7 +33,7 @@ use tempfile::tempdir;
 
 use crate::index::{Index, IndexSearcher, Writer};
 use crate::types::{
-    Config, CrawlerCheckpoint, Event, EventContext, EventId, Profile, Result, SearchConfig,
+    Config, CrawlerCheckpoint, CheckpointDirection, Event, EventContext, EventId, Profile, Result, SearchConfig,
     SearchResult, ThreadMessage,
 };
 
@@ -89,13 +89,14 @@ impl Connection {
     /// Load all the previously stored crawler checkpoints from the database.
     /// # Arguments
     pub fn load_checkpoints(&self) -> Result<Vec<CrawlerCheckpoint>> {
-        let mut stmt = self.prepare("SELECT room_id, token, full_crawl FROM crawlercheckpoints")?;
+        let mut stmt = self.prepare("SELECT room_id, token, full_crawl, direction FROM crawlercheckpoints")?;
 
         let rows = stmt.query_map(NO_PARAMS, |row| {
             Ok(CrawlerCheckpoint {
                 room_id: row.get(0)?,
                 token: row.get(1)?,
                 full_crawl: row.get(2)?,
+                direction: row.get(3)?,
             })
         })?;
 
@@ -394,7 +395,8 @@ impl Database {
                 room_id TEXT NOT NULL,
                 token TEXT NOT NULL,
                 full_crawl BOOLEAN NOT NULL,
-                UNIQUE(room_id,token,full_crawl)
+                direction TEXT NOT NULL,
+                UNIQUE(room_id,token,full_crawl,direction)
             )",
             NO_PARAMS,
         )?;
@@ -741,12 +743,13 @@ impl Database {
     ) -> Result<()> {
         if let Some(checkpoint) = new {
             connection.execute(
-                "INSERT OR IGNORE INTO crawlercheckpoints (room_id, token, full_crawl)
-                VALUES(?1, ?2, ?3)",
+                "INSERT OR IGNORE INTO crawlercheckpoints (room_id, token, full_crawl, direction)
+                VALUES(?1, ?2, ?3, ?4)",
                 &[
                     &checkpoint.room_id,
                     &checkpoint.token,
                     &checkpoint.full_crawl as &dyn ToSql,
+                    &checkpoint.direction,
                 ],
             )?;
         }
@@ -754,11 +757,12 @@ impl Database {
         if let Some(checkpoint) = old {
             connection.execute(
                 "DELETE FROM crawlercheckpoints
-                WHERE (room_id=?1 AND token=?2 AND full_crawl=?3)",
+                WHERE (room_id=?1 AND token=?2 AND full_crawl=?3 AND direction=?4)",
                 &[
                     &checkpoint.room_id,
                     &checkpoint.token,
                     &checkpoint.full_crawl as &dyn ToSql,
+                    &checkpoint.direction,
                 ],
             )?;
         }
@@ -964,6 +968,7 @@ fn save_and_load_checkpoints() {
         room_id: "!test:room".to_string(),
         token: "1234".to_string(),
         full_crawl: false,
+        direction: CheckpointDirection::Backwards,
     };
 
     let mut connection = db.get_connection().unwrap();
@@ -974,12 +979,15 @@ fn save_and_load_checkpoints() {
 
     let checkpoints = connection.load_checkpoints().unwrap();
 
+    println!("{:?}", checkpoints);
+
     assert!(checkpoints.contains(&checkpoint));
 
     let new_checkpoint = CrawlerCheckpoint {
         room_id: "!test:room".to_string(),
         token: "12345".to_string(),
         full_crawl: false,
+        direction: CheckpointDirection::Backwards,
     };
 
     Database::replace_crawler_checkpoint(&connection, Some(&new_checkpoint), Some(&checkpoint))

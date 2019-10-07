@@ -21,7 +21,7 @@ use neon::prelude::*;
 use neon_serde;
 use serde_json;
 use seshat::{
-    Config, Connection, CrawlerCheckpoint, Database, Event, EventType, Language, Profile,
+    Config, Connection, CrawlerCheckpoint, CheckpointDirection, Database, Event, EventType, Language, Profile,
     SearchConfig, SearchResult, Searcher, Receiver
 };
 
@@ -918,11 +918,24 @@ fn js_checkpoint_to_rust(
         .downcast::<JsBoolean>()
         .unwrap_or_else(|_| JsBoolean::new(&mut *cx, false))
         .value();
+    let direction = object
+        .get(&mut *cx, "direction")?
+        .downcast::<JsString>()
+        .unwrap_or_else(|_| JsString::new(&mut *cx, ""))
+        .value();
+
+    let direction = match direction.to_lowercase().as_ref() {
+        "backwards" | "backward" | "b" => CheckpointDirection::Backwards,
+        "forwards" | "forward" | "f" => CheckpointDirection::Forwards,
+        "" => CheckpointDirection::Backwards,
+        d => return cx.throw_error(format!("Unknown checkpoint direction {}", d)),
+    };
 
     Ok(CrawlerCheckpoint {
         room_id,
         token,
         full_crawl,
+        direction
     })
 }
 

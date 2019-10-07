@@ -115,6 +115,49 @@ pub struct CrawlerCheckpoint {
     pub token: String,
     /// Is this a checkpoint for a complete crawl of the message history.
     pub full_crawl: bool,
+    pub direction: CheckpointDirection
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum CheckpointDirection {
+    Forwards,
+    Backwards,
+}
+
+impl Display for CheckpointDirection {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        let string = match self {
+            CheckpointDirection::Forwards => "Forwards",
+            CheckpointDirection::Backwards => "Backwards",
+        };
+
+        write!(f, "{}", string)
+    }
+}
+
+impl ToSql for CheckpointDirection {
+    fn to_sql(&self) -> rusqlite::Result<ToSqlOutput<'_>> {
+        Ok(ToSqlOutput::from(format!("{}", self)))
+    }
+}
+
+impl FromSql for CheckpointDirection {
+    fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+        match value {
+            ValueRef::Text(s) => {
+                let s = std::str::from_utf8(s).map_err(|e| FromSqlError::Other(Box::new(e)))?;
+
+                let e = match s {
+                    "Forwards" => CheckpointDirection::Forwards,
+                    "Backwards" => CheckpointDirection::Backwards,
+                    _ => return Err(FromSqlError::InvalidType),
+                };
+
+                Ok(e)
+            }
+            _ => Err(FromSqlError::InvalidType),
+        }
+    }
 }
 
 #[cfg(test)]
