@@ -1,6 +1,6 @@
 {
   "name": "seshat-node",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "A matrix message logger with full text search support",
   "main": "lib/index.js",
   "author": "Damir Jelić <poljar@termina.org.uk>",
