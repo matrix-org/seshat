@@ -106,6 +106,7 @@ const checkPoint = {
     roomId: '!TESTROOM',
     token: '1234',
     fullCrawl: false,
+    direction: "f",
 }
 
 describe('Database', function() {

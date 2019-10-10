@@ -158,10 +158,15 @@ impl Task for LoadCheckPointsTask {
             let room_id = JsString::new(&mut cx, c.room_id);
             let token = JsString::new(&mut cx, c.token);
             let full_crawl = JsBoolean::new(&mut cx, c.full_crawl);
+            let direction = match c.direction {
+                CheckpointDirection::Backwards => JsString::new(&mut cx, "b"),
+                CheckpointDirection::Forwards => JsString::new(&mut cx, "f"),
+            };
 
             js_checkpoint.set(&mut cx, "roomId", room_id)?;
             js_checkpoint.set(&mut cx, "token", token)?;
             js_checkpoint.set(&mut cx, "fullCrawl", full_crawl)?;
+            js_checkpoint.set(&mut cx, "direction", direction)?;
 
             ret.set(&mut cx, i as u32, js_checkpoint)?;
         }
