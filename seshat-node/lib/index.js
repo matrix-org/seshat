@@ -51,6 +51,10 @@ const seshat = require('../native');
  * belongs to.
  * @property {string} token The token that can be used to fetch more events for
  * the given room.
+ * @property {boolean} fullCrawl Is this checkpoint of a crawl that should
+ * re-crawl the complete room history.
+ * @property {string} direction The crawl direction of the checkpoint. Can be
+ * one of "b" or "f".
  */
 
 
