@@ -1,7 +1,9 @@
 #[macro_use]
 extern crate lazy_static;
 
-use seshat::{CrawlerCheckpoint, CheckpointDirection, Database, Event, EventType, Profile, SearchConfig};
+use seshat::{
+    CheckpointDirection, CrawlerCheckpoint, Database, Event, EventType, Profile, SearchConfig,
+};
 
 use std::path::Path;
 use tempfile::tempdir;

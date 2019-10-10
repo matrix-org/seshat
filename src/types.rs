@@ -115,7 +115,7 @@ pub struct CrawlerCheckpoint {
     pub token: String,
     /// Is this a checkpoint for a complete crawl of the message history.
     pub full_crawl: bool,
-    pub direction: CheckpointDirection
+    pub direction: CheckpointDirection,
 }
 
 #[derive(Debug, PartialEq, Clone)]

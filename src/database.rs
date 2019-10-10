@@ -33,8 +33,8 @@ use tempfile::tempdir;
 
 use crate::index::{Index, IndexSearcher, Writer};
 use crate::types::{
-    Config, CrawlerCheckpoint, CheckpointDirection, Event, EventContext, EventId, Profile, Result, SearchConfig,
-    SearchResult, ThreadMessage,
+    CheckpointDirection, Config, CrawlerCheckpoint, Event, EventContext, EventId, Profile, Result,
+    SearchConfig, SearchResult, ThreadMessage,
 };
 
 #[cfg(test)]
@@ -89,7 +89,8 @@ impl Connection {
     /// Load all the previously stored crawler checkpoints from the database.
     /// # Arguments
     pub fn load_checkpoints(&self) -> Result<Vec<CrawlerCheckpoint>> {
-        let mut stmt = self.prepare("SELECT room_id, token, full_crawl, direction FROM crawlercheckpoints")?;
+        let mut stmt =
+            self.prepare("SELECT room_id, token, full_crawl, direction FROM crawlercheckpoints")?;
 
         let rows = stmt.query_map(NO_PARAMS, |row| {
             Ok(CrawlerCheckpoint {
@@ -114,8 +115,11 @@ impl Connection {
     pub fn is_empty(&self) -> Result<bool> {
         let event_count: i64 =
             self.query_row("SELECT COUNT(*) FROM events", NO_PARAMS, |row| row.get(0))?;
-        let checkpoint_count: i64 =
-            self.query_row("SELECT COUNT(*) FROM crawlercheckpoints", NO_PARAMS, |row| row.get(0))?;
+        let checkpoint_count: i64 = self.query_row(
+            "SELECT COUNT(*) FROM crawlercheckpoints",
+            NO_PARAMS,
+            |row| row.get(0),
+        )?;
 
         Ok(event_count == 0 && checkpoint_count == 0)
     }

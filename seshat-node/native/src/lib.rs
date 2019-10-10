@@ -21,8 +21,8 @@ use neon::prelude::*;
 use neon_serde;
 use serde_json;
 use seshat::{
-    Config, Connection, CrawlerCheckpoint, CheckpointDirection, Database, Event, EventType, Language, Profile,
-    SearchConfig, SearchResult, Searcher, Receiver
+    CheckpointDirection, Config, Connection, CrawlerCheckpoint, Database, Event, EventType,
+    Language, Profile, Receiver, SearchConfig, SearchResult, Searcher,
 };
 
 #[no_mangle]
@@ -884,13 +884,11 @@ fn parse_profile(
     cx: &mut CallContext<Seshat>,
     profile: JsObject,
 ) -> Result<Profile, neon::result::Throw> {
-    let displayname: Option<String> = match profile
-        .get(&mut *cx, "displayname")?
-        .downcast::<JsString>()
-    {
-        Ok(s) => Some(s.value()),
-        Err(_e) => None,
-    };
+    let displayname: Option<String> =
+        match profile.get(&mut *cx, "displayname")?.downcast::<JsString>() {
+            Ok(s) => Some(s.value()),
+            Err(_e) => None,
+        };
 
     let avatar_url: Option<String> =
         match profile.get(&mut *cx, "avatar_url")?.downcast::<JsString>() {
@@ -940,7 +938,7 @@ fn js_checkpoint_to_rust(
         room_id,
         token,
         full_crawl,
-        direction
+        direction,
     })
 }
 

@@ -30,8 +30,8 @@ pub use database::Database;
 pub use database::Searcher;
 
 pub use types::{
-    Config, CrawlerCheckpoint, Error, Event, EventType, Language, Profile, Result, SearchConfig,
-    SearchResult, CheckpointDirection
+    CheckpointDirection, Config, CrawlerCheckpoint, Error, Event, EventType, Language, Profile,
+    Result, SearchConfig, SearchResult,
 };
 
 pub use std::sync::mpsc::Receiver;
