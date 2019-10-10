@@ -115,10 +115,12 @@ pub struct CrawlerCheckpoint {
     pub token: String,
     /// Is this a checkpoint for a complete crawl of the message history.
     pub full_crawl: bool,
+    /// The direction which should be used to crawl the room timeline.
     pub direction: CheckpointDirection,
 }
 
 #[derive(Debug, PartialEq, Clone)]
+#[allow(missing_docs)]
 pub enum CheckpointDirection {
     Forwards,
     Backwards,
