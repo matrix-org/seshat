@@ -31,10 +31,11 @@ use fake::{Fake, Faker};
 #[cfg(test)]
 use tempfile::tempdir;
 
+use crate::config::{Config, SearchConfig};
 use crate::index::{Index, IndexSearcher, Writer};
 use crate::types::{
-    Config, CrawlerCheckpoint, Event, EventContext, EventId, Profile, Result,
-    SearchConfig, SearchResult, ThreadMessage,
+    CrawlerCheckpoint, Event, EventContext, EventId, Profile, Result, SearchResult,
+    ThreadMessage,
 };
 
 #[cfg(test)]

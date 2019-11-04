@@ -20,6 +20,7 @@
 #[macro_use]
 extern crate lazy_static;
 
+mod config;
 mod database;
 mod index;
 mod japanese_tokenizer;
@@ -30,9 +31,10 @@ pub use database::Database;
 pub use database::Searcher;
 
 pub use types::{
-    CheckpointDirection, Config, CrawlerCheckpoint, Error, Event, EventType, Language, Profile,
-    Result, SearchConfig, SearchResult,
+    CheckpointDirection, CrawlerCheckpoint, Error, Event, EventType, Profile, Result, SearchResult,
 };
+
+pub use config::{Config, Language, SearchConfig};
 
 pub use std::sync::mpsc::Receiver;
 

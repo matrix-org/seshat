@@ -17,7 +17,8 @@ use tantivy as tv;
 use tantivy::tokenizer::Tokenizer;
 
 use crate::japanese_tokenizer::TinySegmenterTokenizer;
-use crate::types::{Event, EventId, EventType, Language, SearchConfig};
+use crate::types::{Event, EventId, EventType};
+use crate::config::{SearchConfig, Language};
 
 // Tantivy requires at least 3MB per writer thread and will panic if we
 // give it less than 3MB for the total writer heap size. The amount of writer 
