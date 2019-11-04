@@ -25,18 +25,20 @@ mod database;
 mod index;
 mod japanese_tokenizer;
 mod types;
+mod events;
+mod error;
 
 pub use database::Connection;
 pub use database::Database;
 pub use database::Searcher;
 
-pub use types::{
-    CheckpointDirection, CrawlerCheckpoint, Error, Event, EventType, Profile, Result, SearchResult,
-};
+pub use types::SearchResult;
+pub use error::{Result, Error};
 
 pub use config::{Config, Language, SearchConfig};
+pub use events::{Event, EventType, Profile, CrawlerCheckpoint, CheckpointDirection};
 
 pub use std::sync::mpsc::Receiver;
 
 #[cfg(test)]
-pub use types::{EVENT, EVENT_SOURCE, TOPIC_EVENT, TOPIC_EVENT_SOURCE};
+pub use events::{EVENT, EVENT_SOURCE, TOPIC_EVENT, TOPIC_EVENT_SOURCE};

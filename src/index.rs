@@ -17,7 +17,7 @@ use tantivy as tv;
 use tantivy::tokenizer::Tokenizer;
 
 use crate::japanese_tokenizer::TinySegmenterTokenizer;
-use crate::types::{Event, EventId, EventType};
+use crate::events::{Event, EventId, EventType};
 use crate::config::{SearchConfig, Language};
 
 // Tantivy requires at least 3MB per writer thread and will panic if we
@@ -36,7 +36,7 @@ const TANTIVY_WRITER_HEAP_SIZE: usize = 50_000_000;
 use tempfile::TempDir;
 
 #[cfg(test)]
-use crate::types::{EVENT, JAPANESE_EVENTS};
+use crate::events::{EVENT, JAPANESE_EVENTS};
 
 pub(crate) struct Index {
     index: tv::Index,

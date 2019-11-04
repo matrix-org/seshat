@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::types::{RoomId, EventType};
+use crate::events::{RoomId, EventType};
 
 #[derive(Debug, PartialEq, Clone)]
 /// Search configuration

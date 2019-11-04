@@ -33,15 +33,14 @@ use tempfile::tempdir;
 
 use crate::config::{Config, SearchConfig};
 use crate::index::{Index, IndexSearcher, Writer};
-use crate::types::{
-    CrawlerCheckpoint, Event, EventContext, EventId, Profile, Result, SearchResult,
-    ThreadMessage,
-};
+use crate::types::{SearchResult, ThreadMessage};
+use crate::events::{CrawlerCheckpoint, Event, EventContext, EventId, Profile};
+use crate::error::Result;
 
 #[cfg(test)]
 use crate::EVENT;
 #[cfg(test)]
-use crate::types::CheckpointDirection;
+use crate::events::CheckpointDirection;
 
 /// The main entry point to the index and database.
 pub struct Searcher {
