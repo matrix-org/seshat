@@ -33,14 +33,34 @@ use tempfile::tempdir;
 
 use crate::config::{Config, SearchConfig};
 use crate::index::{Index, IndexSearcher, Writer};
-use crate::types::{SearchResult, ThreadMessage};
-use crate::events::{CrawlerCheckpoint, Event, EventContext, EventId, Profile};
+use crate::events::{CrawlerCheckpoint, Event, EventContext, EventId, Profile, SerializedEvent, HistoricEventsT};
 use crate::error::Result;
 
 #[cfg(test)]
 use crate::EVENT;
 #[cfg(test)]
 use crate::events::CheckpointDirection;
+
+pub(crate) enum ThreadMessage {
+    Event((Event, Profile)),
+    HistoricEvents(HistoricEventsT),
+    Write(Sender<Result<()>>),
+}
+
+#[derive(Debug, PartialEq, Default, Clone)]
+/// A search result
+pub struct SearchResult {
+    /// The score that the full text search assigned to this event.
+    pub score: f32,
+    /// The serialized source of the event that matched a search.
+    pub event_source: SerializedEvent,
+    /// Events that happened before our matched event.
+    pub events_before: Vec<String>,
+    /// Events that happened after our matched event.
+    pub events_after: Vec<String>,
+    /// The profile of the sender of the matched event.
+    pub profile_info: HashMap<String, Profile>,
+}
 
 /// The main entry point to the index and database.
 pub struct Searcher {
