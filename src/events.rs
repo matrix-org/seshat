@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use rusqlite::types::{FromSql, FromSqlError, FromSqlResult, ToSqlOutput, ValueRef};
+use rusqlite::ToSql;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::sync::mpsc::Sender;
-use rusqlite::types::{FromSql, FromSqlError, FromSqlResult, ToSqlOutput, ValueRef};
-use rusqlite::ToSql;
 
 use crate::error::Result;
 

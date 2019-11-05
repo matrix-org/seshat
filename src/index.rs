@@ -16,9 +16,9 @@ use std::path::Path;
 use tantivy as tv;
 use tantivy::tokenizer::Tokenizer;
 
-use crate::japanese_tokenizer::TinySegmenterTokenizer;
+use crate::config::{Language, SearchConfig};
 use crate::events::{Event, EventId, EventType};
-use crate::config::{SearchConfig, Language};
+use crate::japanese_tokenizer::TinySegmenterTokenizer;
 
 // Tantivy requires at least 3MB per writer thread and will panic if we
 // give it less than 3MB for the total writer heap size. The amount of writer 

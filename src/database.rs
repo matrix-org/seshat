@@ -32,14 +32,16 @@ use fake::{Fake, Faker};
 use tempfile::tempdir;
 
 use crate::config::{Config, SearchConfig};
-use crate::index::{Index, IndexSearcher, Writer};
-use crate::events::{CrawlerCheckpoint, Event, EventContext, EventId, Profile, SerializedEvent, HistoricEventsT};
 use crate::error::Result;
+use crate::events::{
+    CrawlerCheckpoint, Event, EventContext, EventId, HistoricEventsT, Profile, SerializedEvent,
+};
+use crate::index::{Index, IndexSearcher, Writer};
 
 #[cfg(test)]
-use crate::EVENT;
-#[cfg(test)]
 use crate::events::CheckpointDirection;
+#[cfg(test)]
+use crate::EVENT;
 
 pub(crate) enum ThreadMessage {
     Event((Event, Profile)),

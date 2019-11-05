@@ -22,17 +22,17 @@ extern crate lazy_static;
 
 mod config;
 mod database;
+mod error;
+mod events;
 mod index;
 mod japanese_tokenizer;
-mod events;
-mod error;
 
-pub use database::{Connection, Database, Searcher, SearchResult};
+pub use database::{Connection, Database, SearchResult, Searcher};
 
-pub use error::{Result, Error};
+pub use error::{Error, Result};
 
 pub use config::{Config, Language, SearchConfig};
-pub use events::{Event, EventType, Profile, CrawlerCheckpoint, CheckpointDirection};
+pub use events::{CheckpointDirection, CrawlerCheckpoint, Event, EventType, Profile};
 
 pub use std::sync::mpsc::Receiver;
 

@@ -14,8 +14,8 @@
 
 use fs_extra;
 use r2d2;
-use tantivy;
 use rusqlite;
+use tantivy;
 
 use failure::Fail;
 
