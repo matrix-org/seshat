@@ -355,7 +355,7 @@ declare_types! {
             }
         }
 
-        method commitAsync(mut cx) {
+        method commit(mut cx) {
             let f = cx.argument::<JsFunction>(0)?;
             let mut this = cx.this();
 
@@ -514,7 +514,7 @@ declare_types! {
             Ok(search_result.upcast())
         }
 
-        method searchAsync(mut cx) {
+        method search(mut cx) {
             let args = cx.argument::<JsObject>(0)?;
             let f = cx.argument::<JsFunction>(1)?;
 

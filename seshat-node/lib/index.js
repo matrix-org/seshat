@@ -114,7 +114,7 @@ class Seshat extends seshat.Seshat {
      */
     async commit() {
         return new Promise((resolve, reject) => {
-            this.commitAsync((err, res) => {
+            super.commit((err, res) => {
                 resolve(res);
             });
         });
@@ -164,7 +164,7 @@ class Seshat extends seshat.Seshat {
      */
     async search(args) {
         return new Promise((resolve, reject) => {
-            this.searchAsync(args, (err, res) => {
+            super.search(args, (err, res) => {
                 if (err) reject(err);
                 else resolve(res);
             });

@@ -140,15 +140,6 @@ describe('Database', function() {
         assert.equal(ret, undefined);
     });
 
-    it('should allow events to be commited asynchronously', function(done) {
-        const db = createDb();
-
-        db.commitAsync(function(err, value) {
-        if (err) done(err);
-        else done();
-        });
-    });
-
     it('should allow events to be commited using a promise', async function() {
         const db = createDb();
         await db.commit();
