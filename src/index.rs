@@ -19,6 +19,18 @@ use tantivy::tokenizer::Tokenizer;
 use crate::japanese_tokenizer::TinySegmenterTokenizer;
 use crate::types::{Event, EventId, EventType, Language, SearchConfig};
 
+// Tantivy requires at least of 3MB per writer thread, Tantivy will panic if we
+// give it less than 3MB for the total writer heap size. The amount of writer 
+// threads that Tantivy will spawn depends on the amount of heap we give it.
+// The logic for the number of threads is as follows:
+//
+//     num_threads = { num_cpu,                  if heap_size / num_cpu >= 3MB
+//                   { max(heap_size / 3MB, 1),  if heap_size / num_cpu <  3MB
+//
+// We give Tantivy 50MB of heap size, which would spawn up to 16 writer threads
+// given a CPU with 16 or more cores.
+const TANTIVY_WRITER_HEAP_SIZE: usize = 50_000_000;
+
 #[cfg(test)]
 use tempfile::TempDir;
 
@@ -216,7 +228,7 @@ impl Index {
 
     pub fn get_writer(&self) -> Result<Writer, tv::Error> {
         Ok(Writer {
-            inner: self.index.writer(50_000_000)?,
+            inner: self.index.writer(TANTIVY_WRITER_HEAP_SIZE)?,
             body_field: self.body_field,
             topic_field: self.topic_field,
             name_field: self.name_field,
