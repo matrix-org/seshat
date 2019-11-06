@@ -1,4 +1,4 @@
-// Copyright 2019 The Matrix.org Foundation CIC
+// Copyright 2019 The Matrix.org Foundation C.I.C.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -355,7 +355,7 @@ declare_types! {
             }
         }
 
-        method commitAsync(mut cx) {
+        method commit(mut cx) {
             let f = cx.argument::<JsFunction>(0)?;
             let mut this = cx.this();
 
@@ -514,7 +514,7 @@ declare_types! {
             Ok(search_result.upcast())
         }
 
-        method searchAsync(mut cx) {
+        method search(mut cx) {
             let args = cx.argument::<JsObject>(0)?;
             let f = cx.argument::<JsFunction>(1)?;
 

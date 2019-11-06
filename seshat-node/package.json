@@ -1,5 +1,5 @@
 {
-  "name": "seshat-node",
+  "name": "matrix-seshat",
   "version": "0.2.0",
   "description": "A matrix message logger with full text search support",
   "main": "lib/index.js",
