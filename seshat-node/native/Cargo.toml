@@ -9,7 +9,7 @@ edition = "2018"
 
 [lib]
 name = "seshat_node"
-crate-type = ["dylib"]
+crate-type = ["cdylib"]
 
 [build-dependencies]
 neon-build = "0.3.*"
