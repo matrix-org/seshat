@@ -275,11 +275,11 @@ class Seshat extends seshat.Seshat {
     }
 
     /**
-     * Load the stored crawler checkpoints.
-     * @param  {checkpoint} checkpoint
+     * Get the size of the database.
+     * This returns the number of bytes the database is using on disk.
      *
-     * @return {Promise<Array.<checkpoint>>} A promise that will resolve to an
-     * array of checkpoints when they are loaded from the database.
+     * @return {Promise<number>} A promise that will resolve to the database
+     * size in bytes.
      */
     async getSize() {
         return new Promise((resolve, reject) => {
@@ -306,10 +306,10 @@ class Seshat extends seshat.Seshat {
     }
 
     /**
-     * Delete the Seshat database.
+     * Check if the database is completely empty.
      *
      * @return {Promise<boolean>} A promise that will resolve to true if the
-     * database is empty, that is it doesn't contain any events, false
+     * database is empty, that is, it doesn't contain any events, false
      * otherwise.
      */
     async isEmpty() {
