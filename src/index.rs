@@ -19,7 +19,7 @@ use tantivy::tokenizer::Tokenizer;
 use crate::japanese_tokenizer::TinySegmenterTokenizer;
 use crate::types::{Event, EventId, EventType, Language, SearchConfig};
 
-// Tantivy requires at least of 3MB per writer thread, Tantivy will panic if we
+// Tantivy requires at least 3MB per writer thread and will panic if we
 // give it less than 3MB for the total writer heap size. The amount of writer 
 // threads that Tantivy will spawn depends on the amount of heap we give it.
 // The logic for the number of threads is as follows:
