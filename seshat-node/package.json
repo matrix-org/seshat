@@ -6,7 +6,7 @@
   "author": "Damir Jelić <poljar@termina.org.uk>",
   "license": "Apache-2.0",
   "dependencies": {
-    "neon-cli": "^0.3.0"
+    "neon-cli": "0.3.3"
   },
   "devDependencies": {
     "chai": "^4.2.0",
