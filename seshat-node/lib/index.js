@@ -230,7 +230,7 @@ class Seshat extends seshat.Seshat {
                 (err, res) => {
                     if (err) reject(err);
                     else resolve(res);
-                }
+                },
             );
         });
     }
