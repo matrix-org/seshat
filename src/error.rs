@@ -39,6 +39,18 @@ pub enum Error {
     /// Error signaling that there was an error while reading from the
     /// filesystem.
     FsError(fs_extra::error::Error),
+    /// Error signaling that the database passphrase was incorrect.
+    #[fail(display = "Error unlocking the database: {}", _0)]
+    DatabaseUnlockError(String),
+    /// Error when opening the Seshat database and reading the database version.
+    #[fail(display = "Database version missmatch.")]
+    DatabaseVersionError,
+    /// Error when opening the Seshat database and reading the database version.
+    #[fail(display = "Error opening the database: {}", _0)]
+    DatabaseOpenError(String),
+    /// Error signaling that sqlcipher support is missing.
+    #[fail(display = "Sqlcipher error: {}", _0)]
+    SqlCipherError(String),
 }
 
 impl From<r2d2::Error> for Error {

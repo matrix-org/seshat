@@ -27,7 +27,13 @@ before_install:
     choco install sqlite;
     cd C:\ProgramData\chocolatey\lib\SQLite\tools;
     lib /def:sqlite3.def /out:sqlite3.lib;
+    elif [[ "$TRAVIS_OS_NAME" == "osx" ]] ; then
+    HOMEBREW_NO_AUTO_UPDATE=1 brew install sqlcipher;
+    nvm install $TRAVIS_NODE_VERSION;
+    nvm use ${TRAVIS_NODE_VERSION};
     else
+    sudo apt-get update -q;
+    sudo apt-get install libsqlcipher-dev -y;
     nvm install $TRAVIS_NODE_VERSION;
     nvm use ${TRAVIS_NODE_VERSION};
     fi
@@ -36,7 +42,7 @@ before_install:
   - npm i -g yarn@latest neon-cli@latest
 
 script:
-  - cargo test
+  - cargo test -- --test-threads=1
   - cd seshat-node
   - yarn install
   - yarn test

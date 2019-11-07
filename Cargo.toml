@@ -9,11 +9,12 @@ description = "A matrix message logger with full text search support"
 [dependencies]
 tantivy = { git = "https://github.com/tantivy-search/tantivy", rev = "2f867aa" }
 tinysegmenter = "0.1"
-rusqlite = "0.20"
+rusqlite = { version = "0.20", features = ["sqlcipher"] }
 fs_extra = "1.1.0"
 r2d2_sqlite = "0.12"
 r2d2 = "0.8"
 failure = "0.1.5"
+zeroize = "1.0.0"
 
 [dev-dependencies]
 tempfile = "3.1"

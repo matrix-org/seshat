@@ -2,7 +2,7 @@
 extern crate lazy_static;
 
 use seshat::{
-    CheckpointDirection, CrawlerCheckpoint, Database, Event, EventType, Profile, SearchConfig,
+    Config, CheckpointDirection, CrawlerCheckpoint, Database, Event, EventType, Profile, SearchConfig,
 };
 
 use std::path::Path;
@@ -230,4 +230,20 @@ fn delete() {
     db.delete().unwrap();
 
     assert!(!path.exists());
+}
+
+#[test]
+fn encrypted_save_and_search() {
+    let tmpdir = tempdir().unwrap();
+    let db_config = Config::new().set_passphrase("wordpass");
+    let mut db = Database::new_with_config(tmpdir.path(), &db_config).unwrap();
+    let profile = Profile::new("Alice", "");
+
+    db.add_event(EVENT.clone(), profile);
+    db.commit().unwrap();
+    db.reload().unwrap();
+
+    let result = db.search("Test", &Default::default()).unwrap();
+    assert!(!result.is_empty());
+    assert_eq!(result[0].event_source, EVENT.source);
 }

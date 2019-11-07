@@ -31,8 +31,10 @@ use fake::{Fake, Faker};
 #[cfg(test)]
 use tempfile::tempdir;
 
+use zeroize::Zeroizing;
+
 use crate::config::{Config, SearchConfig};
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::events::{
     CrawlerCheckpoint, Event, EventContext, EventId, HistoricEventsT, Profile, SerializedEvent,
 };
@@ -42,6 +44,8 @@ use crate::index::{Index, IndexSearcher, Writer};
 use crate::events::CheckpointDirection;
 #[cfg(test)]
 use crate::EVENT;
+
+const DATABASE_VERSION: i64 = 1;
 
 pub(crate) enum ThreadMessage {
     Event((Event, Profile)),
@@ -102,6 +106,7 @@ pub struct Database {
     _write_thread: JoinHandle<()>,
     tx: Sender<ThreadMessage>,
     index: Index,
+    passphrase: Option<Zeroizing<String>>,
 }
 
 /// A Seshat database connection.
@@ -195,11 +200,34 @@ impl Database {
 
         let connection = Arc::new(pool.get()?);
 
+        if let Some(ref p) = config.passphrase {
+            Database::unlock(&connection, p)?;
+        }
+
         Database::create_tables(&connection)?;
+
+        let version = match Database::get_version(&connection) {
+            Ok(v) => v,
+            Err(e) => return Err(Error::DatabaseOpenError(e.to_string())),
+        };
+
+        if version != DATABASE_VERSION {
+            return Err(Error::DatabaseVersionError);
+        }
 
         let index = Database::create_index(&path, &config)?;
         let writer = index.get_writer()?;
-        let (t_handle, tx) = Database::spawn_writer(pool.get()?, writer);
+
+        // Warning: Do not open a new db connection before we write the tables
+        // to the DB, otherwise sqlcipher might think that we are initializing
+        // a new database and we'll end up with two connections using differing
+        // keys and writes/reads to one of the connections might fail.
+        let writer_connection = pool.get()?;
+        if let Some(ref p) = config.passphrase {
+            Database::unlock(&writer_connection, p)?;
+        }
+
+        let (t_handle, tx) = Database::spawn_writer(writer_connection, writer);
 
         Ok(Database {
             path: path.into(),
@@ -208,7 +236,54 @@ impl Database {
             _write_thread: t_handle,
             tx,
             index,
+            passphrase: config.passphrase.clone(),
         })
+    }
+
+    /// Change the passphrase of the Seshat database.
+    ///
+    /// Note that this consumes the database object and any searcher objects
+    /// can't be used anymore. A new database will have to be opened and new
+    /// searcher objects as well.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - The directory where the database will be stored in. This
+    /// should be an empty directory if a new database should be created.
+    /// * `new_passphrase` - The passphrase that should be used instead of the
+    /// current one.
+    pub fn change_passphrase(self, new_passphrase: &str) -> Result<()> {
+        match self.passphrase {
+            Some(_p) => {
+                self.connection
+                    .pragma_update(None, "rekey", &new_passphrase as &dyn ToSql)?;
+            }
+            None => panic!("Database isn't encrypted"),
+        }
+        Ok(())
+    }
+
+    fn unlock(connection: &rusqlite::Connection, passphrase: &str) -> Result<()> {
+        let mut statement = connection.prepare("PRAGMA cipher_version")?;
+        let results = statement.query_map(NO_PARAMS, |row| row.get::<usize, String>(0))?;
+
+        if results.count() != 1 {
+            return Err(Error::SqlCipherError(
+                "Sqlcipher support is missing".to_string(),
+            ));
+        }
+
+        connection.pragma_update(None, "key", &passphrase as &dyn ToSql)?;
+
+        let count: std::result::Result<i64, rusqlite::Error> =
+            connection.query_row("SELECT COUNT(*) FROM sqlite_master", NO_PARAMS, |row| {
+                row.get(0)
+            });
+
+        match count {
+            Ok(_) => Ok(()),
+            Err(_) => Err(Error::DatabaseUnlockError("Invalid passphrase".to_owned())),
+        }
     }
 
     /// Get the size of the database.
@@ -382,6 +457,22 @@ impl Database {
         receiver
     }
 
+    fn get_version(connection: &rusqlite::Connection) -> Result<i64> {
+        connection.execute(
+            "INSERT OR IGNORE INTO seshat_version ( version ) VALUES(?1)",
+            &[DATABASE_VERSION],
+        )?;
+
+        let version: i64 =
+            connection.query_row("SELECT version FROM seshat_version", NO_PARAMS, |row| {
+                row.get(0)
+            })?;
+
+        // Do database migrations here before bumping the database version.
+
+        Ok(version)
+    }
+
     fn create_tables(conn: &rusqlite::Connection) -> Result<()> {
         conn.execute(
             "CREATE TABLE IF NOT EXISTS profiles (
@@ -419,6 +510,14 @@ impl Database {
                 full_crawl BOOLEAN NOT NULL,
                 direction TEXT NOT NULL,
                 UNIQUE(room_id,token,full_crawl,direction)
+            )",
+            NO_PARAMS,
+        )?;
+
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS seshat_version (
+                id INTEGER NOT NULL PRIMARY KEY CHECK (id = 1),
+                version INTEGER NOT NULL
             )",
             NO_PARAMS,
         )?;
@@ -796,6 +895,11 @@ impl Database {
     /// Note that this connection should only be used for reading.
     pub fn get_connection(&mut self) -> Result<Connection> {
         let connection = self.pool.get()?;
+
+        if let Some(ref p) = self.passphrase {
+            Database::unlock(&connection, p)?;
+        }
+
         Ok(Connection(connection))
     }
 
@@ -1064,4 +1168,88 @@ fn is_empty() {
     db.add_event(EVENT.clone(), profile.clone());
     db.commit().unwrap();
     assert!(!connection.is_empty().unwrap());
+}
+
+#[test]
+fn encrypted_db() {
+    let tmpdir = tempdir().unwrap();
+    let db_config = Config::new().set_passphrase("test");
+    let mut db = match Database::new_with_config(tmpdir.path(), &db_config) {
+        Ok(db) => db,
+        Err(e) => panic!("Coulnd't open encrypted database {}", e),
+    };
+
+    let connection = match db.get_connection() {
+        Ok(c) => c,
+        Err(e) => panic!("Could not get database connection {}", e),
+    };
+
+    assert!(
+        connection.is_empty().unwrap(),
+        "New database should be empty"
+    );
+
+    let profile = Profile::new("Alice", "");
+    db.add_event(EVENT.clone(), profile.clone());
+
+    match db.commit() {
+        Ok(_) => (),
+        Err(e) => panic!("Could not commit events to database {}", e),
+    }
+    assert!(
+        !connection.is_empty().unwrap(),
+        "Database shouldn't be empty anymore"
+    );
+
+    drop(db);
+
+    let db = Database::new(tmpdir.path());
+    assert!(
+        db.is_err(),
+        "opening the database without a passphrase should fail"
+    );
+}
+
+#[test]
+fn change_passphrase() {
+    let tmpdir = tempdir().unwrap();
+    let db_config = Config::new().set_passphrase("test");
+    let mut db = match Database::new_with_config(tmpdir.path(), &db_config) {
+        Ok(db) => db,
+        Err(e) => panic!("Coulnd't open encrypted database {}", e),
+    };
+
+    let connection = db
+        .get_connection()
+        .expect("Could not get database connection");
+    assert!(
+        connection.is_empty().unwrap(),
+        "New database should be empty"
+    );
+
+    let profile = Profile::new("Alice", "");
+    db.add_event(EVENT.clone(), profile.clone());
+
+    db.commit().expect("Could not commit events to database");
+    db.change_passphrase("wordpass")
+        .expect("Could not change the database passphrase");
+
+    let db_config = Config::new().set_passphrase("wordpass");
+    let mut db = Database::new_with_config(tmpdir.path(), &db_config)
+        .expect("Could not open database with the new passphrase");
+    let connection = db
+        .get_connection()
+        .expect("Could not get database connection");
+    assert!(
+        !connection.is_empty().unwrap(),
+        "Database shouldn't be empty anymore"
+    );
+    drop(db);
+
+    let db_config = Config::new().set_passphrase("test");
+    let db = Database::new_with_config(tmpdir.path(), &db_config);
+    assert!(
+        db.is_err(),
+        "opening the database without a passphrase should fail"
+    );
 }
