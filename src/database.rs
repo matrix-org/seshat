@@ -504,12 +504,12 @@ impl Database {
             &[
                 &event.event_id,
                 &event.sender,
-                &event.server_ts.to_string(),
+                &event.server_ts as &dyn ToSql,
                 &event.room_id,
                 &event.content_value,
-                "m.room.message",
+                &event.event_type as &dyn ToSql,
                 &event.source,
-                &profile_id.to_string(),
+                &profile_id as &dyn ToSql,
             ],
         )?;
 
