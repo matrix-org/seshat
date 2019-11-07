@@ -264,8 +264,15 @@ declare_types! {
                             Language::Unknown => return cx.throw_type_error(
                                 format!("Unsuported language: {}", l.value())
                             ),
-                            _ => {config.set_language(&language);}
+                            _ => {config = config.set_language(&language);}
                         }
+                    }
+                }
+
+                if let Ok(p) = c.get(&mut cx, "passphrase") {
+                    if let Ok(p) = p.downcast::<JsString>() {
+                        let passphrase: String = p.value();
+                        config = config.set_passphrase(passphrase);
                     }
                 }
             }

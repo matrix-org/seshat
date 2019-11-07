@@ -71,6 +71,9 @@ const seshat = require('../native');
  * database already exist in the given folder the database will be reused.
  * @param  {string} config.language The language that the database should use
  * for indexing. Picking the correct indexing language may improve the search.
+ * @param  {string} config.passphrase The passphrase that should be used to
+ * encrypt the database. The database is left unencrypted it no passphrase is
+ * set.
  *
  * @constructor
  *

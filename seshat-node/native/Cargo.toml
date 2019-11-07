@@ -21,4 +21,4 @@ serde_json = "1.0"
 r2d2 = "0.8"
 r2d2_sqlite = "0.12"
 neon-serde = "=0.2.0"
-seshat = { git = "https://github.com/matrix-org/seshat/", rev = "8e50ac7" }
+seshat = { path = "../../" }

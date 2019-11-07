@@ -340,6 +340,19 @@ describe('Database', function() {
         assert(!await db.isEmpty());
     });
 
+    it('should allow us to create an encrypted db', async function() {
+        const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'seshat-'));
+        let db = new Seshat(tempDir, {passphrase: "wordpass"});
+
+        assert(await db.isEmpty());
+        db.addEvent(matrixEvent, matrixProfileOnlyDisplayName);
+        await db.commit();
+        assert(!await db.isEmpty());
+
+        expect(() => db = new Seshat(tempDir)).to.throw('');
+    });
+
+
     it('should throw an error when adding events with missing fields.', function() {
         delete matrixEvent.content;
         expect(() => db.addEvent(matrixEvent, matrixProfile)).to.throw('Event doesn\'t contain any content');
