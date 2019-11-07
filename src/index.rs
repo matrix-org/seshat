@@ -16,12 +16,13 @@ use std::path::Path;
 use tantivy as tv;
 use tantivy::tokenizer::Tokenizer;
 
-use crate::config::{Language, SearchConfig};
+use crate::config::{Config, Language, SearchConfig};
+use crate::encrypted_dir::EncryptedMmapDirectory;
 use crate::events::{Event, EventId, EventType};
 use crate::japanese_tokenizer::TinySegmenterTokenizer;
 
 // Tantivy requires at least 3MB per writer thread and will panic if we
-// give it less than 3MB for the total writer heap size. The amount of writer 
+// give it less than 3MB for the total writer heap size. The amount of writer
 // threads that Tantivy will spawn depends on the amount of heap we give it.
 // The logic for the number of threads is as follows:
 //
@@ -152,8 +153,8 @@ impl IndexSearcher {
 }
 
 impl Index {
-    pub fn new<P: AsRef<Path>>(path: P, language: &Language) -> Result<Index, tv::Error> {
-        let tokenizer_name = language.as_tokenizer_name();
+    pub fn new<P: AsRef<Path>>(path: P, config: &Config) -> Result<Index, tv::Error> {
+        let tokenizer_name = config.language.as_tokenizer_name();
 
         let text_field_options = Index::create_text_options(&tokenizer_name);
         let mut schemabuilder = tv::schema::Schema::builder();
@@ -167,12 +168,20 @@ impl Index {
 
         let schema = schemabuilder.build();
 
-        let index_dir = tv::directory::MmapDirectory::open(path)?;
+        let index = match &config.passphrase {
+            Some(p) => {
+                let dir = EncryptedMmapDirectory::open(path, &p)?;
+                tv::Index::open_or_create(dir, schema)?
+            }
+            None => {
+                let dir = tv::directory::MmapDirectory::open(path)?;
+                tv::Index::open_or_create(dir, schema)?
+            }
+        };
 
-        let index = tv::Index::open_or_create(index_dir, schema)?;
         let reader = index.reader()?;
 
-        match language {
+        match config.language {
             Language::Unknown => (),
             Language::Japanese => {
                 index
@@ -183,7 +192,7 @@ impl Index {
                 let tokenizer = tv::tokenizer::SimpleTokenizer
                     .filter(tv::tokenizer::RemoveLongFilter::limit(40))
                     .filter(tv::tokenizer::LowerCaser)
-                    .filter(tv::tokenizer::Stemmer::new(language.as_tantivy()));
+                    .filter(tv::tokenizer::Stemmer::new(config.language.as_tantivy()));
                 index.tokenizers().register(&tokenizer_name, tokenizer);
             }
         }
@@ -197,6 +206,15 @@ impl Index {
             event_id_field,
             room_id_field,
         })
+    }
+
+    pub fn change_passphrase<P: AsRef<Path>>(
+        path: P,
+        old_passphrase: &str,
+        new_passphrase: &str,
+    ) -> Result<(), tv::Error> {
+        EncryptedMmapDirectory::change_passphrase(path, old_passphrase, new_passphrase)?;
+        Ok(())
     }
 
     fn create_text_options(tokenizer: &str) -> tv::schema::TextOptions {
@@ -242,7 +260,8 @@ impl Index {
 #[test]
 fn add_an_event() {
     let tmpdir = TempDir::new().unwrap();
-    let index = Index::new(&tmpdir, &Language::English).unwrap();
+    let config = Config::new().set_language(&Language::English);
+    let index = Index::new(&tmpdir, &config).unwrap();
 
     let mut writer = index.get_writer().unwrap();
 
@@ -262,7 +281,8 @@ fn add_an_event() {
 #[test]
 fn add_events_to_differing_rooms() {
     let tmpdir = TempDir::new().unwrap();
-    let index = Index::new(&tmpdir, &Language::English).unwrap();
+    let config = Config::new().set_language(&Language::English);
+    let index = Index::new(&tmpdir, &config).unwrap();
 
     let event_id = EVENT.event_id.to_string();
     let mut writer = index.get_writer().unwrap();
@@ -291,7 +311,8 @@ fn add_events_to_differing_rooms() {
 #[test]
 fn switch_languages() {
     let tmpdir = TempDir::new().unwrap();
-    let index = Index::new(&tmpdir, &Language::English).unwrap();
+    let config = Config::new().set_language(&Language::English);
+    let index = Index::new(&tmpdir, &config).unwrap();
 
     let mut writer = index.get_writer().unwrap();
 
@@ -309,7 +330,8 @@ fn switch_languages() {
 
     drop(index);
 
-    let index = Index::new(&tmpdir, &Language::German);
+    let config = Config::new().set_language(&Language::German);
+    let index = Index::new(&tmpdir, &config);
 
     assert!(index.is_err())
 }
@@ -317,7 +339,8 @@ fn switch_languages() {
 #[test]
 fn japanese_tokenizer() {
     let tmpdir = TempDir::new().unwrap();
-    let index = Index::new(&tmpdir, &Language::Japanese).unwrap();
+    let config = Config::new().set_language(&Language::Japanese);
+    let index = Index::new(&tmpdir, &config).unwrap();
 
     let mut writer = index.get_writer().unwrap();
 

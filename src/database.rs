@@ -254,7 +254,8 @@ impl Database {
     /// current one.
     pub fn change_passphrase(self, new_passphrase: &str) -> Result<()> {
         match self.passphrase {
-            Some(_p) => {
+            Some(p) => {
+                Index::change_passphrase(&self.path, &p, new_passphrase)?;
                 self.connection
                     .pragma_update(None, "rekey", &new_passphrase as &dyn ToSql)?;
             }
@@ -298,7 +299,7 @@ impl Database {
     }
 
     fn create_index<P: AsRef<Path>>(path: &P, config: &Config) -> Result<Index> {
-        Ok(Index::new(path, &config.language)?)
+        Ok(Index::new(path, &config)?)
     }
 
     fn write_events_helper(
