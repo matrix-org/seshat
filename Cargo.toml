@@ -14,6 +14,8 @@ fs_extra = "1.1.0"
 r2d2_sqlite = "0.12"
 r2d2 = "0.8"
 failure = "0.1.5"
+rust-crypto = "0.2.36"
+rand = "0.7.2"
 zeroize = "1.0.0"
 
 [dev-dependencies]
