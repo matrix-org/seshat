@@ -288,36 +288,30 @@ impl Database {
     ) -> WriterRet {
         let (tx, rx): (_, Receiver<ThreadMessage>) = channel();
 
-        let t_handle = thread::spawn(move || loop {
+        let t_handle = thread::spawn(move || {
             let mut events: Vec<(Event, Profile)> = Vec::new();
-            loop {
-                let message = rx.recv();
 
+            while let Ok(message) = rx.recv() {
                 match message {
-                    Ok(m) => {
-                        match m {
-                            ThreadMessage::Event(e) => events.push(e),
-                            ThreadMessage::Write(sender) => {
-                                let ret = Database::write_queued_events(
-                                    &connection,
-                                    &mut index_writer,
-                                    &mut events,
-                                );
-                                // Notify that we are done with the write.
-                                sender.send(ret).unwrap_or(());
-                            }
-                            ThreadMessage::HistoricEvents(m) => {
-                                let (check, old_check, events, sender) = m;
-                                let ret = Database::write_historic_events(
-                                    &mut connection,
-                                    &mut index_writer,
-                                    (check, old_check, events),
-                                );
-                                sender.send(ret).unwrap_or(());
-                            }
-                        };
+                    ThreadMessage::Event(e) => events.push(e),
+                    ThreadMessage::Write(sender) => {
+                        let ret = Database::write_queued_events(
+                            &connection,
+                            &mut index_writer,
+                            &mut events,
+                        );
+                        // Notify that we are done with the write.
+                        sender.send(ret).unwrap_or(());
                     }
-                    Err(_e) => return,
+                    ThreadMessage::HistoricEvents(m) => {
+                        let (check, old_check, events, sender) = m;
+                        let ret = Database::write_historic_events(
+                            &mut connection,
+                            &mut index_writer,
+                            (check, old_check, events),
+                        );
+                        sender.send(ret).unwrap_or(());
+                    }
                 };
             }
         });
