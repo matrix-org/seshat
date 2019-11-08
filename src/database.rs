@@ -726,7 +726,7 @@ impl Database {
         }
 
         // Sqlite orders by recency for us, but if we score by rank sqlite will
-        // mess up our order, resort our events here.
+        // mess up our order, re-sort our events here.
         if !order_by_recency {
             events.sort_by(|a, b| {
                 a.score
