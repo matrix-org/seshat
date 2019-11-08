@@ -3,6 +3,7 @@ matrix:
     - os: windows
   include:
     - os: linux
+      dist: bionic
       language: rust
       env:
         - TRAVIS_NODE_VERSION="12"
