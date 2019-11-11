@@ -91,7 +91,9 @@ pub(crate) const PBKDF_COUNT: u32 = 10_000;
 /// derived with the user provided passphrase using [PBKDF2][pbkdf]. We generate
 /// a random 128 bit salt and derive a 512 bit key using PBKDF2:
 ///
+/// ```text
 ///     derived_key = PBKDF2(SHA512, passphrase, salt, count, 512)
+/// ```
 ///
 /// After key derivation, the key is split into a 256 bit AES encryption key and
 /// a 256 bit MAC key.
@@ -100,24 +102,32 @@ pub(crate) const PBKDF_COUNT: u32 = 10_000;
 /// was derived before, a random IV will be generated before encrypting the
 /// store_key:
 ///
+/// ```text
 ///     ciphertext = AES256-CTR(iv, store_key)
+/// ```
 ///
 /// A MAC of the encrypted ciphertext will be created using
 /// the derived MAC key and [HMAC-SHA256][hmac]:
 ///
+/// ```text
 ///     mac = HMAC-SHA256(mac_key, version || iv || salt || ciphertext)
+/// ```
 ///
 /// The store key will be written to a file concatenated with a store version,
 /// IV, salt, PBKDF count, and MAC. The PBKDF count will be stored using the big
 /// endian byte order:
 ///
+/// ```text
 ///     key_file = (version || iv || salt || pbkdf_count || mac || key_ciphertext)
+/// ```
 ///
 /// Our store key will be used to encrypt the many files that Tantivy generates.
 /// For this, the store key will be expanded into an 256 bit encryption key and
 /// a 256 bit MAC key using [HKDF][hkdf].
 ///
+/// ```text
 ///     encryption_key, mac_key = HKDF(SHA512, store_key, "", 512)
+/// ```
 ///
 /// Those two keys are used to encrypt and authenticate the Tantivy files. The
 /// encryption scheme is similar to the one used for the store key, AES-CTR mode
@@ -126,12 +136,16 @@ pub(crate) const PBKDF_COUNT: u32 = 10_000;
 ///
 /// The MAC will be calculated only on the ciphertext:
 ///
+/// ```text
 ///     mac = HMAC-SHA256(mac_key, ciphertext)
+/// ```
 ///
 /// The file format differs a bit, the MAC will be at the end of the file and
 /// the ciphertext is between the IV and salt:
 ///
+/// ```text
 ///     file_data = (iv || ciphertext || mac)
+/// ```
 ///
 /// [aes]: https://en.wikipedia.org/wiki/Advanced_Encryption_Standard
 /// [pbkdf]: https://en.wikipedia.org/wiki/PBKDF2
