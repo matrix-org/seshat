@@ -65,8 +65,8 @@ impl<E: BlockEncryptor, M: Mac, W: Write> AesWriter<E, M, W> {
     /// # Arguments
     ///
     /// * `writer`: Writer to write encrypted data into
-    /// * `enc`: [`BlockEncryptor`][be] to use for encyrption
-    /// * `mac`: [`Mac`][mac] to use for encyrption
+    /// * `enc`: [`BlockEncryptor`][be] to use for encryption
+    /// * `mac`: [`Mac`][mac] to use for encryption
     ///
     /// [be]: https://docs.rs/rust-crypto/0.2.36/crypto/symmetriccipher/trait.BlockEncryptor.html
     /// [mac]: https://docs.rs/rust-crypto/0.2.36/crypto/mac/trait.Mac.html
