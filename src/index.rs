@@ -17,7 +17,7 @@ use tantivy as tv;
 use tantivy::tokenizer::Tokenizer;
 
 use crate::config::{Config, Language, SearchConfig};
-use crate::encrypted_dir::EncryptedMmapDirectory;
+use crate::encrypted_dir::{EncryptedMmapDirectory, PBKDF_COUNT};
 use crate::events::{Event, EventId, EventType};
 use crate::japanese_tokenizer::TinySegmenterTokenizer;
 
@@ -170,7 +170,7 @@ impl Index {
 
         let index = match &config.passphrase {
             Some(p) => {
-                let dir = EncryptedMmapDirectory::open(path, &p)?;
+                let dir = EncryptedMmapDirectory::open_or_create(path, &p, PBKDF_COUNT)?;
                 tv::Index::open_or_create(dir, schema)?
             }
             None => {
@@ -213,7 +213,12 @@ impl Index {
         old_passphrase: &str,
         new_passphrase: &str,
     ) -> Result<(), tv::Error> {
-        EncryptedMmapDirectory::change_passphrase(path, old_passphrase, new_passphrase)?;
+        EncryptedMmapDirectory::change_passphrase(
+            path,
+            old_passphrase,
+            new_passphrase,
+            PBKDF_COUNT,
+        )?;
         Ok(())
     }
 

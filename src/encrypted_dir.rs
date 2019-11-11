@@ -72,7 +72,7 @@ const VERSION: u8 = 1;
 
 #[cfg(test)]
 // Tests don't need to protect against brute force attacks.
-const PBKDF_COUNT: u32 = 10;
+pub(crate) const PBKDF_COUNT: u32 = 10;
 
 #[cfg(not(test))]
 // This is quite a bit lower than the spec since the encrypted key and index
@@ -80,7 +80,7 @@ const PBKDF_COUNT: u32 = 10;
 // its key and only then move on to bruteforcing the key. Even if the attacker
 // decrypts the index he wouldn't get to the events itself, only to the index
 // of them.
-const PBKDF_COUNT: u32 = 10_000;
+pub(crate) const PBKDF_COUNT: u32 = 10_000;
 
 #[derive(Clone, Debug)]
 /// A Directory implementation that wraps a MmapDirectory and adds AES based
@@ -110,17 +110,34 @@ impl EncryptedMmapDirectory {
     /// Open a encrypted mmap directory. If the directory is empty a new
     /// directory key will be generated and encrypted with the given passphrase.
     ///
+    /// If a new store is created, this method will randomly generated a new
+    /// store key and encrypted using the given passphrase.
+    ///
     /// # Arguments
     ///
     /// * `path` - The path where the directory should reside in.
-    /// * `passphrase` - The passphrase.
+    /// * `passphrase` - The passphrase that was used to encrypt our directory
+    /// or the one that will be used to encrypt our directory.
+    /// * `key_derivation_count` - The number of iterations that our key
+    /// derivation function should use. Can't be lower than 1, should be chosen
+    /// as high as possible, depending on how much time is acceptable for the
+    /// caller to wait. Is only used when a new store is created. The count will
+    /// be stored with the store key.
     ///
     /// Returns an error if the path does not exist, if it is not a directory or
     /// if there was an error when trying to decrypt the directory key e.g. the
     /// given passphrase was incorrect.
-    pub fn open<P: AsRef<Path>>(path: P, passphrase: &str) -> Result<Self, OpenDirectoryError> {
+    pub fn open_or_create<P: AsRef<Path>>(
+        path: P,
+        passphrase: &str,
+        key_derivation_count: u32,
+    ) -> Result<Self, OpenDirectoryError> {
         if passphrase.is_empty() {
             return Err(IoError::new(ErrorKind::Other, "empty passphrase").into());
+        }
+
+        if key_derivation_count == 0 {
+            return Err(IoError::new(ErrorKind::Other, "invalid key derivation count").into());
         }
 
         let key_path = path.as_ref().join(KEYFILE);
@@ -137,9 +154,40 @@ impl EncryptedMmapDirectory {
                 if e.kind() != ErrorKind::NotFound {
                     return Err(e.into());
                 }
-                EncryptedMmapDirectory::create_new_store(&key_path, passphrase, PBKDF_COUNT)?
+                EncryptedMmapDirectory::create_new_store(
+                    &key_path,
+                    passphrase,
+                    key_derivation_count,
+                )?
             }
         };
+        EncryptedMmapDirectory::new(store_key, path.as_ref())
+    }
+
+    /// Open a encrypted mmap directory.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - The path where the directory should reside in.
+    /// * `passphrase` - The passphrase that was used to encrypt our directory.
+    ///
+    /// Returns an error if the path does not exist, if it is not a directory or
+    /// if there was an error when trying to decrypt the directory key e.g. the
+    /// given passphrase was incorrect.
+
+    // This isn't currently used anywhere, but it will make sense if the
+    // EncryptedMmapDirectory gets upstreamed.
+    #[allow(dead_code)]
+    pub fn open<P: AsRef<Path>>(path: P, passphrase: &str) -> Result<Self, OpenDirectoryError> {
+        if passphrase.is_empty() {
+            return Err(IoError::new(ErrorKind::Other, "empty passphrase").into());
+        }
+
+        let key_path = path.as_ref().join(KEYFILE);
+        let key_file = File::open(&key_path)?;
+
+        // Expand the store key into a encryption and MAC key.
+        let (_, store_key) = EncryptedMmapDirectory::load_store_key(key_file, passphrase)?;
         EncryptedMmapDirectory::new(store_key, path.as_ref())
     }
 
@@ -151,29 +199,34 @@ impl EncryptedMmapDirectory {
     /// * `path` - The path where the directory resides in.
     /// * `old_passphrase` - The currently used passphrase.
     /// * `new_passphrase` - The passphrase that should be used from now on.
+    /// * `new_key_derivation_count` - The key derivation count that should be
+    /// used for the re-encrypted store key.
     pub fn change_passphrase<P: AsRef<Path>>(
         path: P,
         old_passphrase: &str,
         new_passphrase: &str,
+        new_key_derivation_count: u32,
     ) -> Result<(), OpenDirectoryError> {
         if old_passphrase.is_empty() || new_passphrase.is_empty() {
             return Err(IoError::new(ErrorKind::Other, "empty passphrase").into());
+        }
+        if new_key_derivation_count == 0 {
+            return Err(IoError::new(ErrorKind::Other, "invalid key derivation count").into());
         }
 
         let key_path = path.as_ref().join(KEYFILE);
         let key_file = File::open(&key_path)?;
 
         // Load our store key using the old passphrase.
-        let (pbkdf_count, store_key) =
-            EncryptedMmapDirectory::load_store_key(key_file, old_passphrase)?;
+        let (_, store_key) = EncryptedMmapDirectory::load_store_key(key_file, old_passphrase)?;
         // Derive new encryption keys using the new passphrase.
         let (key, hmac_key, salt) =
-            EncryptedMmapDirectory::derive_key(new_passphrase, pbkdf_count)?;
+            EncryptedMmapDirectory::derive_key(new_passphrase, new_key_derivation_count)?;
         // Re-encrypt our store key using the newly derived keys.
         EncryptedMmapDirectory::encrypt_store_key(
             &key,
             &salt,
-            pbkdf_count,
+            new_key_derivation_count,
             &hmac_key,
             &store_key,
             &key_path,
@@ -537,8 +590,8 @@ use tempfile::tempdir;
 #[test]
 fn create_new_store_and_reopen() {
     let tmpdir = tempdir().unwrap();
-    let dir =
-        EncryptedMmapDirectory::open(tmpdir.path(), "wordpass").expect("Can't create a new store");
+    let dir = EncryptedMmapDirectory::open_or_create(tmpdir.path(), "wordpass", PBKDF_COUNT)
+        .expect("Can't create a new store");
     drop(dir);
     let dir = EncryptedMmapDirectory::open(tmpdir.path(), "wordpass")
         .expect("Can't open the existing store");
@@ -563,11 +616,11 @@ fn create_store_with_empty_passphrase() {
 #[test]
 fn change_passphrase() {
     let tmpdir = tempdir().unwrap();
-    let dir =
-        EncryptedMmapDirectory::open(tmpdir.path(), "wordpass").expect("Can't create a new store");
+    let dir = EncryptedMmapDirectory::open_or_create(tmpdir.path(), "wordpass", PBKDF_COUNT)
+        .expect("Can't create a new store");
 
     drop(dir);
-    EncryptedMmapDirectory::change_passphrase(tmpdir.path(), "wordpass", "password")
+    EncryptedMmapDirectory::change_passphrase(tmpdir.path(), "wordpass", "password", PBKDF_COUNT)
         .expect("Can't change passphrase");
     let dir = EncryptedMmapDirectory::open(tmpdir.path(), "wordpass");
     assert!(
