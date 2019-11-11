@@ -460,14 +460,12 @@ impl Database {
 
     fn get_version(connection: &rusqlite::Connection) -> Result<i64> {
         connection.execute(
-            "INSERT OR IGNORE INTO seshat_version ( version ) VALUES(?1)",
+            "INSERT OR IGNORE INTO version ( version ) VALUES(?1)",
             &[DATABASE_VERSION],
         )?;
 
         let version: i64 =
-            connection.query_row("SELECT version FROM seshat_version", NO_PARAMS, |row| {
-                row.get(0)
-            })?;
+            connection.query_row("SELECT version FROM version", NO_PARAMS, |row| row.get(0))?;
 
         // Do database migrations here before bumping the database version.
 
@@ -516,7 +514,7 @@ impl Database {
         )?;
 
         conn.execute(
-            "CREATE TABLE IF NOT EXISTS seshat_version (
+            "CREATE TABLE IF NOT EXISTS version (
                 id INTEGER NOT NULL PRIMARY KEY CHECK (id = 1),
                 version INTEGER NOT NULL
             )",
