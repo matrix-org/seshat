@@ -13,7 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 // This file originates from the rust-aes-stream repo[1], it has been moddified
 // to use AES-CTR mode and to authenticate the encrypted files.
 // [1] https://github.com/oberien/rust-aes-stream/

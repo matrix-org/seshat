@@ -18,6 +18,7 @@ use std::io::Error as IoError;
 use std::io::{BufWriter, Cursor, ErrorKind, Read, Write};
 use std::path::{Path, PathBuf};
 
+use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto::aessafe::AesSafe256Encryptor;
 use crypto::blockmodes::CtrMode;
 use crypto::buffer::{BufferResult, ReadBuffer, RefReadBuffer, RefWriteBuffer, WriteBuffer};
@@ -92,6 +93,20 @@ pub struct EncryptedMmapDirectory {
 }
 
 impl EncryptedMmapDirectory {
+    fn new(store_key: KeyBuffer, path: &Path) -> Result<Self, OpenDirectoryError> {
+        // Expand the store key into a encryption and MAC key.
+        let (encryption_key, mac_key) = EncryptedMmapDirectory::expand_store_key(&store_key);
+
+        // Open our underlying bare tantivy mmap based directory.
+        let mmap_dir = tantivy::directory::MmapDirectory::open(&path)?;
+
+        Ok(EncryptedMmapDirectory {
+            path: PathBuf::from(&path),
+            mmap_dir,
+            encryption_key,
+            mac_key,
+        })
+    }
     /// Open a encrypted mmap directory. If the directory is empty a new
     /// directory key will be generated and encrypted with the given passphrase.
     ///
@@ -108,35 +123,24 @@ impl EncryptedMmapDirectory {
             return Err(IoError::new(ErrorKind::Other, "empty passphrase").into());
         }
 
-        let path = PathBuf::from(path.as_ref());
-        let key_path = path.as_path().join(KEYFILE);
-
+        let key_path = path.as_ref().join(KEYFILE);
         let key_file = File::open(&key_path);
 
         // Either load a store key or create a new store key if the key file
         // doesn't exist.
         let store_key = match key_file {
-            Ok(k) => EncryptedMmapDirectory::load_store_key(k, passphrase)?,
+            Ok(k) => {
+                let (_, key) = EncryptedMmapDirectory::load_store_key(k, passphrase)?;
+                key
+            }
             Err(e) => {
                 if e.kind() != ErrorKind::NotFound {
                     return Err(e.into());
                 }
-                EncryptedMmapDirectory::create_new_store(&key_path, passphrase)?
+                EncryptedMmapDirectory::create_new_store(&key_path, passphrase, PBKDF_COUNT)?
             }
         };
-
-        // Expand the store key into a encryption and MAC key.
-        let (encryption_key, mac_key) = EncryptedMmapDirectory::expand_store_key(&store_key);
-
-        // Open our underlying bare tantivy mmap based directory.
-        let mmap_dir = tantivy::directory::MmapDirectory::open(&path)?;
-
-        Ok(EncryptedMmapDirectory {
-            path,
-            mmap_dir,
-            encryption_key,
-            mac_key,
-        })
+        EncryptedMmapDirectory::new(store_key, path.as_ref())
     }
 
     /// Change the passphrase that is used to encrypt the store key.
@@ -160,11 +164,20 @@ impl EncryptedMmapDirectory {
         let key_file = File::open(&key_path)?;
 
         // Load our store key using the old passphrase.
-        let store_key = EncryptedMmapDirectory::load_store_key(key_file, old_passphrase)?;
+        let (pbkdf_count, store_key) =
+            EncryptedMmapDirectory::load_store_key(key_file, old_passphrase)?;
         // Derive new encryption keys using the new passphrase.
-        let (key, hmac_key, salt) = EncryptedMmapDirectory::derive_key(new_passphrase)?;
+        let (key, hmac_key, salt) =
+            EncryptedMmapDirectory::derive_key(new_passphrase, pbkdf_count)?;
         // Re-encrypt our store key using the newly derived keys.
-        EncryptedMmapDirectory::encrypt_store_key(&key, &salt, &hmac_key, &store_key, &key_path)?;
+        EncryptedMmapDirectory::encrypt_store_key(
+            &key,
+            &salt,
+            pbkdf_count,
+            &hmac_key,
+            &store_key,
+            &key_path,
+        )?;
 
         Ok(())
     }
@@ -186,7 +199,7 @@ impl EncryptedMmapDirectory {
     fn load_store_key(
         mut key_file: File,
         passphrase: &str,
-    ) -> Result<KeyBuffer, OpenDirectoryError> {
+    ) -> Result<(u32, KeyBuffer), OpenDirectoryError> {
         let mut iv = [0u8; IV_SIZE];
         let mut salt = [0u8; SALT_SIZE];
         let mut expected_mac = [0u8; MAC_LENGTH];
@@ -197,6 +210,7 @@ impl EncryptedMmapDirectory {
         key_file.read_exact(&mut version)?;
         key_file.read_exact(&mut iv)?;
         key_file.read_exact(&mut salt)?;
+        let pbkdf_count = key_file.read_u32::<BigEndian>()?;
         key_file.read_exact(&mut expected_mac)?;
 
         // Our key will be AES encrypted in CTR mode meaning the ciphertext
@@ -212,7 +226,7 @@ impl EncryptedMmapDirectory {
         }
 
         // Rederive our key using the passphrase and salt.
-        let (key, hmac_key) = EncryptedMmapDirectory::rederive_key(passphrase, &salt);
+        let (key, hmac_key) = EncryptedMmapDirectory::rederive_key(passphrase, &salt, pbkdf_count);
 
         // First check our MAC of the encrypted key.
         let expected_mac = MacResult::new(&expected_mac);
@@ -265,7 +279,7 @@ impl EncryptedMmapDirectory {
             }
         }
 
-        Ok(out)
+        Ok((pbkdf_count, out))
     }
 
     /// Calculate a HMAC for the given inputs.
@@ -289,17 +303,25 @@ impl EncryptedMmapDirectory {
     fn create_new_store(
         key_path: &Path,
         passphrase: &str,
+        pbkdf_count: u32,
     ) -> Result<KeyBuffer, OpenDirectoryError> {
         // Derive a AES key from our passphrase using a randomly generated salt
         // to prevent bruteforce attempts using rainbow tables.
-        let (key, hmac_key, salt) = EncryptedMmapDirectory::derive_key(passphrase)?;
+        let (key, hmac_key, salt) = EncryptedMmapDirectory::derive_key(passphrase, pbkdf_count)?;
         // Generate a new random store key. This key will encrypt our tantivy
         // indexing files. The key itself is stored encrypted using the derived
         // key.
         let store_key = EncryptedMmapDirectory::generate_key()?;
 
         // Encrypt and save the encrypted store key to a file.
-        EncryptedMmapDirectory::encrypt_store_key(&key, &salt, &hmac_key, &store_key, key_path)?;
+        EncryptedMmapDirectory::encrypt_store_key(
+            &key,
+            &salt,
+            pbkdf_count,
+            &hmac_key,
+            &store_key,
+            key_path,
+        )?;
 
         Ok(store_key)
     }
@@ -308,6 +330,7 @@ impl EncryptedMmapDirectory {
     fn encrypt_store_key(
         key: &[u8],
         salt: &[u8],
+        pbkdf_count: u32,
         hmac_key: &[u8],
         store_key: &[u8],
         key_path: &Path,
@@ -329,6 +352,7 @@ impl EncryptedMmapDirectory {
         key_file.write_all(&[VERSION])?;
         key_file.write_all(&iv)?;
         key_file.write_all(&salt)?;
+        key_file.write_u32::<BigEndian>(pbkdf_count)?;
 
         // Encrypt our key.
         let res = encryptor
@@ -387,11 +411,11 @@ impl EncryptedMmapDirectory {
     }
 
     /// Derive two keys from the given passphrase and the given salt using PBKDF2.
-    fn rederive_key(passphrase: &str, salt: &[u8]) -> KeyDerivationResult {
+    fn rederive_key(passphrase: &str, salt: &[u8], pbkdf_count: u32) -> KeyDerivationResult {
         let mut mac = Hmac::new(Sha512::new(), passphrase.as_bytes());
         let mut pbkdf_result = Zeroizing::new([0u8; KEY_SIZE * 2]);
 
-        pbkdf2(&mut mac, &salt, PBKDF_COUNT, &mut *pbkdf_result);
+        pbkdf2(&mut mac, &salt, pbkdf_count, &mut *pbkdf_result);
         let (key, hmac_key) = pbkdf_result.split_at(KEY_SIZE);
         (
             Zeroizing::new(Vec::from(key)),
@@ -401,14 +425,17 @@ impl EncryptedMmapDirectory {
 
     /// Generate a random salt and derive two keys from the salt and the given
     /// passphrase.
-    fn derive_key(passphrase: &str) -> Result<InitialKeyDerivationResult, OpenDirectoryError> {
+    fn derive_key(
+        passphrase: &str,
+        pbkdf_count: u32,
+    ) -> Result<InitialKeyDerivationResult, OpenDirectoryError> {
         let mut rng = thread_rng();
         let mut salt = vec![0u8; SALT_SIZE];
         rng.try_fill(&mut salt[..]).map_err(|e| {
             IoError::new(ErrorKind::Other, format!("error generating salt: {:?}", e))
         })?;
 
-        let (key, hmac_key) = EncryptedMmapDirectory::rederive_key(passphrase, &salt);
+        let (key, hmac_key) = EncryptedMmapDirectory::rederive_key(passphrase, &salt, pbkdf_count);
         Ok((key, hmac_key, salt))
     }
 }
