@@ -97,7 +97,7 @@ impl EncryptedMmapDirectory {
         // Expand the store key into a encryption and MAC key.
         let (encryption_key, mac_key) = EncryptedMmapDirectory::expand_store_key(&store_key);
 
-        // Open our underlying bare tantivy mmap based directory.
+        // Open our underlying bare Tantivy mmap based directory.
         let mmap_dir = tantivy::directory::MmapDirectory::open(&path)?;
 
         Ok(EncryptedMmapDirectory {
@@ -278,7 +278,7 @@ impl EncryptedMmapDirectory {
             return Err(IoError::new(ErrorKind::Other, "invalid index store version").into());
         }
 
-        // Rederive our key using the passphrase and salt.
+        // Re-derive our key using the passphrase and salt.
         let (key, hmac_key) = EncryptedMmapDirectory::rederive_key(passphrase, &salt, pbkdf_count);
 
         // First check our MAC of the encrypted key.
@@ -361,7 +361,7 @@ impl EncryptedMmapDirectory {
         // Derive a AES key from our passphrase using a randomly generated salt
         // to prevent bruteforce attempts using rainbow tables.
         let (key, hmac_key, salt) = EncryptedMmapDirectory::derive_key(passphrase, pbkdf_count)?;
-        // Generate a new random store key. This key will encrypt our tantivy
+        // Generate a new random store key. This key will encrypt our Tantivy
         // indexing files. The key itself is stored encrypted using the derived
         // key.
         let store_key = EncryptedMmapDirectory::generate_key()?;
@@ -574,7 +574,7 @@ impl Directory for EncryptedMmapDirectory {
     }
 }
 
-// This tantivy trait is used to indicate when no more writes are expected to be
+// This Tantivy trait is used to indicate when no more writes are expected to be
 // done on a writer.
 impl<E: crypto::symmetriccipher::BlockEncryptor, M: Mac, W: Write> TerminatingWrite
     for AesWriter<E, M, W>
