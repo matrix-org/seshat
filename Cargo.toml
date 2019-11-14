@@ -1,13 +1,13 @@
 [package]
 name = "seshat"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Damir Jelić <poljar@termina.org.uk>"]
 edition = "2018"
 license = "Apache-2.0"
 description = "A matrix message logger with full text search support"
 
 [dependencies]
-tantivy = { git = "https://github.com/tantivy-search/tantivy", rev = "2f867aa" }
+tantivy = { git = "https://github.com/tantivy-search/tantivy", rev = "598b076" }
 tinysegmenter = "0.1"
 rusqlite = { version = "0.20", features = ["sqlcipher"] }
 fs_extra = "1.1.0"
