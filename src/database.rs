@@ -36,7 +36,8 @@ use zeroize::Zeroizing;
 use crate::config::{Config, SearchConfig};
 use crate::error::{Error, Result};
 use crate::events::{
-    CrawlerCheckpoint, Event, EventContext, EventId, HistoricEventsT, Profile, SerializedEvent,
+    CrawlerCheckpoint, Event, EventContext, EventId, HistoricEventsT, MxId, Profile,
+    SerializedEvent,
 };
 use crate::index::{Index, IndexSearcher, Writer};
 
@@ -61,11 +62,11 @@ pub struct SearchResult {
     /// The serialized source of the event that matched a search.
     pub event_source: SerializedEvent,
     /// Events that happened before our matched event.
-    pub events_before: Vec<String>,
+    pub events_before: Vec<SerializedEvent>,
     /// Events that happened after our matched event.
-    pub events_after: Vec<String>,
+    pub events_after: Vec<SerializedEvent>,
     /// The profile of the sender of the matched event.
-    pub profile_info: HashMap<String, Profile>,
+    pub profile_info: HashMap<MxId, Profile>,
 }
 
 /// The main entry point to the index and database.
