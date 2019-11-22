@@ -248,6 +248,47 @@ impl Task for DeleteTask {
     }
 }
 
+struct GetFileEventsTask {
+    inner: Searcher,
+    room_id: String,
+    limit: u32,
+    from_event: Option<String>,
+}
+
+impl Task for GetFileEventsTask {
+    type Output = Vec<String>;
+    type Error = seshat::Error;
+    type JsEvent = JsArray;
+
+    fn perform(&self) -> Result<Self::Output, Self::Error> {
+        self.inner.get_file_events(
+            &self.room_id,
+            self.limit,
+            self.from_event.as_ref().map(|x| &**x),
+        )
+    }
+
+    fn complete(
+        self,
+        mut cx: TaskContext,
+        result: Result<Self::Output, Self::Error>,
+    ) -> JsResult<Self::JsEvent> {
+        let mut ret = match result {
+            Ok(r) => r,
+            Err(e) => return cx.throw_type_error(e.to_string()),
+        };
+
+        let results = JsArray::new(&mut cx, ret.len() as u32);
+
+        for (i, source) in ret.drain(..).enumerate() {
+            let event = deserialize_event(&mut cx, &source)?;
+            results.set(&mut cx, i as u32, event)?;
+        }
+
+        Ok(results)
+    }
+}
+
 declare_types! {
     pub class Seshat for SeshatDatabase {
         init(mut cx) {
@@ -567,6 +608,57 @@ declare_types! {
             let path = db.get_path();
 
             let task = DeleteTask { db_path: path.to_path_buf() };
+            task.schedule(f);
+
+            Ok(cx.undefined().upcast())
+        }
+
+        method getFileEvents(mut cx) {
+            let args = cx.argument::<JsObject>(0)?;
+            let f = cx.argument::<JsFunction>(1)?;
+
+            let room_id = args
+                    .get(&mut cx, "roomId")?
+                    .downcast::<JsString>()
+                    .or_throw(&mut cx)?
+                    .value();
+
+            let limit: u32 = args
+                    .get(&mut cx, "limit")?
+                    .downcast::<JsNumber>()
+                    .or_throw(&mut cx)?
+                    .value() as u32;
+
+            let from_event = if let Ok(e) = args.get(&mut cx, "fromEvent") {
+                if let Ok(e) = e.downcast::<JsString>() {
+                    Some(e.value())
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
+            let mut this = cx.this();
+
+            let searcher = {
+                let guard = cx.lock();
+                let db = &mut this.borrow_mut(&guard).0;
+                db.as_ref().map_or_else(|| Err("Database has been deleted"), |db| Ok(db.get_searcher()))
+            };
+
+            let searcher = match searcher {
+                Ok(s) => s,
+                Err(e) => return cx.throw_type_error(e.to_string()),
+            };
+
+            let task = GetFileEventsTask {
+                inner: searcher,
+                room_id,
+                limit,
+                from_event,
+            };
+
             task.schedule(f);
 
             Ok(cx.undefined().upcast())

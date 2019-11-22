@@ -323,6 +323,29 @@ class Seshat extends seshat.Seshat {
             });
         });
     }
+
+    /**
+     * Get events that contain an mxc URL to a file.
+     *
+     * @param  {object} args Arguments object for the method.
+     * @param  {string} args.roomId The ID of the room for which the events
+     * should be loaded.
+     * @param  {number} args.limit The maximum number of events to return.
+     * @param  {string} args.fromEvent An event id of a previous event returned
+     * by this method. If set events that are older than the event with the
+     * given event ID will be returned.
+     *
+     * @return {Promise<[matrixEvent]>} A promise that will resolve to an array
+     * of Matrix events that contain mxc URLs.
+     */
+    async getFileEvents(args) {
+        return new Promise((resolve, reject) => {
+            super.getFileEvents(args, (err, res) => {
+                if (err) reject(err);
+                else resolve(res);
+            });
+        });
+    }
 }
 
 module.exports = Seshat;
