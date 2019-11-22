@@ -709,13 +709,11 @@ fn add_historic_events_helper(
     Ok(receiver)
 }
 
-fn search_result_to_js<'a, C: Context<'a>>(
+fn deserialize_event<'a, C: Context<'a>>(
     cx: &mut C,
-    mut result: SearchResult,
-) -> Result<Handle<'a, JsObject>, neon::result::Throw> {
-    let rank = cx.number(f64::from(result.score));
-
-    let source = serde_json::from_str(&result.event_source);
+    source: &str,
+) -> Result<Handle<'a, JsValue>, neon::result::Throw> {
+    let source = serde_json::from_str(source);
     let source: serde_json::Value = match source {
         Ok(s) => s,
         Err(e) => {
@@ -726,7 +724,17 @@ fn search_result_to_js<'a, C: Context<'a>>(
         }
     };
 
-    let source = neon_serde::to_value(&mut *cx, &source)?;
+    let ret = neon_serde::to_value(&mut *cx, &source)?;
+    Ok(ret)
+}
+
+fn search_result_to_js<'a, C: Context<'a>>(
+    cx: &mut C,
+    mut result: SearchResult,
+) -> Result<Handle<'a, JsObject>, neon::result::Throw> {
+    let rank = cx.number(f64::from(result.score));
+
+    let event = deserialize_event(&mut *cx, &result.event_source)?;
 
     let object = JsObject::new(&mut *cx);
     let context = JsObject::new(&mut *cx);
@@ -765,7 +773,7 @@ fn search_result_to_js<'a, C: Context<'a>>(
     context.set(&mut *cx, "profile_info", profile_info)?;
 
     object.set(&mut *cx, "rank", rank)?;
-    object.set(&mut *cx, "result", source)?;
+    object.set(&mut *cx, "result", event)?;
     object.set(&mut *cx, "context", context)?;
 
     Ok(object)
