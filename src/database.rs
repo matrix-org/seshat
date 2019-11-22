@@ -81,6 +81,10 @@ impl Searcher {
     /// # Arguments
     ///
     /// * `term` - The search term that should be used to search the index.
+    /// * `config` - A SearchConfig that will modify what the search result
+    /// should contain.
+    ///
+    /// Returns a list of `SearchResult`.
     pub fn search(&self, term: &str, config: &SearchConfig) -> Result<Vec<SearchResult>> {
         let search_result = self.inner.search(term, config)?;
 
