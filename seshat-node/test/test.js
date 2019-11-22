@@ -18,6 +18,30 @@ const matrixEvent = {
     origin_server_ts: 1516362244026,
 };
 
+const fileEvent = {
+    type: 'm.room.message',
+    event_id: '$15163622476EBvZB:localhost',
+    room_id: '!TESTROOM',
+    sender: '@alice:example.org',
+    content: {
+        body: 'Test file',
+        msgtype: 'm.file',
+    },
+    origin_server_ts: 1516362244028,
+};
+
+const imageEvent = {
+    type: 'm.room.message',
+    event_id: '$15163622481EBvZB:localhost',
+    room_id: '!TESTROOM',
+    sender: '@alice:example.org',
+    content: {
+        body: 'Test image',
+        msgtype: 'm.image',
+    },
+    origin_server_ts: 1516362244048,
+};
+
 const beforeMatrixEvent = {
     type: 'm.room.message',
     event_id: '$15163622445EBvFA:localhost',
@@ -357,6 +381,24 @@ describe('Database', function() {
         expect(() => db = new Seshat(tempDir)).to.throw('');
     });
 
+    it('should allow us to load events that contain files from the db', async function() {
+        const db = createDb();
+        db.addEvent(matrixEvent, matrixProfileOnlyDisplayName);
+        db.addEvent(fileEvent, matrixProfileOnlyDisplayName);
+        db.addEvent(imageEvent, matrixProfileOnlyDisplayName);
+
+        await db.commit();
+        let events = await db.getFileEvents({roomId: fileEvent.room_id, limit: 10})
+        assert(events.length == 2);
+
+        events = await db.getFileEvents({roomId: fileEvent.room_id, limit: 1})
+        assert(events.length == 1);
+        assert.deepEqual(events[0], imageEvent);
+
+        events = await db.getFileEvents({roomId: fileEvent.room_id, limit: 10, fromEvent: imageEvent.event_id})
+        assert(events.length == 1);
+        assert.deepEqual(events[0], fileEvent);
+    });
 
     it('should throw an error when adding events with missing fields.', function() {
         delete matrixEvent.content;
