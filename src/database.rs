@@ -528,6 +528,11 @@ impl Database {
             NO_PARAMS,
         )?;
 
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS room_events ON events (room_id, type, msgtype)",
+            NO_PARAMS,
+        )?;
+
         Ok(())
     }
 
