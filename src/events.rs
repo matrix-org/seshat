@@ -87,6 +87,8 @@ pub struct Event {
     /// The textual representation of a message, this part of the event will be
     /// indexed.
     pub content_value: String,
+    /// The type of the message if the event is of a m.room.text type.
+    pub msgtype: Option<String>,
     /// The unique identifier of this event.
     pub event_id: String,
     /// The MXID of the user who sent this event.
@@ -108,6 +110,7 @@ impl<T> Dummy<T> for Event {
         Event::new(
             EventType::Message,
             "Hello world",
+            Some("m.text"),
             &format!("${}:{}", (0..10).fake::<u8>(), &domain),
             &format!(
                 "@{}:{}",
@@ -155,15 +158,23 @@ impl Event {
     pub fn new(
         event_type: EventType,
         content_value: &str,
+        msgtype: Option<&str>,
         event_id: &str,
         sender: &str,
         server_ts: i64,
         room_id: &str,
         source: &str,
     ) -> Event {
+        let msgtype = if let Some(m) = msgtype {
+            Some(m.to_string())
+        } else {
+            None
+        };
+
         Event {
-            event_type: event_type.clone(),
+            event_type,
             content_value: content_value.to_string(),
+            msgtype,
             event_id: event_id.to_string(),
             sender: sender.to_string(),
             server_ts,
@@ -229,11 +240,12 @@ lazy_static! {
     pub static ref EVENT: Event = Event::new(
         EventType::Message,
         "Test message",
+        Some("m.text"),
         "$15163622445EBvZJ:localhost",
         "@example2:localhost",
         151636_2244026,
         "!test_room:localhost",
-        EVENT_SOURCE
+        EVENT_SOURCE,
     );
 }
 
@@ -242,11 +254,12 @@ lazy_static! {
     pub static ref TOPIC_EVENT: Event = Event::new(
         EventType::Topic,
         "Test topic",
+        None,
         "$15163622445EBvZE:localhost",
         "@example2:localhost",
         151636_2244038,
         "!test_room:localhost",
-        TOPIC_EVENT_SOURCE
+        TOPIC_EVENT_SOURCE,
     );
 }
 
@@ -256,20 +269,22 @@ lazy_static! {
         Event::new(
             EventType::Message,
             "日本語の本文",
+            Some("m.text"),
             "$15163622445EBvZE:localhost",
             "@example2:localhost",
             151636_2244038,
             "!test_room:localhost",
-            ""
+            "",
         ),
         Event::new(
             EventType::Message,
             "ルダの伝説 時のオカリナ",
+            Some("m.text"),
             "$15163622445ZERuD:localhost",
             "@example2:localhost",
             151636_2244063,
             "!test_room:localhost",
-            ""
+            "",
         ),
     ];
 }

@@ -43,11 +43,12 @@ lazy_static! {
     pub static ref EVENT: Event = Event::new(
         EventType::Message,
         "Test message",
+        Some("m.text"),
         "$15163622445EBvZJ:localhost",
         "@example2:localhost",
         151636_2244026,
         "!test_room:localhost",
-        EVENT_SOURCE
+        EVENT_SOURCE,
     );
 }
 
@@ -55,11 +56,12 @@ lazy_static! {
     pub static ref TOPIC_EVENT: Event = Event::new(
         EventType::Topic,
         "Test topic",
+        None,
         "$15163622445EBvZE:localhost",
         "@example2:localhost",
         151636_2244038,
         "!test_room:localhost",
-        TOPIC_EVENT_SOURCE
+        TOPIC_EVENT_SOURCE,
     );
 }
 
@@ -69,6 +71,7 @@ fn fake_event() -> Event {
     Event::new(
         EventType::Message,
         "Hello world",
+        Some("m.text"),
         &format!("${}:{}", (0..10).fake::<u8>(), &domain),
         &format!(
             "@{}:{}",

@@ -494,6 +494,7 @@ impl Database {
                 room_id TEXT NOT NULL,
                 content_value TEXT NOT NULL,
                 type TEXT NOT NULL,
+                msgtype TEXT,
                 source TEXT NOT NULL,
                 profile_id INTEGER NOT NULL,
                 FOREIGN KEY (profile_id) REFERENCES profile (id),
@@ -592,8 +593,8 @@ impl Database {
             "
             INSERT OR IGNORE INTO events (
                 event_id, sender, server_ts, room_id, content_value, type,
-                source, profile_id
-            ) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                msgtype, source, profile_id
+            ) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             &[
                 &event.event_id,
                 &event.sender,
@@ -601,6 +602,7 @@ impl Database {
                 &event.room_id,
                 &event.content_value,
                 &event.event_type as &dyn ToSql,
+                &event.msgtype,
                 &event.source,
                 &profile_id as &dyn ToSql,
             ],
@@ -757,7 +759,8 @@ impl Database {
 
         let mut stmt = if order_by_recency {
             connection.prepare(&format!(
-                "SELECT type, content_value, event_id, sender, server_ts, room_id, source, displayname, avatar_url
+                "SELECT type, content_value, msgtype, event_id, sender,
+                 server_ts, room_id, source, displayname, avatar_url
                  FROM events
                  INNER JOIN profiles on profiles.id = events.profile_id
                  WHERE event_id IN (?{})
@@ -767,7 +770,8 @@ impl Database {
             ))?
         } else {
             connection.prepare(&format!(
-                "SELECT type, content_value, event_id, sender, server_ts, room_id, source, displayname, avatar_url
+                "SELECT type, content_value, msgtype, event_id, sender,
+                 server_ts, room_id, source, displayname, avatar_url
                  FROM events
                  INNER JOIN profiles on profiles.id = events.profile_id
                  WHERE event_id IN (?{})
@@ -792,15 +796,16 @@ impl Database {
                 Event {
                     event_type: row.get(0)?,
                     content_value: row.get(1)?,
-                    event_id: row.get(2)?,
-                    sender: row.get(3)?,
-                    server_ts: row.get(4)?,
-                    room_id: row.get(5)?,
-                    source: row.get(6)?,
+                    msgtype: row.get(2)?,
+                    event_id: row.get(3)?,
+                    sender: row.get(4)?,
+                    server_ts: row.get(5)?,
+                    room_id: row.get(6)?,
+                    source: row.get(7)?,
                 },
                 Profile {
-                    displayname: row.get(7)?,
-                    avatar_url: row.get(8)?,
+                    displayname: row.get(8)?,
+                    avatar_url: row.get(9)?,
                 },
             ))
         })?;
