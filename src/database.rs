@@ -119,8 +119,10 @@ impl Connection {
     /// Load all the previously stored crawler checkpoints from the database.
     /// # Arguments
     pub fn load_checkpoints(&self) -> Result<Vec<CrawlerCheckpoint>> {
-        let mut stmt =
-            self.prepare("SELECT room_id, token, full_crawl, direction FROM crawlercheckpoints")?;
+        let mut stmt = self.prepare(
+            "SELECT room_id, token, full_crawl, direction
+                                    FROM crawlercheckpoints",
+        )?;
 
         let rows = stmt.query_map(NO_PARAMS, |row| {
             Ok(CrawlerCheckpoint {
@@ -874,8 +876,8 @@ impl Database {
     ) -> Result<()> {
         if let Some(checkpoint) = new {
             connection.execute(
-                "INSERT OR IGNORE INTO crawlercheckpoints (room_id, token, full_crawl, direction)
-                VALUES(?1, ?2, ?3, ?4)",
+                "INSERT OR IGNORE INTO crawlercheckpoints
+                (room_id, token, full_crawl, direction) VALUES(?1, ?2, ?3, ?4)",
                 &[
                     &checkpoint.room_id,
                     &checkpoint.token,
@@ -1175,7 +1177,7 @@ fn is_empty() {
     assert!(connection.is_empty().unwrap());
 
     let profile = Profile::new("Alice", "");
-    db.add_event(EVENT.clone(), profile.clone());
+    db.add_event(EVENT.clone(), profile);
     db.commit().unwrap();
     assert!(!connection.is_empty().unwrap());
 }
@@ -1200,7 +1202,7 @@ fn encrypted_db() {
     );
 
     let profile = Profile::new("Alice", "");
-    db.add_event(EVENT.clone(), profile.clone());
+    db.add_event(EVENT.clone(), profile);
 
     match db.commit() {
         Ok(_) => (),
@@ -1238,7 +1240,7 @@ fn change_passphrase() {
     );
 
     let profile = Profile::new("Alice", "");
-    db.add_event(EVENT.clone(), profile.clone());
+    db.add_event(EVENT.clone(), profile);
 
     db.commit().expect("Could not commit events to database");
     db.change_passphrase("wordpass")

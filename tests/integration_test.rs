@@ -112,7 +112,7 @@ fn duplicate_events() {
     let profile = Profile::new("Alice", "");
 
     db.add_event(EVENT.clone(), profile.clone());
-    db.add_event(EVENT.clone(), profile.clone());
+    db.add_event(EVENT.clone(), profile);
 
     db.commit().unwrap();
     db.reload().unwrap();
@@ -186,7 +186,7 @@ fn add_differing_events() {
     let profile = Profile::new("Alice", "");
 
     db.add_event(EVENT.clone(), profile.clone());
-    db.add_event(TOPIC_EVENT.clone(), profile.clone());
+    db.add_event(TOPIC_EVENT.clone(), profile);
     db.commit().unwrap();
     db.reload().unwrap();
 
@@ -211,7 +211,7 @@ fn search_with_specific_key() {
         .unwrap();
     assert!(result.is_empty());
 
-    db.add_event(TOPIC_EVENT.clone(), profile.clone());
+    db.add_event(TOPIC_EVENT.clone(), profile);
     db.commit().unwrap();
     db.reload().unwrap();
 
