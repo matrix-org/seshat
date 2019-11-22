@@ -39,6 +39,34 @@ pub static TOPIC_EVENT_SOURCE: &str = "{
     age: 43289803098
 }";
 
+pub static FILE_SOURCE: &str = "{
+    content: {
+        body: Test File,
+        msgtype: m.file,
+    },
+    event_id: $15163622445EBvZJ:localhost,
+    origin_server_ts: 1516362244026,
+    sender: @example2:localhost,
+    type: m.room.message,
+    unsigned: {age: 43289803095},
+    user_id: @example2:localhost,
+    age: 43289803095
+}";
+
+pub static IMAGE_SOURCE: &str = "{
+    content: {
+        body: Test image,
+        msgtype: m.image,
+    },
+    event_id: $15163622445EBvZJ:localhost,
+    origin_server_ts: 1516362244026,
+    sender: @example2:localhost,
+    type: m.room.message,
+    unsigned: {age: 43289803095},
+    user_id: @example2:localhost,
+    age: 43289803095
+}";
+
 lazy_static! {
     pub static ref EVENT: Event = Event::new(
         EventType::Message,
@@ -49,6 +77,32 @@ lazy_static! {
         151636_2244026,
         "!test_room:localhost",
         EVENT_SOURCE,
+    );
+}
+
+lazy_static! {
+    pub static ref FILE_EVENT: Event = Event::new(
+        EventType::Message,
+        "Test file",
+        Some("m.file"),
+        "$15163622468EBvZJ:localhost",
+        "@example2:localhost",
+        151636_2244029,
+        "!test_room:localhost",
+        FILE_SOURCE,
+    );
+}
+
+lazy_static! {
+    pub static ref IMAGE_EVENT: Event = Event::new(
+        EventType::Message,
+        "Test image",
+        Some("m.image"),
+        "$15163622471EBvZJ:localhost",
+        "@example2:localhost",
+        151636_2244058,
+        "!test_room:localhost",
+        IMAGE_SOURCE,
     );
 }
 
@@ -250,4 +304,43 @@ fn encrypted_save_and_search() {
     let result = db.search("Test", &Default::default()).unwrap();
     assert!(!result.is_empty());
     assert_eq!(result[0].event_source, EVENT.source);
+}
+
+#[test]
+fn load_file_events() {
+    let tmpdir = tempdir().unwrap();
+    let mut db = Database::new(tmpdir.path()).unwrap();
+    let profile = Profile::new("Alice", "");
+
+    db.add_event(EVENT.clone(), profile.clone());
+    db.add_event(FILE_EVENT.clone(), profile.clone());
+    db.add_event(IMAGE_EVENT.clone(), profile);
+    db.commit().unwrap();
+    db.reload().unwrap();
+
+    let searcher = db.get_searcher();
+
+    let result = searcher
+        .get_file_events(&FILE_EVENT.room_id, 10, None)
+        .expect("Can't load file events");
+    assert!(!result.is_empty());
+    assert!(result.len() == 2);
+    assert_eq!(result[0], IMAGE_EVENT.source);
+    assert!(result.len() == 2);
+    assert_eq!(result[1], FILE_EVENT.source);
+
+    let result = searcher
+        .get_file_events(&FILE_EVENT.room_id, 1, None)
+        .expect("Can't load file events");
+    assert!(!result.is_empty());
+    assert!(result.len() == 1);
+    assert_eq!(result[0], IMAGE_EVENT.source);
+
+    let result = searcher
+        .get_file_events(&FILE_EVENT.room_id, 1, Some(&IMAGE_EVENT.event_id))
+        .expect("Can't load file events with token");
+
+    assert!(!result.is_empty());
+    assert!(result.len() == 1);
+    assert_eq!(result[0], FILE_EVENT.source);
 }

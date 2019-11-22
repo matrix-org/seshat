@@ -47,6 +47,7 @@ use crate::events::CheckpointDirection;
 use crate::EVENT;
 
 const DATABASE_VERSION: i64 = 1;
+const FILE_EVENT_TYPES: &str = "'m.image', 'm.file', 'm.audio', 'm.video'";
 
 pub(crate) enum ThreadMessage {
     Event((Event, Profile)),
@@ -94,6 +95,26 @@ impl Searcher {
             config.after_limit,
             config.order_by_recency,
         )?)
+    }
+
+    /// Get events that contain an mxc URL to a file.
+    /// # Arguments
+    ///
+    /// * `room_id` - The ID of the room for which the events should be loaded.
+    /// * `limit` - The maximum number of events to return.
+    /// * `from_event` - An event id of a previous event returned by this
+    ///     method.  If set events that are older than the event with the given
+    ///     event ID will be returned.
+    ///
+    /// Returns a list of serialized events.
+    pub fn get_file_events(
+        &self,
+        room_id: &str,
+        limit: u32,
+        from_event: Option<&str>,
+    ) -> Result<Vec<SerializedEvent>> {
+        let ret = Database::load_file_events(&self.database, room_id, limit, from_event)?;
+        Ok(ret)
     }
 }
 
@@ -649,6 +670,74 @@ impl Database {
         }
     }
 
+    pub(crate) fn load_file_events(
+        connection: &rusqlite::Connection,
+        room_id: &str,
+        limit: u32,
+        from_event: Option<&str>,
+    ) -> rusqlite::Result<Vec<SerializedEvent>> {
+        let events = match from_event {
+            Some(e) => {
+                let event = Database::load_event(connection, room_id, e)?;
+                let mut stmt = connection.prepare(&format!(
+                    "SELECT source
+                     FROM events
+                     WHERE (
+                         (room_id == ?1) &
+                         (msgtype in ({})) &
+                         (event_id != ?2) &
+                         (server_ts <= ?3)
+                     ) ORDER BY server_ts DESC LIMIT ?4
+                     ",
+                    FILE_EVENT_TYPES
+                ))?;
+
+                let events = stmt.query_map(
+                    &vec![
+                        &room_id as &dyn ToSql,
+                        &event.event_id as &dyn ToSql,
+                        &event.server_ts as &dyn ToSql,
+                        &(limit as i64),
+                    ],
+                    |row| Ok(row.get(0)),
+                )?;
+                let mut ret: Vec<String> = Vec::new();
+
+                for row in events {
+                    let source = row?;
+                    ret.push(source?)
+                }
+                ret
+            }
+            None => {
+                let mut stmt = connection.prepare(&format!(
+                    "SELECT source
+                     FROM events
+                     WHERE (
+                         (room_id == ?1) &
+                         (msgtype in ({}))
+                     ) ORDER BY server_ts DESC LIMIT ?2
+                     ",
+                    FILE_EVENT_TYPES
+                ))?;
+
+                let events = stmt
+                    .query_map(&vec![&room_id as &dyn ToSql, &(limit as i64)], |row| {
+                        Ok(row.get(0))
+                    })?;
+                let mut ret: Vec<String> = Vec::new();
+
+                for row in events {
+                    let source = row?;
+                    ret.push(source?)
+                }
+                ret
+            }
+        };
+
+        Ok(events)
+    }
+
     /// Load events surounding the given event.
     pub fn load_event_context(
         connection: &rusqlite::Connection,
@@ -746,6 +835,32 @@ impl Database {
         };
 
         Ok((before, after, profiles))
+    }
+
+    pub(crate) fn load_event(
+        connection: &rusqlite::Connection,
+        room_id: &str,
+        event_id: &str,
+    ) -> rusqlite::Result<Event> {
+        connection.query_row(
+            "SELECT type, content_value, msgtype, event_id, sender,
+             server_ts, room_id, source
+             FROM events
+             WHERE (room_id == ?1) & (event_id == ?2)",
+            &[room_id, event_id],
+            |row| {
+                Ok(Event {
+                    event_type: row.get(0)?,
+                    content_value: row.get(1)?,
+                    msgtype: row.get(2)?,
+                    event_id: row.get(3)?,
+                    sender: row.get(4)?,
+                    server_ts: row.get(5)?,
+                    room_id: row.get(6)?,
+                    source: row.get(7)?,
+                })
+            },
+        )
     }
 
     pub(crate) fn load_events(
