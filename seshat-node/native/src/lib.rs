@@ -869,6 +869,19 @@ fn parse_event(
             .value(),
     };
 
+    let msgtype = match event_type {
+        EventType::Message => Some(
+            content
+                .get(&mut *cx, "msgtype")?
+                .downcast::<JsString>()
+                .or_else(|_| {
+                    cx.throw_type_error("m.room.message event doesn't contain a valid msgtype")
+                })?
+                .value(),
+        ),
+        _ => None,
+    };
+
     let event_value = event.as_value(&mut *cx);
     let event_source: serde_json::Value = neon_serde::from_value(&mut *cx, event_value)?;
     let event_source: String = serde_json::to_string(&event_source)
@@ -882,6 +895,7 @@ fn parse_event(
         server_ts: server_timestamp,
         room_id,
         source: event_source,
+        msgtype: msgtype,
     })
 }
 

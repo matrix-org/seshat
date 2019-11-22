@@ -13,6 +13,7 @@ const matrixEvent = {
     sender: '@alice:example.org',
     content: {
         body: 'Test message',
+        msgtype: 'm.text',
     },
     origin_server_ts: 1516362244026,
 };
@@ -24,6 +25,7 @@ const beforeMatrixEvent = {
     sender: '@alice:example.org',
     content: {
         body: 'Another test message before on',
+        msgtype: 'm.text',
     },
     origin_server_ts: 1516352244100,
 };
@@ -35,6 +37,7 @@ const laterMatrixEvent = {
     sender: '@alice:example.org',
     content: {
         body: 'Another test message later on',
+        msgtype: 'm.text',
     },
     origin_server_ts: 1516372244100,
 };
@@ -68,6 +71,7 @@ const matrixEventRoom2 = {
     sender: '@alice:example.org',
     content: {
         body: 'Test message',
+        msgtype: 'm.text',
     },
     origin_server_ts: 1516362244064,
 };
@@ -87,6 +91,7 @@ const badEvent = {
     sender: '@alice:example.org',
     content: {
         body: 'Test message',
+        msgtype: 'm.text',
     },
     origin_server_ts: '1516362244026',
 };
