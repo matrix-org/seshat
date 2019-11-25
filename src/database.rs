@@ -688,6 +688,7 @@ impl Database {
                      FROM events
                      WHERE (
                          (room_id == ?1) &
+                         (type == 'm.room.message') &
                          (msgtype in ({})) &
                          (event_id != ?2) &
                          (server_ts <= ?3)
@@ -719,6 +720,7 @@ impl Database {
                      FROM events
                      WHERE (
                          (room_id == ?1) &
+                         (type == 'm.room.message') &
                          (msgtype in ({}))
                      ) ORDER BY server_ts DESC LIMIT ?2
                      ",
