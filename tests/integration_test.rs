@@ -318,9 +318,9 @@ fn load_file_events() {
     db.commit().unwrap();
     db.reload().unwrap();
 
-    let searcher = db.get_searcher();
+    let connection = db.get_connection().unwrap();
 
-    let result = searcher
+    let result = connection
         .get_file_events(&FILE_EVENT.room_id, 10, None)
         .expect("Can't load file events");
     assert!(!result.is_empty());
@@ -329,14 +329,14 @@ fn load_file_events() {
     assert!(result.len() == 2);
     assert_eq!(result[1], FILE_EVENT.source);
 
-    let result = searcher
+    let result = connection
         .get_file_events(&FILE_EVENT.room_id, 1, None)
         .expect("Can't load file events");
     assert!(!result.is_empty());
     assert!(result.len() == 1);
     assert_eq!(result[0], IMAGE_EVENT.source);
 
-    let result = searcher
+    let result = connection
         .get_file_events(&FILE_EVENT.room_id, 1, Some(&IMAGE_EVENT.event_id))
         .expect("Can't load file events with token");
 

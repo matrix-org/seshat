@@ -100,26 +100,6 @@ impl Searcher {
             config.order_by_recency,
         )?)
     }
-
-    /// Get events that contain an mxc URL to a file.
-    /// # Arguments
-    ///
-    /// * `room_id` - The ID of the room for which the events should be loaded.
-    /// * `limit` - The maximum number of events to return.
-    /// * `from_event` - An event id of a previous event returned by this
-    ///     method.  If set events that are older than the event with the given
-    ///     event ID will be returned.
-    ///
-    /// Returns a list of serialized events.
-    pub fn get_file_events(
-        &self,
-        room_id: &str,
-        limit: u32,
-        from_event: Option<&str>,
-    ) -> Result<Vec<SerializedEvent>> {
-        let ret = Database::load_file_events(&self.database, room_id, limit, from_event)?;
-        Ok(ret)
-    }
 }
 
 unsafe impl Send for Searcher {}
@@ -179,6 +159,26 @@ impl Connection {
         )?;
 
         Ok(event_count == 0 && checkpoint_count == 0)
+    }
+
+    /// Get events that contain an mxc URL to a file.
+    /// # Arguments
+    ///
+    /// * `room_id` - The ID of the room for which the events should be loaded.
+    /// * `limit` - The maximum number of events to return.
+    /// * `from_event` - An event id of a previous event returned by this
+    ///     method.  If set events that are older than the event with the given
+    ///     event ID will be returned.
+    ///
+    /// Returns a list of serialized events.
+    pub fn get_file_events(
+        &self,
+        room_id: &str,
+        limit: u32,
+        from_event: Option<&str>,
+    ) -> Result<Vec<SerializedEvent>> {
+        let ret = Database::load_file_events(self, room_id, limit, from_event)?;
+        Ok(ret)
     }
 }
 

@@ -249,7 +249,7 @@ impl Task for DeleteTask {
 }
 
 struct GetFileEventsTask {
-    inner: Searcher,
+    inner: Connection,
     room_id: String,
     limit: u32,
     from_event: Option<String>,
@@ -641,19 +641,24 @@ declare_types! {
 
             let mut this = cx.this();
 
-            let searcher = {
+            let connection = {
                 let guard = cx.lock();
                 let db = &mut this.borrow_mut(&guard).0;
-                db.as_ref().map_or_else(|| Err("Database has been deleted"), |db| Ok(db.get_searcher()))
+                db
+                    .as_ref()
+                    .map_or_else(|| Err("Database has been deleted"), |db| Ok(db.get_connection()))
             };
 
-            let searcher = match searcher {
-                Ok(s) => s,
+            let connection = match connection {
+                Ok(s) => match s {
+                    Ok(s) => s,
+                    Err(e) => return cx.throw_type_error(e.to_string()),
+                },
                 Err(e) => return cx.throw_type_error(e.to_string()),
             };
 
             let task = GetFileEventsTask {
-                inner: searcher,
+                inner: connection,
                 room_id,
                 limit,
                 from_event,
