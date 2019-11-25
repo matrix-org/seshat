@@ -179,7 +179,7 @@ fn duplicate_events() {
 #[test]
 fn save_and_search_historic_events() {
     let tmpdir = tempdir().unwrap();
-    let mut db = Database::new(tmpdir.path()).unwrap();
+    let db = Database::new(tmpdir.path()).unwrap();
     let profile = Profile::new("Alice", "");
 
     let mut events = Vec::new();

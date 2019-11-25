@@ -1024,7 +1024,7 @@ impl Database {
 
     /// Get a database connection.
     /// Note that this connection should only be used for reading.
-    pub fn get_connection(&mut self) -> Result<Connection> {
+    pub fn get_connection(&self) -> Result<Connection> {
         let connection = self.pool.get()?;
 
         if let Some(ref p) = self.passphrase {
@@ -1219,7 +1219,7 @@ fn load_event_context() {
 #[test]
 fn save_and_load_checkpoints() {
     let tmpdir = tempdir().unwrap();
-    let mut db = Database::new(tmpdir.path()).unwrap();
+    let db = Database::new(tmpdir.path()).unwrap();
 
     let checkpoint = CrawlerCheckpoint {
         room_id: "!test:room".to_string(),
@@ -1366,7 +1366,7 @@ fn change_passphrase() {
         .expect("Could not change the database passphrase");
 
     let db_config = Config::new().set_passphrase("wordpass");
-    let mut db = Database::new_with_config(tmpdir.path(), &db_config)
+    let db = Database::new_with_config(tmpdir.path(), &db_config)
         .expect("Could not open database with the new passphrase");
     let connection = db
         .get_connection()
