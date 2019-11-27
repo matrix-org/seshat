@@ -338,7 +338,7 @@ impl Database {
         let mut ret = Vec::new();
 
         for (e, p) in events.drain(..) {
-            if Database::event_in_store(&connection, &e) {
+            if Database::event_in_store(&connection, &e)? {
                 ret.push(true);
                 continue;
             }
@@ -518,14 +518,24 @@ impl Database {
                 event_id TEXT NOT NULL,
                 sender TEXT NOT NULL,
                 server_ts DATETIME NOT NULL,
-                room_id TEXT NOT NULL,
+                room_id INTEGER NOT NULL,
                 content_value TEXT NOT NULL,
                 type TEXT NOT NULL,
                 msgtype TEXT,
                 source TEXT NOT NULL,
                 profile_id INTEGER NOT NULL,
                 FOREIGN KEY (profile_id) REFERENCES profile (id),
+                FOREIGN KEY (room_id) REFERENCES rooms (id),
                 UNIQUE(event_id, room_id)
+            )",
+            NO_PARAMS,
+        )?;
+
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS rooms (
+                id INTEGER NOT NULL PRIMARY KEY,
+                room_id TEXT NOT NULL,
+                UNIQUE(room_id)
             )",
             NO_PARAMS,
         )?;
@@ -616,11 +626,27 @@ impl Database {
         Ok(profile)
     }
 
+    pub(crate) fn get_room_id(
+        connection: &rusqlite::Connection,
+        room: &str,
+    ) -> rusqlite::Result<i64> {
+        connection.execute("INSERT OR IGNORE INTO rooms (room_id) VALUES(?1)", &[room])?;
+
+        let room_id: i64 =
+            connection.query_row("SELECT id FROM rooms WHERE (room_id=?1)", &[room], |row| {
+                row.get(0)
+            })?;
+
+        Ok(room_id)
+    }
+
     pub(crate) fn save_event_helper(
         connection: &rusqlite::Connection,
         event: &Event,
         profile_id: i64,
     ) -> Result<()> {
+        let room_id = Database::get_room_id(connection, &event.room_id)?;
+
         connection.execute(
             "
             INSERT OR IGNORE INTO events (
@@ -631,7 +657,7 @@ impl Database {
                 &event.event_id,
                 &event.sender,
                 &event.server_ts as &dyn ToSql,
-                &event.room_id,
+                &room_id as &dyn ToSql,
                 &event.content_value,
                 &event.event_type as &dyn ToSql,
                 &event.msgtype,
@@ -648,7 +674,7 @@ impl Database {
         event: &Event,
         profile: &Profile,
     ) -> Result<()> {
-        if Database::event_in_store(connection, event) {
+        if Database::event_in_store(connection, event)? {
             return Ok(());
         }
 
@@ -658,19 +684,23 @@ impl Database {
         Ok(())
     }
 
-    pub(crate) fn event_in_store(connection: &rusqlite::Connection, event: &Event) -> bool {
+    pub(crate) fn event_in_store(
+        connection: &rusqlite::Connection,
+        event: &Event,
+    ) -> rusqlite::Result<bool> {
+        let room_id = Database::get_room_id(connection, &event.room_id)?;
         let ret: std::result::Result<i64, rusqlite::Error> = connection.query_row(
             "
             SELECT id FROM events WHERE (
                 event_id=?1
                 and room_id=?2)",
-            &[&event.event_id, &event.room_id],
+            &[&event.event_id, &room_id as &dyn ToSql],
             |row| row.get(0),
         );
 
         match ret {
-            Ok(_event_id) => true,
-            Err(_e) => false,
+            Ok(_event_id) => Ok(true),
+            Err(_e) => Ok(false),
         }
     }
 
@@ -687,7 +717,7 @@ impl Database {
                     "SELECT source
                      FROM events
                      WHERE (
-                         (room_id == ?1) &
+                         (events.room_id == ?1) &
                          (type == 'm.room.message') &
                          (msgtype in ({})) &
                          (event_id != ?2) &
@@ -697,6 +727,7 @@ impl Database {
                     FILE_EVENT_TYPES
                 ))?;
 
+                let room_id = Database::get_room_id(connection, &room_id)?;
                 let events = stmt.query_map(
                     &vec![
                         &room_id as &dyn ToSql,
@@ -719,7 +750,7 @@ impl Database {
                     "SELECT source
                      FROM events
                      WHERE (
-                         (room_id == ?1) &
+                         (events.room_id == ?1) &
                          (type == 'm.room.message') &
                          (msgtype in ({}))
                      ) ORDER BY server_ts DESC LIMIT ?2
@@ -727,6 +758,7 @@ impl Database {
                     FILE_EVENT_TYPES
                 ))?;
 
+                let room_id = Database::get_room_id(connection, &room_id)?;
                 let events = stmt
                     .query_map(&vec![&room_id as &dyn ToSql, &(limit as i64)], |row| {
                         Ok(row.get(0))
@@ -745,13 +777,14 @@ impl Database {
     }
 
     /// Load events surounding the given event.
-    pub fn load_event_context(
+    fn load_event_context(
         connection: &rusqlite::Connection,
         event: &Event,
         before_limit: usize,
         after_limit: usize,
     ) -> rusqlite::Result<EventContext> {
         let mut profiles: HashMap<String, Profile> = HashMap::new();
+        let room_id = Database::get_room_id(connection, &event.room_id)?;
 
         let before = if before_limit == 0 {
             vec![]
@@ -770,7 +803,7 @@ impl Database {
             let context = stmt.query_map(
                 &vec![
                     &event.event_id as &dyn ToSql,
-                    &event.room_id,
+                    &room_id,
                     &event.server_ts,
                     &(after_limit as i64),
                 ],
@@ -813,7 +846,7 @@ impl Database {
             let context = stmt.query_map(
                 &vec![
                     &event.event_id as &dyn ToSql,
-                    &event.room_id,
+                    &room_id,
                     &event.server_ts,
                     &(after_limit as i64),
                 ],
@@ -848,12 +881,15 @@ impl Database {
         room_id: &str,
         event_id: &str,
     ) -> rusqlite::Result<Event> {
+        let room_id = Database::get_room_id(connection, &room_id)?;
+
         connection.query_row(
             "SELECT type, content_value, msgtype, event_id, sender,
-             server_ts, room_id, source
+             server_ts, rooms.room_id, source
              FROM events
-             WHERE (room_id == ?1) & (event_id == ?2)",
-            &[room_id, event_id],
+             INNER JOIN rooms on rooms.id = events.room_id
+             WHERE (events.room_id == ?1) & (event_id == ?2)",
+            &[&room_id as &dyn ToSql, &event_id],
             |row| {
                 Ok(Event {
                     event_type: row.get(0)?,
@@ -888,9 +924,10 @@ impl Database {
         let mut stmt = if order_by_recency {
             connection.prepare(&format!(
                 "SELECT type, content_value, msgtype, event_id, sender,
-                 server_ts, room_id, source, displayname, avatar_url
+                 server_ts, rooms.room_id, source, displayname, avatar_url
                  FROM events
                  INNER JOIN profiles on profiles.id = events.profile_id
+                 INNER JOIN rooms on rooms.id = events.room_id
                  WHERE event_id IN (?{})
                  ORDER BY server_ts DESC
                  ",
@@ -899,9 +936,10 @@ impl Database {
         } else {
             connection.prepare(&format!(
                 "SELECT type, content_value, msgtype, event_id, sender,
-                 server_ts, room_id, source, displayname, avatar_url
+                 server_ts, rooms.room_id, source, displayname, avatar_url
                  FROM events
                  INNER JOIN profiles on profiles.id = events.profile_id
+                 INNER JOIN rooms on rooms.id = events.room_id
                  WHERE event_id IN (?{})
                  ",
                 &parameter_str
