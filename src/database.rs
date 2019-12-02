@@ -25,12 +25,6 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::Arc;
 use std::thread;
 use std::thread::JoinHandle;
-
-#[cfg(test)]
-use fake::{Fake, Faker};
-#[cfg(test)]
-use tempfile::tempdir;
-
 use zeroize::Zeroizing;
 
 use crate::config::{Config, SearchConfig};
@@ -40,6 +34,13 @@ use crate::events::{
     SerializedEvent,
 };
 use crate::index::{Index, IndexSearcher, Writer};
+
+#[cfg(test)]
+use fake::{Fake, Faker};
+#[cfg(test)]
+use std::time;
+#[cfg(test)]
+use tempfile::tempdir;
 
 #[cfg(test)]
 use crate::events::CheckpointDirection;
@@ -1244,16 +1245,28 @@ fn load_event_context() {
     }
 
     db.commit().unwrap();
-    db.commit().unwrap();
-    db.reload().unwrap();
-    db.reload().unwrap();
 
-    let (before, after, _) = Database::load_event_context(&db.connection, &EVENT, 1, 1).unwrap();
+    for i in 1..5 {
+        let (before, after, _) =
+            Database::load_event_context(&db.connection, &EVENT, 1, 1).unwrap();
 
-    assert_eq!(before.len(), 1);
-    assert_eq!(before[0], before_event.as_ref().unwrap().source);
-    assert_eq!(after.len(), 1);
-    assert_eq!(after[0], after_event.as_ref().unwrap().source);
+        if (before.len() != 1
+            || after.len() != 1
+            || before[0] != before_event.as_ref().unwrap().source
+            || after[0] != after_event.as_ref().unwrap().source)
+            && i != 10
+        {
+            thread::sleep(time::Duration::from_millis(10));
+            continue;
+        }
+
+        assert_eq!(before.len(), 1);
+        assert_eq!(before[0], before_event.as_ref().unwrap().source);
+        assert_eq!(after.len(), 1);
+        assert_eq!(after[0], after_event.as_ref().unwrap().source);
+
+        return;
+    }
 }
 
 #[test]
