@@ -520,7 +520,6 @@ impl Database {
                 sender TEXT NOT NULL,
                 server_ts DATETIME NOT NULL,
                 room_id INTEGER NOT NULL,
-                content_value TEXT NOT NULL,
                 type TEXT NOT NULL,
                 msgtype TEXT,
                 source TEXT NOT NULL,
@@ -651,15 +650,14 @@ impl Database {
         connection.execute(
             "
             INSERT OR IGNORE INTO events (
-                event_id, sender, server_ts, room_id, content_value, type,
+                event_id, sender, server_ts, room_id, type,
                 msgtype, source, profile_id
-            ) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            ) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
             &[
                 &event.event_id,
                 &event.sender,
                 &event.server_ts as &dyn ToSql,
                 &room_id as &dyn ToSql,
-                &event.content_value,
                 &event.event_type as &dyn ToSql,
                 &event.msgtype,
                 &event.source,
@@ -885,7 +883,7 @@ impl Database {
         let room_id = Database::get_room_id(connection, &room_id)?;
 
         connection.query_row(
-            "SELECT type, content_value, msgtype, event_id, sender,
+            "SELECT type, msgtype, event_id, sender,
              server_ts, rooms.room_id, source
              FROM events
              INNER JOIN rooms on rooms.id = events.room_id
@@ -894,13 +892,13 @@ impl Database {
             |row| {
                 Ok(Event {
                     event_type: row.get(0)?,
-                    content_value: row.get(1)?,
-                    msgtype: row.get(2)?,
-                    event_id: row.get(3)?,
-                    sender: row.get(4)?,
-                    server_ts: row.get(5)?,
-                    room_id: row.get(6)?,
-                    source: row.get(7)?,
+                    content_value: "".to_string(),
+                    msgtype: row.get(1)?,
+                    event_id: row.get(2)?,
+                    sender: row.get(3)?,
+                    server_ts: row.get(4)?,
+                    room_id: row.get(5)?,
+                    source: row.get(6)?,
                 })
             },
         )
@@ -924,7 +922,7 @@ impl Database {
 
         let mut stmt = if order_by_recency {
             connection.prepare(&format!(
-                "SELECT type, content_value, msgtype, event_id, sender,
+                "SELECT type, msgtype, event_id, sender,
                  server_ts, rooms.room_id, source, displayname, avatar_url
                  FROM events
                  INNER JOIN profiles on profiles.id = events.profile_id
@@ -936,7 +934,7 @@ impl Database {
             ))?
         } else {
             connection.prepare(&format!(
-                "SELECT type, content_value, msgtype, event_id, sender,
+                "SELECT type, msgtype, event_id, sender,
                  server_ts, rooms.room_id, source, displayname, avatar_url
                  FROM events
                  INNER JOIN profiles on profiles.id = events.profile_id
@@ -962,17 +960,17 @@ impl Database {
             Ok((
                 Event {
                     event_type: row.get(0)?,
-                    content_value: row.get(1)?,
-                    msgtype: row.get(2)?,
-                    event_id: row.get(3)?,
-                    sender: row.get(4)?,
-                    server_ts: row.get(5)?,
-                    room_id: row.get(6)?,
-                    source: row.get(7)?,
+                    content_value: "".to_string(),
+                    msgtype: row.get(1)?,
+                    event_id: row.get(2)?,
+                    sender: row.get(3)?,
+                    server_ts: row.get(4)?,
+                    room_id: row.get(5)?,
+                    source: row.get(6)?,
                 },
                 Profile {
-                    displayname: row.get(8)?,
-                    avatar_url: row.get(9)?,
+                    displayname: row.get(7)?,
+                    avatar_url: row.get(8)?,
                 },
             ))
         })?;
