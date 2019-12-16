@@ -563,12 +563,16 @@ impl EncryptedMmapDirectory {
 // [dr] https://docs.rs/tantivy/0.10.2/tantivy/directory/trait.Directory.html
 impl Directory for EncryptedMmapDirectory {
     fn open_read(&self, path: &Path) -> Result<ReadOnlySource, OpenReadError> {
-        let source = self.mmap_dir.open_read(path)?;
+        let mut source = self.mmap_dir.open_read(path)?;
 
         let decryptor = AesSafe256Encryptor::new(&self.encryption_key);
         let mac = Hmac::new(Sha256::new(), &self.mac_key);
-        let mut reader = AesReader::new(Cursor::new(source.as_slice()), decryptor, mac)
-            .map_err(TvIoError::from)?;
+
+        let mut data = Vec::new();
+        source.read_to_end(&mut data).map_err(TvIoError::from)?;
+
+        let mut reader =
+            AesReader::new(Cursor::new(data), decryptor, mac).map_err(TvIoError::from)?;
         let mut decrypted = Vec::new();
 
         reader
