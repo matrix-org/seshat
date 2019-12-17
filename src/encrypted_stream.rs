@@ -170,9 +170,11 @@ impl<E: BlockEncryptor, M: Mac, W: Write> Drop for AesWriter<E, M, W> {
 /// based on given [`CtrMode`][ct]
 ///
 /// [ct]: https://docs.rs/rust-crypto/0.2.36/crypto/blockmodes/struct.CtrMode.html
-pub struct AesReader<D: BlockEncryptor, R: Read + Seek> {
+pub struct AesReader<D: BlockEncryptor + Clone, R: Read + Seek> {
     /// Reader to read encrypted data from
     reader: R,
+    /// Block encryptor that is used to reset the decryptor.
+    enc: D,
     /// Decryptor to decrypt data with
     dec: CtrMode<D>,
     /// Buffer used to store blob needed to find out if we reached eof
@@ -183,9 +185,11 @@ pub struct AesReader<D: BlockEncryptor, R: Read + Seek> {
     length: u64,
     /// Length of the MAC.
     mac_length: u64,
+    /// The IV for our decryptor, used when resetting.
+    iv: Vec<u8>,
 }
 
-impl<D: BlockEncryptor, R: Read + Seek> AesReader<D, R> {
+impl<D: BlockEncryptor + Clone, R: Read + Seek> AesReader<D, R> {
     /// Creates a new AesReader.
     ///
     /// Assumes that the first block of given reader is the IV.
@@ -246,11 +250,13 @@ impl<D: BlockEncryptor, R: Read + Seek> AesReader<D, R> {
 
         Ok(AesReader {
             reader,
-            dec: CtrMode::new(dec, iv),
+            dec: CtrMode::new(dec.clone(), iv.clone()),
+            enc: dec,
             buffer: Vec::new(),
             eof: false,
             length: end,
             mac_length: u_mac_length,
+            iv,
         })
     }
 
@@ -362,14 +368,65 @@ impl<D: BlockEncryptor, R: Read + Seek> AesReader<D, R> {
         }
         Ok(dec_len)
     }
+
+    fn seek_from_start(&mut self, offset: u64) -> Result<u64> {
+        // The reset() method doesn't seem to do what it's supposed to do, we
+        // create a completely new decryptor instead.
+        // self.dec.reset(&self.iv);
+        self.dec = CtrMode::new(self.enc.clone(), self.iv.clone());
+
+        self.reader.seek(SeekFrom::Start(self.iv.len() as u64))?;
+        self.buffer.clear();
+        self.eof = false;
+
+        if offset != 0 {
+            let mut skip = vec![0u8; (offset as u64) as usize];
+            self.read_exact(&mut skip)?;
+        }
+
+        Ok(offset)
+    }
 }
 
-impl<D: BlockEncryptor, R: Read + Seek> Read for AesReader<D, R> {
+impl<D: BlockEncryptor + Clone, R: Read + Seek> Read for AesReader<D, R> {
     /// Reads encrypted data from the underlying reader, decrypts it and writes the result into the
     /// passed buffer.
     fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
         let read = self.read_decrypt(buf)?;
         Ok(read)
+    }
+}
+
+impl<D: BlockEncryptor + Clone, R: Read + Seek> Seek for AesReader<D, R> {
+    fn seek(&mut self, pos: SeekFrom) -> Result<u64> {
+        match pos {
+            SeekFrom::Start(offset) => self.seek_from_start(offset),
+            SeekFrom::Current(offset) => {
+                if offset == 0 {
+                    let pos = self.reader.seek(pos)?;
+                    Ok(pos - self.iv.len() as u64)
+                } else {
+                    let current = self.seek(SeekFrom::Current(0))?;
+                    let offset = current
+                        .checked_add(offset as u64)
+                        .ok_or(std::io::Error::new(
+                            std::io::ErrorKind::InvalidInput,
+                            "invalid seek to a negative or overflowing position",
+                        ))?;
+                    self.seek_from_start(offset)
+                }
+            }
+            SeekFrom::End(offset) => {
+                let end = self.length - self.mac_length;
+                let offset = end
+                    .checked_sub(offset.wrapping_neg() as u64 + self.iv.len() as u64)
+                    .ok_or(std::io::Error::new(
+                        std::io::ErrorKind::InvalidInput,
+                        "invalid seek to a negative or overflowing position",
+                    ))?;
+                self.seek_from_start(offset)
+            }
+        }
     }
 }
 
@@ -511,4 +568,28 @@ fn dec_read_unaligned() {
         }
     }
     assert_eq!(dec, &orig);
+}
+
+#[test]
+fn dec_after_seek() {
+    let key = [0u8; 16];
+    let orig: Vec<u8> = (0..32).collect();
+
+    let enc = encrypt(&orig);
+
+    let block_dec = AesSafe128Encryptor::new(&key);
+    let hmac = Hmac::new(Sha256::new(), &key);
+    let mut aes = AesReader::new(Cursor::new(&enc), block_dec, hmac).unwrap();
+
+    let mut dec = vec![0u8; 16];
+    aes.seek(SeekFrom::Start(16)).unwrap();
+    aes.read_exact(&mut dec).expect("Decryptor can't read");
+
+    assert_eq!(dec, (16..32).collect::<Vec<u8>>());
+
+    let mut dec = vec![0u8; 16];
+    aes.seek(SeekFrom::End(-32)).unwrap();
+    aes.read_exact(&mut dec).expect("Decryptor can't read");
+
+    assert_eq!(dec, (0..16).collect::<Vec<u8>>());
 }

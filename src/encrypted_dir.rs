@@ -700,3 +700,62 @@ fn change_passphrase() {
     let _ = EncryptedMmapDirectory::open(tmpdir.path(), "password")
         .expect("Can't open the store with the new passphrase");
 }
+
+#[cfg(test)]
+use std::io::{Seek, SeekFrom};
+
+#[test]
+fn read_only_source_as_the_decryptor_reader() {
+    let data = vec![1, 2, 3, 4];
+    let key = [1u8; 32];
+    let mac_key = [2u8; 32];
+
+    let encryptor = AesSafe256Encryptor::new(&key);
+    let mac = Hmac::new(Sha256::new(), &mac_key);
+
+    let mut encrypted_data = Vec::new();
+
+    {
+        let mut writer =
+            AesWriter::new(&mut encrypted_data, encryptor, mac).expect("Can't create writer");
+        writer.write_all(&data).expect("Can't encrypt data");
+    }
+
+    let mut cursor_data = Cursor::new(encrypted_data.clone());
+    let mut source_data = ReadOnlySource::from(encrypted_data);
+
+    let mut read_cursor = Vec::new();
+    let mut read_source = Vec::new();
+
+    cursor_data.read_to_end(&mut read_cursor).unwrap();
+    source_data.read_to_end(&mut read_source).unwrap();
+
+    assert_eq!(read_cursor, read_source);
+
+    cursor_data.seek(SeekFrom::Start(0)).unwrap();
+    source_data.seek(SeekFrom::Start(0)).unwrap();
+
+    let decryptor = AesSafe256Encryptor::new(&key);
+    let mac = Hmac::new(Sha256::new(), &mac_key);
+
+    let mut cursor_reader =
+        AesReader::new(cursor_data, decryptor, mac).expect("Can't create AesReader");
+
+    let decryptor = AesSafe256Encryptor::new(&key);
+    let mac = Hmac::new(Sha256::new(), &mac_key);
+    let mut source_reader =
+        AesReader::new(source_data, decryptor, mac).expect("Can't create AesReader");
+
+    let mut cursor_decrypted = Vec::new();
+    let mut source_decrypted = Vec::new();
+
+    source_reader
+        .read_to_end(&mut source_decrypted)
+        .expect("Can't read decrypted data");
+    cursor_reader
+        .read_to_end(&mut cursor_decrypted)
+        .expect("Can't read decrypted data");
+
+    assert_eq!(data, cursor_decrypted);
+    assert_eq!(data, source_decrypted);
+}
