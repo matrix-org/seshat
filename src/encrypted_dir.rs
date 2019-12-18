@@ -889,29 +889,9 @@ fn composed_read_after_skip() {
     let source = AesReader::new(source, decryptor, mac).expect("Can't create AesReader");
     let mut source = ReadOnlySource::new(source);
 
-    println!(
-        "Positions {} {}",
-        source.seek(SeekFrom::Current(0)).unwrap(),
-        source.data.seek(SeekFrom::Current(0)).unwrap()
-    );
     source.seek(SeekFrom::Start(16)).unwrap();
-    println!(
-        "Positions {} {}",
-        source.seek(SeekFrom::Current(0)).unwrap(),
-        source.data.seek(SeekFrom::Current(0)).unwrap()
-    );
     source.seek(SeekFrom::Start(0)).unwrap();
-    println!(
-        "Positions {} {}",
-        source.seek(SeekFrom::Current(0)).unwrap(),
-        source.data.seek(SeekFrom::Current(0)).unwrap()
-    );
     let mut source = source.slice_from(16);
-    println!(
-        "Positions after slice {} {}",
-        source.seek(SeekFrom::Current(0)).unwrap(),
-        source.data.seek(SeekFrom::Current(0)).unwrap()
-    );
 
     let decrypted_data = source.read_after_skip(0).expect("Can't read after skip");
     assert_eq!(data[16..], decrypted_data[0..]);
