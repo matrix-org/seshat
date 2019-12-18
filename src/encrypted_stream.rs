@@ -170,7 +170,7 @@ impl<E: BlockEncryptor, M: Mac, W: Write> Drop for AesWriter<E, M, W> {
 /// based on given [`CtrMode`][ct]
 ///
 /// [ct]: https://docs.rs/rust-crypto/0.2.36/crypto/blockmodes/struct.CtrMode.html
-pub struct AesReader<D: BlockEncryptor + Clone, R: Read + Seek> {
+pub struct AesReader<D: BlockEncryptor + Clone, R: Read + Seek + Clone> {
     /// Reader to read encrypted data from
     reader: R,
     /// Block encryptor that is used to reset the decryptor.
@@ -182,14 +182,16 @@ pub struct AesReader<D: BlockEncryptor + Clone, R: Read + Seek> {
     /// Indicates wheather eof of the underlying buffer was reached
     eof: bool,
     /// Total length of the reader
-    length: u64,
+    pub(crate) length: u64,
     /// Length of the MAC.
-    mac_length: u64,
+    pub(crate) mac_length: u64,
     /// The IV for our decryptor, used when resetting.
-    iv: Vec<u8>,
+    pub(crate) iv: Vec<u8>,
+
+    pos: u64,
 }
 
-impl<D: BlockEncryptor + Clone, R: Read + Seek> AesReader<D, R> {
+impl<D: BlockEncryptor + Clone, R: Read + Seek + Clone> AesReader<D, R> {
     /// Creates a new AesReader.
     ///
     /// Assumes that the first block of given reader is the IV.
@@ -257,6 +259,7 @@ impl<D: BlockEncryptor + Clone, R: Read + Seek> AesReader<D, R> {
             length: end,
             mac_length: u_mac_length,
             iv,
+            pos: 0,
         })
     }
 
@@ -378,41 +381,75 @@ impl<D: BlockEncryptor + Clone, R: Read + Seek> AesReader<D, R> {
         self.reader.seek(SeekFrom::Start(self.iv.len() as u64))?;
         self.buffer.clear();
         self.eof = false;
+        self.pos = 0;
+
+        let mut buffer = [0u8; BUFFER_SIZE];
+        let mut read: usize = 0;
 
         if offset != 0 {
-            let mut skip = vec![0u8; (offset as u64) as usize];
-            self.read_exact(&mut skip)?;
+            loop {
+                let left_to_read = offset as usize - read;
+
+                if left_to_read < buffer.len() {
+                    self.read_exact(&mut buffer[0..left_to_read as usize])
+                        .expect("Can't read while seeking");
+                    break;
+                } else {
+                    read += self.read(&mut buffer).expect("Can't read while seeking");
+                }
+            }
         }
 
-        Ok(offset)
+        Ok(self.pos)
     }
 }
 
-impl<D: BlockEncryptor + Clone, R: Read + Seek> Read for AesReader<D, R> {
+impl<D: BlockEncryptor + Clone, R: Read + Seek + Clone> Clone for AesReader<D, R> {
+    fn clone(&self) -> Self {
+        let mut reader = self.reader.clone();
+        reader
+            .seek(SeekFrom::Start(self.iv.len() as u64))
+            .expect("Can't seek reader clone to start");
+
+        AesReader {
+            reader,
+            dec: CtrMode::new(self.enc.clone(), self.iv.clone()),
+            enc: self.enc.clone(),
+            buffer: Vec::new(),
+            eof: false,
+            length: self.length,
+            mac_length: self.mac_length,
+            iv: self.iv.clone(),
+            pos: 0,
+        }
+    }
+}
+
+impl<D: BlockEncryptor + Clone, R: Read + Seek + Clone> Read for AesReader<D, R> {
     /// Reads encrypted data from the underlying reader, decrypts it and writes the result into the
     /// passed buffer.
     fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
         let read = self.read_decrypt(buf)?;
+        self.pos += read as u64;
         Ok(read)
     }
 }
 
-impl<D: BlockEncryptor + Clone, R: Read + Seek> Seek for AesReader<D, R> {
+impl<D: BlockEncryptor + Clone, R: Read + Seek + Clone> Seek for AesReader<D, R> {
     fn seek(&mut self, pos: SeekFrom) -> Result<u64> {
         match pos {
             SeekFrom::Start(offset) => self.seek_from_start(offset),
             SeekFrom::Current(offset) => {
                 if offset == 0 {
-                    let pos = self.reader.seek(pos)?;
-                    Ok(pos - self.iv.len() as u64)
+                    Ok(self.pos)
                 } else {
                     let current = self.seek(SeekFrom::Current(0))?;
-                    let offset = current
-                        .checked_add(offset as u64)
-                        .ok_or(std::io::Error::new(
+                    let offset = current.checked_add(offset as u64).ok_or_else(|| {
+                        std::io::Error::new(
                             std::io::ErrorKind::InvalidInput,
                             "invalid seek to a negative or overflowing position",
-                        ))?;
+                        )
+                    })?;
                     self.seek_from_start(offset)
                 }
             }
@@ -420,10 +457,12 @@ impl<D: BlockEncryptor + Clone, R: Read + Seek> Seek for AesReader<D, R> {
                 let end = self.length - self.mac_length;
                 let offset = end
                     .checked_sub(offset.wrapping_neg() as u64 + self.iv.len() as u64)
-                    .ok_or(std::io::Error::new(
-                        std::io::ErrorKind::InvalidInput,
-                        "invalid seek to a negative or overflowing position",
-                    ))?;
+                    .ok_or_else(|| {
+                        std::io::Error::new(
+                            std::io::ErrorKind::InvalidInput,
+                            "invalid seek to a negative or overflowing position",
+                        )
+                    })?;
                 self.seek_from_start(offset)
             }
         }
@@ -476,7 +515,7 @@ fn encrypt_poly1305(data: &[u8]) -> Vec<u8> {
 }
 
 #[cfg(test)]
-fn decrypt<R: Read + Seek>(data: R) -> Vec<u8> {
+fn decrypt<R: Read + Seek + Clone>(data: R) -> Vec<u8> {
     let key = [0u8; 16];
     let block_dec = AesSafe128Encryptor::new(&key);
     let mut dec = Vec::new();
@@ -487,7 +526,7 @@ fn decrypt<R: Read + Seek>(data: R) -> Vec<u8> {
 }
 
 #[cfg(test)]
-fn decrypt_poly1305<R: Read + Seek>(data: R) -> Vec<u8> {
+fn decrypt_poly1305<R: Read + Seek + Clone>(data: R) -> Vec<u8> {
     let key = [0u8; 16];
     let hmac_key = [0u8; 32];
     let block_dec = AesSafe128Encryptor::new(&key);
