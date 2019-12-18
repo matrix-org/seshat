@@ -356,8 +356,10 @@ impl Database {
         index_writer: &mut Writer,
         events: &mut Vec<(Event, Profile)>,
     ) -> Result<()> {
-        Database::write_events_helper(connection, index_writer, events)?;
-        index_writer.commit()?;
+        if !events.is_empty() {
+            Database::write_events_helper(connection, index_writer, events)?;
+            index_writer.commit()?;
+        }
 
         Ok(())
     }
