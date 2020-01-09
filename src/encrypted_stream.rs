@@ -24,37 +24,31 @@ use std::convert::TryFrom;
 use std::io::{Error, ErrorKind, Read, Result, Seek, SeekFrom, Write};
 use std::ops::Neg;
 
-use crypto::blockmodes::CtrMode;
-use crypto::buffer::{BufferResult, ReadBuffer, RefReadBuffer, RefWriteBuffer, WriteBuffer};
-use crypto::mac::{Mac, MacResult};
-use crypto::symmetriccipher::{BlockEncryptor, Decryptor, Encryptor};
+use crypto_mac::{Mac, MacResult};
+
+use aes_ctr::stream_cipher::generic_array::GenericArray;
+use aes_ctr::stream_cipher::{NewStreamCipher, SyncStreamCipher, SyncStreamCipherSeek};
+
 use rand::{thread_rng, Rng};
 
 const BUFFER_SIZE: usize = 8192;
 
-// TODO We may want to generalize our writer/reader to take an Encryptor instead
-// of a BlockEncryptor. This would allow us to swap easily between different
-// encryption algorithms like we can swap between different MAC algorithms. This
-// would require the new() method to take the IV/Nonce as an argument.
-// Chacha20/Poly1305 would be available to us this way.
-
-/// Wraps a [`Write`](https://doc.rust-lang.org/std/io/trait.Write.html) implementation with CTR
-/// based on the given [`BlockEncryptor`][be], additionally authenticates the
+/// Wraps a [`Write`](https://doc.rust-lang.org/std/io/trait.Write.html)
+/// implementation with a [`SyncStreamCipher`][cy], additionally authenticates the
 /// writer with the given [`Mac`][mac]
 ///
-/// [be]: https://docs.rs/rust-crypto/0.2.36/crypto/symmetriccipher/trait.BlockEncryptor.html
-/// [mac]: https://docs.rs/rust-crypto/0.2.36/crypto/mac/trait.Mac.html
-///
-pub struct AesWriter<E: BlockEncryptor, M: Mac, W: Write> {
+/// [be]: https://docs.rs/stream-cipher/0.3.2/stream_cipher/trait.SyncStreamCipher.html
+/// [mac]: https://docs.rs/crypto-mac/0.7.0/crypto_mac/trait.Mac.html
+pub struct AesWriter<E: NewStreamCipher + SyncStreamCipher, M: Mac, W: Write> {
     /// Writer to write encrypted data to
     writer: W,
     /// Encryptor to encrypt data with
-    enc: CtrMode<E>,
+    enc: E,
     mac: M,
     finalized: bool,
 }
 
-impl<E: BlockEncryptor, M: Mac, W: Write> AesWriter<E, M, W> {
+impl<E: NewStreamCipher + SyncStreamCipher, M: Mac, W: Write> AesWriter<E, M, W> {
     /// Creates a new AesWriter with a random IV.
     ///
     /// The IV will be written as first block of the file.
@@ -64,21 +58,34 @@ impl<E: BlockEncryptor, M: Mac, W: Write> AesWriter<E, M, W> {
     /// # Arguments
     ///
     /// * `writer`: Writer to write encrypted data into
-    /// * `enc`: [`BlockEncryptor`][be] to use for encryption
-    /// * `mac`: [`Mac`][mac] to use for encryption
-    ///
-    /// [be]: https://docs.rs/rust-crypto/0.2.36/crypto/symmetriccipher/trait.BlockEncryptor.html
-    /// [mac]: https://docs.rs/rust-crypto/0.2.36/crypto/mac/trait.Mac.html
-    pub fn new(mut writer: W, enc: E, mac: M) -> Result<AesWriter<E, M, W>> {
-        let mut iv = vec![0u8; enc.block_size()];
+    /// * `key`: The encryption key for the stream cipher.
+    /// * `mac_key`: The authentication key for the MAC.
+    /// * `iv_size`: The size of the initialization vector or nonce for the
+    /// streaam cipher.
+    pub fn new(
+        mut writer: W,
+        key: &[u8],
+        mac_key: &[u8],
+        iv_size: usize,
+    ) -> Result<AesWriter<E, M, W>> {
+        let mut iv = vec![0u8; iv_size];
         let mut rng = thread_rng();
-
         rng.try_fill(&mut iv[..])
             .map_err(|e| Error::new(ErrorKind::Other, format!("error generating iv: {:?}", e)))?;
+
+        let mac = M::new_varkey(mac_key)
+            .map_err(|e| Error::new(ErrorKind::Other, format!("error creating mac: {:?}", e)))?;
+
+        let enc = E::new_var(key, &iv).map_err(|e| {
+            Error::new(
+                ErrorKind::Other,
+                format!("Invalid key or iv length: {}", e.to_string()),
+            )
+        })?;
         writer.write_all(&iv)?;
         Ok(AesWriter {
             writer,
-            enc: CtrMode::new(enc, iv),
+            enc,
             mac,
             finalized: false,
         })
@@ -89,7 +96,7 @@ impl<E: BlockEncryptor, M: Mac, W: Write> AesWriter<E, M, W> {
     /// # Arguments
     ///
     /// * `buf`: Plaintext to encrypt and write.
-    fn encrypt_write(&mut self, buf: &[u8], eof: bool) -> Result<usize> {
+    fn encrypt_write(&mut self, buf: &mut [u8]) -> Result<usize> {
         if self.finalized {
             return Err(Error::new(
                 ErrorKind::Other,
@@ -97,24 +104,10 @@ impl<E: BlockEncryptor, M: Mac, W: Write> AesWriter<E, M, W> {
             ));
         }
 
-        let mut read_buf = RefReadBuffer::new(buf);
-        let mut out = [0u8; BUFFER_SIZE];
-        let mut write_buf = RefWriteBuffer::new(&mut out);
-        loop {
-            let res = self
-                .enc
-                .encrypt(&mut read_buf, &mut write_buf, eof)
-                .map_err(|e| Error::new(ErrorKind::Other, format!("encryption error: {:?}", e)))?;
-            let mut enc = write_buf.take_read_buffer();
-            let enc = enc.take_remaining();
-            self.writer.write_all(enc)?;
-            self.mac.input(enc);
-            match res {
-                BufferResult::BufferUnderflow => break,
-                BufferResult::BufferOverflow => {}
-            }
-        }
-        assert_eq!(read_buf.remaining(), 0);
+        self.enc.apply_keystream(buf);
+        self.writer.write_all(buf)?;
+        self.mac.input(buf);
+
         Ok(buf.len())
     }
 
@@ -122,24 +115,25 @@ impl<E: BlockEncryptor, M: Mac, W: Write> AesWriter<E, M, W> {
     pub fn finalize(&mut self) -> Result<()> {
         // If our encryptor is using padding this write will insert it now.
         // Otherwise it will do nothing.
-        self.encrypt_write(&[], true)?;
+        self.encrypt_write(&mut [])?;
 
         // Write our mac after our encrypted data.
-        let mac_result = self.mac.result();
-        self.writer.write_all(mac_result.code())?;
+        let mac_result = self.mac.result_reset();
+        self.writer.write_all(mac_result.code().as_slice())?;
 
         // Mark the file as finalized and flush our underlying writer.
         self.finalized = true;
-        self.flush()?;
+        // self.flush()?;
 
         Ok(())
     }
 }
 
-impl<E: BlockEncryptor, M: Mac, W: Write> Write for AesWriter<E, M, W> {
+impl<E: NewStreamCipher + SyncStreamCipher, M: Mac, W: Write> Write for AesWriter<E, M, W> {
     /// Encrypts the passed buffer and writes the result to the underlying writer.
     fn write(&mut self, buf: &[u8]) -> Result<usize> {
-        let written = self.encrypt_write(buf, false)?;
+        let mut buf = buf.to_owned();
+        let written = self.encrypt_write(&mut buf)?;
         Ok(written)
     }
 
@@ -150,7 +144,7 @@ impl<E: BlockEncryptor, M: Mac, W: Write> Write for AesWriter<E, M, W> {
     }
 }
 
-impl<E: BlockEncryptor, M: Mac, W: Write> Drop for AesWriter<E, M, W> {
+impl<E: NewStreamCipher + SyncStreamCipher, M: Mac, W: Write> Drop for AesWriter<E, M, W> {
     /// Drop our AesWriter adding the MAC at the end of the file and flushing
     /// our buffers.
     fn drop(&mut self) {
@@ -166,26 +160,26 @@ impl<E: BlockEncryptor, M: Mac, W: Write> Drop for AesWriter<E, M, W> {
     }
 }
 
-/// Wraps a [`Read`](https://doc.rust-lang.org/std/io/trait.Read.html) implementation with CTR
-/// based on given [`CtrMode`][ct]
-///
-/// [ct]: https://docs.rs/rust-crypto/0.2.36/crypto/blockmodes/struct.CtrMode.html
-pub struct AesReader<D: BlockEncryptor, R: Read + Seek> {
+/// Wraps a [`Read`](https://doc.rust-lang.org/std/io/trait.Read.html) implementation
+/// with a [`SyncStreamCipher`][ci]
+/// [ci]: https://docs.rs/stream-cipher/0.3.2/stream_cipher/trait.SyncStreamCipher.html
+pub struct AesReader<
+    D: NewStreamCipher + SyncStreamCipher + SyncStreamCipherSeek,
+    R: Read + Seek + Clone,
+> {
     /// Reader to read encrypted data from
     reader: R,
     /// Decryptor to decrypt data with
-    dec: CtrMode<D>,
-    /// Buffer used to store blob needed to find out if we reached eof
-    buffer: Vec<u8>,
-    /// Indicates wheather eof of the underlying buffer was reached
-    eof: bool,
+    dec: D,
     /// Total length of the reader
-    length: u64,
+    pub(crate) length: u64,
     /// Length of the MAC.
-    mac_length: u64,
+    pub(crate) mac_length: u64,
 }
 
-impl<D: BlockEncryptor, R: Read + Seek> AesReader<D, R> {
+impl<D: NewStreamCipher + SyncStreamCipher + SyncStreamCipherSeek, R: Read + Seek + Clone>
+    AesReader<D, R>
+{
     /// Creates a new AesReader.
     ///
     /// Assumes that the first block of given reader is the IV.
@@ -193,14 +187,23 @@ impl<D: BlockEncryptor, R: Read + Seek> AesReader<D, R> {
     /// # Arguments
     ///
     /// * `reader`: Reader to read encrypted data from
-    /// * `dec`: [`BlockDecryptor`][bd] to use for decyrption
-    /// * `mac`: [`Mac`][mac] to use for authentication
-    ///
-    /// [bd]: https://docs.rs/rust-crypto/0.2.36/crypto/symmetriccipher/trait.BlockDecryptor.html
-    /// [mac]: https://docs.rs/rust-crypto/0.2.36/crypto/mac/trait.Mac.html
-    pub fn new<M: Mac>(mut reader: R, dec: D, mut mac: M) -> Result<AesReader<D, R>> {
-        let iv_length = dec.block_size();
-        let mac_length = mac.output_bytes();
+    /// * `key`: The decryption key for the stream cipher.
+    /// * `mac_key`: The authentication key for the MAC.
+    /// * `iv_size`: The size of the initialization vector or nonce for the
+    /// streaam cipher.
+    pub fn new<M: Mac>(
+        mut reader: R,
+        key: &[u8],
+        mac_key: &[u8],
+        iv_size: usize,
+        mac_size: usize,
+    ) -> Result<AesReader<D, R>> {
+        let iv_length = iv_size;
+
+        let mut mac = M::new_varkey(mac_key)
+            .map_err(|e| Error::new(ErrorKind::Other, format!("error creating mac: {:?}", e)))?;
+
+        let mac_length = mac_size;
 
         let u_iv_length = u64::try_from(iv_length)
             .map_err(|_| Error::new(ErrorKind::Other, "IV length is too big"))?;
@@ -225,17 +228,22 @@ impl<D: BlockEncryptor, R: Read + Seek> AesReader<D, R> {
         let seek_back = i_mac_length.neg();
         reader.seek(SeekFrom::End(seek_back))?;
         reader.read_exact(&mut expected_mac)?;
-        let expected_mac = MacResult::new_from_owned(expected_mac);
+
+        let expected_mac = MacResult::new(GenericArray::clone_from_slice(&expected_mac));
 
         reader.seek(SeekFrom::Start(u_iv_length))?;
 
-        let mut eof = false;
+        let mut buffer = vec![0u8; BUFFER_SIZE];
 
-        while !eof {
-            let (buffer, end_of_file) =
-                AesReader::<D, R>::read_until_mac(&mut reader, end, u_mac_length)?;
-            eof = end_of_file;
-            mac.input(&buffer);
+        loop {
+            let read =
+                AesReader::<D, R>::read_until_mac(&mut buffer, &mut reader, end, u_mac_length)?;
+
+            if read == 0 {
+                break;
+            }
+
+            mac.input(&buffer[..read]);
         }
 
         if mac.result() != expected_mac {
@@ -244,146 +252,84 @@ impl<D: BlockEncryptor, R: Read + Seek> AesReader<D, R> {
 
         reader.seek(SeekFrom::Start(u_iv_length))?;
 
+        let dec = D::new_var(&key, &iv).map_err(|e| {
+            Error::new(
+                ErrorKind::Other,
+                format!("Invalid key or iv length: {}", e.to_string()),
+            )
+        })?;
+
         Ok(AesReader {
             reader,
-            dec: CtrMode::new(dec, iv),
-            buffer: Vec::new(),
-            eof: false,
+            dec,
             length: end,
             mac_length: u_mac_length,
         })
     }
 
-    /// Read bytes from a reader until the start of the MAC instead of until the
-    /// end of file.
+    /// Read bytes from a reader and put them into the given buffer, make sure
+    /// to not read the MAC.
     ///
     /// # Arguments
     ///
+    /// * `buffer`: The buffer to fill.
     /// * `reader`: Reader to read encrypted data from
     /// * `total_length`: The total number of bytes that the reader contains.
     /// * `mac_length`: The length of the MAC that is stored the file we are
     /// reading from.
     fn read_until_mac(
+        buffer: &mut [u8],
         reader: &mut R,
         total_length: u64,
         mac_length: u64,
-    ) -> Result<(Vec<u8>, bool)> {
-        let mut buffer = vec![0u8; BUFFER_SIZE];
-        let read = reader.read(&mut buffer)?;
-
+    ) -> Result<usize> {
         let current_pos = reader.seek(SeekFrom::Current(0))?;
         let mac_start = total_length - mac_length;
-        let read_mac_bytes = cmp::max(current_pos - mac_start, 0);
-        let eof = current_pos >= mac_start;
 
-        let read_mac_bytes = usize::try_from(read_mac_bytes).map_err(|_| {
-            Error::new(
-                ErrorKind::Other,
-                "Cannot convert the number of read MAC bytes.",
-            )
-        })?;
+        if current_pos >= mac_start {
+            return Ok(0);
+        }
 
-        buffer.truncate(read - read_mac_bytes);
+        let max_to_read = cmp::min(buffer.len(), (mac_start - current_pos) as usize);
+        let read = reader.read(&mut buffer[..max_to_read])?;
 
-        Ok((buffer, eof))
+        Ok(read)
     }
 
-    /// Reads at max BUFFER_SIZE bytes, handles potential eof and returns the
-    /// buffer as Vec<u8>
-    fn fill_buf(&mut self) -> Result<Vec<u8>> {
-        let (buffer, eof) =
-            AesReader::<D, R>::read_until_mac(&mut self.reader, self.length, self.mac_length)?;
-        self.eof = eof;
-        Ok(buffer)
-    }
-
-    /// Reads and decrypts data from the underlying stream and writes it into the passed buffer.
+    /// Reads and decrypts data from the underlying stream and writes it into the
+    /// passed buffer.
     ///
     /// # Arguments
     ///
     /// * `buf`: Buffer to write decrypted data into.
     fn read_decrypt(&mut self, buf: &mut [u8]) -> Result<usize> {
-        // If this is the first iteration, fill our internal buffer
-        if self.buffer.is_empty() && !self.eof {
-            self.buffer = self.fill_buf()?;
-        }
-
-        let buf_len = buf.len();
-        let mut write_buf = RefWriteBuffer::new(buf);
-        let res;
-        let remaining;
-        {
-            let mut read_buf = RefReadBuffer::new(&self.buffer);
-
-            // Test if our decryptor still has enough decrypted data or we have
-            // enough buffered.
-            res = self
-                .dec
-                .decrypt(&mut read_buf, &mut write_buf, self.eof)
-                .map_err(|e| Error::new(ErrorKind::Other, format!("decryption error: {:?}", e)))?;
-            remaining = read_buf.remaining();
-        }
-        // Keep the remaining bytes
-        let len = self.buffer.len();
-        self.buffer.drain(..(len - remaining));
-
-        // If we were able to decrypt the whole file, return early.
-        match res {
-            BufferResult::BufferOverflow => return Ok(buf_len),
-            BufferResult::BufferUnderflow if self.eof => return Ok(write_buf.position()),
-            _ => {}
-        }
-
-        // Otherwise read/decrypt more.
-        let mut dec_len = 0;
-        // If the reader doesn't return enough so that we can decrypt a block,
-        // we need to continue reading until we have enough data to return one
-        // decrypted block, or until we reach eof.
-        while dec_len == 0 && !self.eof {
-            let eof_buffer = self.fill_buf()?;
-            let remaining;
-            {
-                let mut read_buf = RefReadBuffer::new(&self.buffer);
-                self.dec
-                    .decrypt(&mut read_buf, &mut write_buf, self.eof)
-                    .map_err(|e| {
-                        Error::new(ErrorKind::Other, format!("decryption error: {:?}", e))
-                    })?;
-                let mut dec = write_buf.take_read_buffer();
-                let dec = dec.take_remaining();
-                dec_len = dec.len();
-                remaining = read_buf.remaining();
-            }
-            // Keep the remaining bytes
-            let len = self.buffer.len();
-            self.buffer.drain(..(len - remaining));
-            // Append the newly read bytes
-            self.buffer.extend(eof_buffer);
-        }
-        Ok(dec_len)
+        let read =
+            AesReader::<D, R>::read_until_mac(buf, &mut self.reader, self.length, self.mac_length)?;
+        self.dec.apply_keystream(buf);
+        Ok(read)
     }
 }
 
-impl<D: BlockEncryptor, R: Read + Seek> Read for AesReader<D, R> {
-    /// Reads encrypted data from the underlying reader, decrypts it and writes the result into the
-    /// passed buffer.
+impl<D: NewStreamCipher + SyncStreamCipher + SyncStreamCipherSeek, R: Read + Seek + Clone> Read
+    for AesReader<D, R>
+{
+    /// Reads encrypted data from the underlying reader, decrypts it and writes the
+    /// result into the passed buffer.
     fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
         let read = self.read_decrypt(buf)?;
         Ok(read)
     }
 }
 
-#[cfg(test)]
-use crypto::aessafe::AesSafe128Encryptor;
 
 #[cfg(test)]
-use crypto::hmac::Hmac;
+use aes_ctr::Aes128Ctr;
 
 #[cfg(test)]
-use crypto::poly1305::Poly1305;
+use hmac::Hmac;
 
 #[cfg(test)]
-use crypto::sha2::Sha256;
+use sha2::Sha256;
 
 #[cfg(test)]
 use std::io::Cursor;
@@ -393,50 +339,20 @@ fn encrypt(data: &[u8]) -> Vec<u8> {
     let key = [0u8; 16];
     let hmac_key = [0u8; 16];
 
-    let mac = Hmac::new(Sha256::new(), &hmac_key);
-    let block_enc = AesSafe128Encryptor::new(&key);
     let mut enc = Vec::new();
     {
-        let mut aes = AesWriter::new(&mut enc, block_enc, mac).unwrap();
+        let mut aes =
+            AesWriter::<Aes128Ctr, Hmac<Sha256>, _>::new(&mut enc, &key, &hmac_key, 16).unwrap();
         aes.write_all(&data).unwrap();
     }
     enc
 }
 
 #[cfg(test)]
-fn encrypt_poly1305(data: &[u8]) -> Vec<u8> {
+fn decrypt<R: Read + Seek + Clone>(data: R) -> Vec<u8> {
     let key = [0u8; 16];
-    let hmac_key = [0u8; 32];
-
-    let mac = Poly1305::new(&hmac_key);
-    let block_enc = AesSafe128Encryptor::new(&key);
-    let mut enc = Vec::new();
-    {
-        let mut aes = AesWriter::new(&mut enc, block_enc, mac).unwrap();
-        aes.write_all(&data).unwrap();
-    }
-    enc
-}
-
-#[cfg(test)]
-fn decrypt<R: Read + Seek>(data: R) -> Vec<u8> {
-    let key = [0u8; 16];
-    let block_dec = AesSafe128Encryptor::new(&key);
     let mut dec = Vec::new();
-    let hmac = Hmac::new(Sha256::new(), &key);
-    let mut aes = AesReader::new(data, block_dec, hmac).unwrap();
-    aes.read_to_end(&mut dec).unwrap();
-    dec
-}
-
-#[cfg(test)]
-fn decrypt_poly1305<R: Read + Seek>(data: R) -> Vec<u8> {
-    let key = [0u8; 16];
-    let hmac_key = [0u8; 32];
-    let block_dec = AesSafe128Encryptor::new(&key);
-    let mut dec = Vec::new();
-    let hmac = Poly1305::new(&hmac_key);
-    let mut aes = AesReader::new(data, block_dec, hmac).unwrap();
+    let mut aes = AesReader::<Aes128Ctr, _>::new::<Hmac<Sha256>>(data, &key, &key, 16, 32).unwrap();
     aes.read_to_end(&mut dec).unwrap();
     dec
 }
@@ -447,11 +363,10 @@ fn enc_unaligned() {
     let key = [0u8; 16];
     let hmac_key = [0u8; 16];
 
-    let mac = Hmac::new(Sha256::new(), &hmac_key);
-    let block_enc = AesSafe128Encryptor::new(&key);
     let mut enc = Vec::new();
     {
-        let mut aes = AesWriter::new(&mut enc, block_enc, mac).unwrap();
+        let mut aes =
+            AesWriter::<Aes128Ctr, Hmac<Sha256>, _>::new(&mut enc, &key, &hmac_key, 16).unwrap();
         for chunk in orig.chunks(3) {
             aes.write_all(&chunk).unwrap();
         }
@@ -462,17 +377,9 @@ fn enc_unaligned() {
 
 #[test]
 fn enc_dec_single() {
-    let orig = [0u8; 15];
+    let orig = [0u8; 16];
     let enc = encrypt(&orig);
     let dec = decrypt(Cursor::new(&enc));
-    assert_eq!(dec, &orig);
-}
-
-#[test]
-fn enc_dec_single_poly() {
-    let orig = [0u8; 15];
-    let enc = encrypt_poly1305(&orig);
-    let dec = decrypt_poly1305(Cursor::new(&enc));
     assert_eq!(dec, &orig);
 }
 
@@ -485,23 +392,15 @@ fn enc_dec_single_full() {
 }
 
 #[test]
-fn enc_dec_single_full_poly() {
-    let orig = [0u8; 16];
-    let enc = encrypt_poly1305(&orig);
-    let dec = decrypt_poly1305(Cursor::new(&enc));
-    assert_eq!(dec, &orig);
-}
-
-#[test]
 fn dec_read_unaligned() {
     let orig = [0u8; 16];
     let enc = encrypt(&orig);
 
     let key = [0u8; 16];
-    let block_dec = AesSafe128Encryptor::new(&key);
     let mut dec: Vec<u8> = Vec::new();
-    let hmac = Hmac::new(Sha256::new(), &key);
-    let mut aes = AesReader::new(Cursor::new(&enc), block_dec, hmac).unwrap();
+    let mut aes =
+        AesReader::<Aes128Ctr, _>::new::<Hmac<Sha256>>(Cursor::new(&enc), &key, &key, 16, 32)
+            .unwrap();
     loop {
         let mut buf = [0u8; 3];
         let read = aes.read(&mut buf).unwrap();
