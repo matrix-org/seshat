@@ -104,7 +104,12 @@ impl<E: NewStreamCipher + SyncStreamCipher, M: Mac, W: Write> AesWriter<E, M, W>
             ));
         }
 
-        self.enc.apply_keystream(buf);
+        self.enc.try_apply_keystream(buf).map_err(|_| {
+            Error::new(
+                ErrorKind::Other,
+                "Encryption error, reached end of the keystream.",
+            )
+        })?;
         self.writer.write_all(buf)?;
         self.mac.input(buf);
 
@@ -305,7 +310,12 @@ impl<D: NewStreamCipher + SyncStreamCipher + SyncStreamCipherSeek, R: Read + See
     fn read_decrypt(&mut self, buf: &mut [u8]) -> Result<usize> {
         let read =
             AesReader::<D, R>::read_until_mac(buf, &mut self.reader, self.length, self.mac_length)?;
-        self.dec.apply_keystream(buf);
+        self.dec.try_apply_keystream(buf).map_err(|_| {
+            Error::new(
+                ErrorKind::Other,
+                "Decryption error, reached end of the keystream.",
+            )
+        })?;
         Ok(read)
     }
 }
@@ -320,7 +330,6 @@ impl<D: NewStreamCipher + SyncStreamCipher + SyncStreamCipherSeek, R: Read + See
         Ok(read)
     }
 }
-
 
 #[cfg(test)]
 use aes_ctr::Aes128Ctr;

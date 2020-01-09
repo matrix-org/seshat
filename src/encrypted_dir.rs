@@ -38,8 +38,7 @@ use tantivy::directory::error::{
 use tantivy::directory::Directory;
 use tantivy::directory::WatchHandle;
 use tantivy::directory::{
-    AntiCallToken, DirectoryLock, Lock, ReadOnlySource, TerminatingWrite,
-    WatchCallback, WritePtr,
+    AntiCallToken, DirectoryLock, Lock, ReadOnlySource, TerminatingWrite, WatchCallback, WritePtr,
 };
 
 use zeroize::Zeroizing;
@@ -378,7 +377,12 @@ impl EncryptedMmapDirectory {
         })?;
 
         let mut out = Zeroizing::new(encrypted_key);
-        decryptor.apply_keystream(&mut out);
+        decryptor.try_apply_keystream(&mut out).map_err(|_| {
+            IoError::new(
+                ErrorKind::Other,
+                "Decryption error, reached end of the keystream.",
+            )
+        })?;
 
         Ok((pbkdf_count, out))
     }
@@ -550,7 +554,9 @@ impl Directory for EncryptedMmapDirectory {
         .map_err(TvIoError::from)?;
 
         let mut decrypted = Vec::new();
-        reader.read_to_end(&mut decrypted).map_err(TvIoError::from)?;
+        reader
+            .read_to_end(&mut decrypted)
+            .map_err(TvIoError::from)?;
 
         Ok(ReadOnlySource::from(decrypted))
     }
