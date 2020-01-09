@@ -24,10 +24,10 @@ use std::convert::TryFrom;
 use std::io::{Error, ErrorKind, Read, Result, Seek, SeekFrom, Write};
 use std::ops::Neg;
 
-use crypto_mac::{Mac, MacResult};
-
 use aes_ctr::stream_cipher::generic_array::GenericArray;
 use aes_ctr::stream_cipher::{NewStreamCipher, SyncStreamCipher, SyncStreamCipherSeek};
+use crypto_mac::{Mac, MacResult};
+use zeroize::Zeroizing;
 
 use rand::{thread_rng, Rng};
 
@@ -180,6 +180,10 @@ pub struct AesReader<
     pub(crate) length: u64,
     /// Length of the MAC.
     pub(crate) mac_length: u64,
+    /// The IV for our decryptor, used when resetting.
+    pub(crate) iv: Vec<u8>,
+    /// The decryption key, used to clone the reader.
+    pub(crate) key: Zeroizing<Vec<u8>>,
 }
 
 impl<D: NewStreamCipher + SyncStreamCipher + SyncStreamCipherSeek, R: Read + Seek + Clone>
@@ -269,6 +273,8 @@ impl<D: NewStreamCipher + SyncStreamCipher + SyncStreamCipherSeek, R: Read + See
             dec,
             length: end,
             mac_length: u_mac_length,
+            iv,
+            key: Zeroizing::from(key.to_owned()),
         })
     }
 
@@ -318,6 +324,33 @@ impl<D: NewStreamCipher + SyncStreamCipher + SyncStreamCipherSeek, R: Read + See
         })?;
         Ok(read)
     }
+
+    fn seek_from_start(&mut self, offset: u64) -> Result<u64> {
+        self.dec.seek(offset);
+        self.reader
+            .seek(SeekFrom::Start(self.iv.len() as u64 + offset))?;
+        Ok(self.dec.current_pos())
+    }
+}
+
+impl<D: NewStreamCipher + SyncStreamCipher + SyncStreamCipherSeek, R: Read + Seek + Clone> Clone
+    for AesReader<D, R>
+{
+    fn clone(&self) -> Self {
+        let mut reader = self.reader.clone();
+        reader
+            .seek(SeekFrom::Start(self.iv.len() as u64))
+            .expect("Can't seek reader clone to start");
+
+        AesReader {
+            reader,
+            dec: D::new_var(&self.key, &self.iv).expect("Can't create new decryptor"),
+            length: self.length,
+            mac_length: self.mac_length,
+            iv: self.iv.clone(),
+            key: self.key.clone(),
+        }
+    }
 }
 
 impl<D: NewStreamCipher + SyncStreamCipher + SyncStreamCipherSeek, R: Read + Seek + Clone> Read
@@ -328,6 +361,42 @@ impl<D: NewStreamCipher + SyncStreamCipher + SyncStreamCipherSeek, R: Read + See
     fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
         let read = self.read_decrypt(buf)?;
         Ok(read)
+    }
+}
+
+impl<D: NewStreamCipher + SyncStreamCipher + SyncStreamCipherSeek, R: Read + Seek + Clone> Seek
+    for AesReader<D, R>
+{
+    fn seek(&mut self, pos: SeekFrom) -> Result<u64> {
+        match pos {
+            SeekFrom::Start(offset) => self.seek_from_start(offset),
+            SeekFrom::Current(offset) => {
+                if offset == 0 {
+                    Ok(self.dec.current_pos())
+                } else {
+                    let current = self.seek(SeekFrom::Current(0))?;
+                    let offset = current.checked_add(offset as u64).ok_or_else(|| {
+                        std::io::Error::new(
+                            std::io::ErrorKind::InvalidInput,
+                            "invalid seek to a negative or overflowing position",
+                        )
+                    })?;
+                    self.seek_from_start(offset)
+                }
+            }
+            SeekFrom::End(offset) => {
+                let end = self.length - self.mac_length;
+                let offset = end
+                    .checked_sub(offset.wrapping_neg() as u64 + self.iv.len() as u64)
+                    .ok_or_else(|| {
+                        std::io::Error::new(
+                            std::io::ErrorKind::InvalidInput,
+                            "invalid seek to a negative or overflowing position",
+                        )
+                    })?;
+                self.seek_from_start(offset)
+            }
+        }
     }
 }
 
@@ -419,4 +488,28 @@ fn dec_read_unaligned() {
         }
     }
     assert_eq!(dec, &orig);
+}
+
+#[test]
+fn dec_after_seek() {
+    let key = [0u8; 16];
+    let orig: Vec<u8> = (0..32).collect();
+
+    let enc = encrypt(&orig);
+
+    let mut aes =
+        AesReader::<Aes128Ctr, _>::new::<Hmac<Sha256>>(Cursor::new(&enc), &key, &key, 16, 32)
+            .unwrap();
+
+    let mut dec = vec![0u8; 16];
+    aes.seek(SeekFrom::Start(16)).unwrap();
+    aes.read_exact(&mut dec).expect("Decryptor can't read");
+
+    assert_eq!(dec, (16..32).collect::<Vec<u8>>());
+
+    let mut dec = vec![0u8; 16];
+    aes.seek(SeekFrom::End(-32)).unwrap();
+    aes.read_exact(&mut dec).expect("Decryptor can't read");
+
+    assert_eq!(dec, (0..16).collect::<Vec<u8>>());
 }
