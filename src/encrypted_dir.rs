@@ -15,13 +15,13 @@
 use rand::{thread_rng, Rng};
 use std::fs::File;
 use std::io::Error as IoError;
-use std::io::{BufWriter, Cursor, ErrorKind, Read, Write};
+use std::io::{BufWriter, Cursor, ErrorKind, Read, Seek, Write};
 use std::path::{Path, PathBuf};
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 
 use aes_ctr::stream_cipher::generic_array::GenericArray;
-use aes_ctr::stream_cipher::{NewStreamCipher, SyncStreamCipher};
+use aes_ctr::stream_cipher::{NewStreamCipher, SyncStreamCipher, SyncStreamCipherSeek};
 use aes_ctr::Aes256Ctr;
 use crypto_mac::Mac;
 use crypto_mac::MacResult;
@@ -38,8 +38,10 @@ use tantivy::directory::error::{
 use tantivy::directory::Directory;
 use tantivy::directory::WatchHandle;
 use tantivy::directory::{
-    AntiCallToken, DirectoryLock, Lock, ReadOnlySource, TerminatingWrite, WatchCallback, WritePtr,
+    AntiCallToken, DirectoryLock, Lock, ReadOnlyData, ReadOnlySource, TerminatingWrite,
+    WatchCallback, WritePtr,
 };
+use tantivy::postings::HasLen;
 
 use zeroize::Zeroizing;
 
@@ -544,8 +546,8 @@ impl Directory for EncryptedMmapDirectory {
     fn open_read(&self, path: &Path) -> Result<ReadOnlySource, OpenReadError> {
         let source = self.mmap_dir.open_read(path)?;
 
-        let mut reader = AesReader::<Aes256Ctr, _>::new::<Hmac<Sha256>>(
-            Cursor::new(source.as_slice()),
+        let reader = AesReader::<Aes256Ctr, _>::new::<Hmac<Sha256>>(
+            source,
             &self.encryption_key,
             &self.mac_key,
             IV_SIZE,
@@ -553,12 +555,7 @@ impl Directory for EncryptedMmapDirectory {
         )
         .map_err(TvIoError::from)?;
 
-        let mut decrypted = Vec::new();
-        reader
-            .read_to_end(&mut decrypted)
-            .map_err(TvIoError::from)?;
-
-        Ok(ReadOnlySource::from(decrypted))
+        Ok(ReadOnlySource::new(reader))
     }
 
     fn delete(&self, path: &Path) -> Result<(), DeleteError> {
@@ -644,6 +641,26 @@ impl<E: NewStreamCipher + SyncStreamCipher, M: Mac, W: Write> TerminatingWrite
     }
 }
 
+impl<
+        D: NewStreamCipher + SyncStreamCipher + SyncStreamCipherSeek,
+        R: Read + Seek + Send + Sync + Clone,
+    > HasLen for AesReader<D, R>
+{
+    fn len(&self) -> usize {
+        (self.length - self.iv.len() as u64 - self.mac_length) as usize
+    }
+}
+
+impl<
+        D: NewStreamCipher + SyncStreamCipher + SyncStreamCipherSeek + Send + Sync + 'static,
+        R: Read + Seek + Send + Sync + Clone + 'static,
+    > ReadOnlyData for AesReader<D, R>
+{
+    fn snapshot(&self) -> Box<dyn ReadOnlyData> {
+        Box::new(self.clone())
+    }
+}
+
 #[cfg(test)]
 use tempfile::tempdir;
 
@@ -689,4 +706,198 @@ fn change_passphrase() {
     );
     let _ = EncryptedMmapDirectory::open(tmpdir.path(), "password")
         .expect("Can't open the store with the new passphrase");
+}
+
+#[cfg(test)]
+use std::io::SeekFrom;
+
+#[test]
+fn read_only_source_as_the_decryptor_reader() {
+    let data = vec![1, 2, 3, 4];
+    let key = [1u8; 32];
+    let mac_key = [2u8; 32];
+
+    let mut encrypted_data = Vec::new();
+
+    {
+        let mut writer = AesWriter::<Aes256Ctr, Hmac<Sha256>, _>::new(
+            &mut encrypted_data,
+            &key,
+            &mac_key,
+            IV_SIZE,
+        )
+        .expect("Can't create writer");
+        writer.write_all(&data).expect("Can't encrypt data");
+    }
+
+    let mut cursor_data = Cursor::new(encrypted_data.clone());
+    let mut source_data = ReadOnlySource::from(encrypted_data);
+
+    let mut read_cursor = Vec::new();
+    let mut read_source = Vec::new();
+
+    cursor_data.read_to_end(&mut read_cursor).unwrap();
+    source_data.read_to_end(&mut read_source).unwrap();
+
+    assert_eq!(read_cursor, read_source);
+
+    cursor_data.seek(SeekFrom::Start(0)).unwrap();
+    source_data.seek(SeekFrom::Start(0)).unwrap();
+
+    let mut cursor_reader = AesReader::<Aes256Ctr, _>::new::<Hmac<Sha256>>(
+        cursor_data,
+        &key,
+        &mac_key,
+        IV_SIZE,
+        MAC_LENGTH,
+    )
+    .expect("Can't create AesReader");
+
+    let mut source_reader = AesReader::<Aes256Ctr, _>::new::<Hmac<Sha256>>(
+        source_data,
+        &key,
+        &mac_key,
+        IV_SIZE,
+        MAC_LENGTH,
+    )
+    .expect("Can't create AesReader");
+
+    let mut cursor_decrypted = Vec::new();
+    let mut source_decrypted = Vec::new();
+
+    source_reader
+        .read_to_end(&mut source_decrypted)
+        .expect("Can't read decrypted data");
+    cursor_reader
+        .read_to_end(&mut cursor_decrypted)
+        .expect("Can't read decrypted data");
+
+    assert_eq!(data, cursor_decrypted);
+    assert_eq!(data, source_decrypted);
+}
+
+#[test]
+fn read_only_source_wrapping_aesreader() {
+    let data: Vec<u8> = (0..32).collect();
+    let key = [1u8; 32];
+    let mac_key = [2u8; 32];
+
+    let mut encrypted_data = Vec::new();
+
+    {
+        let mut writer = AesWriter::<Aes256Ctr, Hmac<Sha256>, _>::new(
+            &mut encrypted_data,
+            &key,
+            &mac_key,
+            IV_SIZE,
+        )
+        .expect("Can't create writer");
+        writer.write_all(&data).expect("Can't encrypt data");
+    }
+
+    let source = ReadOnlySource::from(encrypted_data);
+
+    let aesreader =
+        AesReader::<Aes256Ctr, _>::new::<Hmac<Sha256>>(source, &key, &mac_key, IV_SIZE, MAC_LENGTH)
+            .expect("Can't create AesReader");
+
+    let mut source = ReadOnlySource::new(aesreader);
+
+    let mut decrypted_data = Vec::new();
+
+    source
+        .read_to_end(&mut decrypted_data)
+        .expect("Can't read decrypted data");
+    assert_eq!(data, decrypted_data);
+
+    let mut sliced_source = source.slice_from(16);
+    let decrypted_data = sliced_source.read_all().expect("Can't read decrypted data");
+
+    assert_eq!(data[16..], decrypted_data[0..]);
+}
+
+#[test]
+fn aesreader_clone() {
+    let data: Vec<u8> = (0..32).collect();
+    let key = [1u8; 32];
+    let mac_key = [2u8; 32];
+
+    let mut encrypted_data = Vec::new();
+
+    {
+        let mut writer = AesWriter::<Aes256Ctr, Hmac<Sha256>, _>::new(
+            &mut encrypted_data,
+            &key,
+            &mac_key,
+            IV_SIZE,
+        )
+        .expect("Can't create writer");
+        writer.write_all(&data).expect("Can't encrypt data");
+    }
+
+    let source = ReadOnlySource::from(encrypted_data);
+
+    let aesreader =
+        AesReader::<Aes256Ctr, _>::new::<Hmac<Sha256>>(source, &key, &mac_key, IV_SIZE, MAC_LENGTH)
+            .expect("Can't create AesReader");
+
+    let mut source = ReadOnlySource::new(aesreader);
+
+    let mut decrypted_data = Vec::new();
+
+    source
+        .read_to_end(&mut decrypted_data)
+        .expect("Can't read decrypted data");
+    assert_eq!(data, decrypted_data);
+    assert!(0 < source.seek(SeekFrom::Current(0)).unwrap());
+
+    let mut cloned_source = source.clone();
+
+    assert!(0 < source.seek(SeekFrom::Current(0)).unwrap());
+    assert_eq!(
+        0,
+        cloned_source.seek(SeekFrom::Current(0)).unwrap(),
+        "Didn't seek to start"
+    );
+
+    let mut decrypted_data = Vec::new();
+    cloned_source
+        .read_to_end(&mut decrypted_data)
+        .expect("Can't read decrypted data");
+
+    assert_eq!(data, decrypted_data);
+}
+
+#[test]
+fn composed_read_after_skip() {
+    let data: Vec<u8> = (0..32).collect();
+    let key = [1u8; 32];
+    let mac_key = [2u8; 32];
+
+    let mut encrypted_data = Vec::new();
+    {
+        let mut writer = AesWriter::<Aes256Ctr, Hmac<Sha256>, _>::new(
+            &mut encrypted_data,
+            &key,
+            &mac_key,
+            IV_SIZE,
+        )
+        .expect("Can't create writer");
+        writer.write_all(&data).expect("Can't encrypt data");
+    }
+
+    let source = ReadOnlySource::from(encrypted_data);
+
+    let source =
+        AesReader::<Aes256Ctr, _>::new::<Hmac<Sha256>>(source, &key, &mac_key, IV_SIZE, MAC_LENGTH)
+            .expect("Can't create AesReader");
+
+    let mut source = ReadOnlySource::new(source);
+
+    source.seek(SeekFrom::Start(16)).unwrap();
+    source.seek(SeekFrom::Start(0)).unwrap();
+    let mut source = source.slice_from(16);
+
+    let decrypted_data = source.read_all().expect("Can't read after skip");
+    assert_eq!(data[16..], decrypted_data[0..]);
 }
