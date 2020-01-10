@@ -238,7 +238,7 @@ impl<D: NewStreamCipher + SyncStreamCipher + SyncStreamCipherSeek, R: Read + See
 
         reader.seek(SeekFrom::Start(u_iv_length))?;
 
-        let mut buffer = vec![0u8; BUFFER_SIZE];
+        let mut buffer = [0u8; BUFFER_SIZE];
 
         loop {
             let read =
