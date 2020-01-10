@@ -352,11 +352,13 @@ impl Database {
     }
 
     fn write_queued_events(
-        connection: &rusqlite::Connection,
+        connection: &mut rusqlite::Connection,
         index_writer: &mut Writer,
         events: &mut Vec<(Event, Profile)>,
     ) -> Result<()> {
-        Database::write_events_helper(connection, index_writer, events)?;
+        let transaction = connection.transaction()?;
+        Database::write_events_helper(&transaction, index_writer, events)?;
+        transaction.commit()?;
         index_writer.commit()?;
 
         Ok(())
@@ -401,7 +403,7 @@ impl Database {
                     ThreadMessage::Event(e) => events.push(e),
                     ThreadMessage::Write(sender) => {
                         let ret = Database::write_queued_events(
-                            &connection,
+                            &mut connection,
                             &mut index_writer,
                             &mut events,
                         );
