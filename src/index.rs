@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::path::Path;
+use std::time::Duration;
 use tantivy as tv;
 use tantivy::tokenizer::Tokenizer;
 
@@ -32,6 +33,28 @@ use crate::japanese_tokenizer::TinySegmenterTokenizer;
 // We give Tantivy 50MB of heap size, which would spawn up to 16 writer threads
 // given a CPU with 16 or more cores.
 const TANTIVY_WRITER_HEAP_SIZE: usize = 50_000_000;
+
+// Tantivy doesn't behave nicely if `commit()` is called too often on the index
+// writer. A commit means that Tantivy will spawn threads that will try to merge
+// index segments together, that is, it tries to merge a bunch of smaller files
+// into one larger.
+//
+// If users call commit faster than those threads manage to merge the segments
+// the number of spawned threads keeps on increasing.
+//
+// To mitigate this we limit the commit rate using the following constants. We
+// either wait for 500 events to be queued up or wait 5 seconds.
+//
+// Those constants have been picked empirically by running the database example.
+// The COMMIT_TIME is fairly conservative. This does mean that users will have
+// to wait 5 seconds before they will manage to see search results for newly
+// added events.
+
+/// How many events should we add to the index before we are allowed to commit.
+const COMMIT_RATE: usize = 500;
+/// How long should we wait between commits if there aren't enough events
+/// committed.
+const COMMIT_TIME: Duration = Duration::from_secs(5);
 
 #[cfg(test)]
 use tempfile::TempDir;
@@ -55,12 +78,32 @@ pub(crate) struct Writer {
     pub(crate) topic_field: tv::schema::Field,
     pub(crate) name_field: tv::schema::Field,
     pub(crate) event_id_field: tv::schema::Field,
+    pub(crate) added_events: usize,
+    pub(crate) commit_timestamp: std::time::Instant,
     room_id_field: tv::schema::Field,
 }
 
 impl Writer {
-    pub fn commit(&mut self) -> Result<(), tv::Error> {
-        self.inner.commit()?;
+    pub fn commit(&mut self) -> Result<bool, tv::Error> {
+        self.commit_helper(false)
+    }
+
+    fn commit_helper(&mut self, force: bool) -> Result<bool, tv::Error> {
+        if force
+            || self.added_events >= COMMIT_RATE
+            || self.commit_timestamp.elapsed() >= COMMIT_TIME
+        {
+            self.inner.commit()?;
+            self.added_events = 0;
+            self.commit_timestamp = std::time::Instant::now();
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
+    pub fn force_commit(&mut self) -> Result<(), tv::Error> {
+        self.commit_helper(true)?;
         Ok(())
     }
 
@@ -258,6 +301,8 @@ impl Index {
             name_field: self.name_field,
             event_id_field: self.event_id_field,
             room_id_field: self.room_id_field,
+            added_events: 0,
+            commit_timestamp: std::time::Instant::now(),
         })
     }
 }
@@ -271,7 +316,7 @@ fn add_an_event() {
     let mut writer = index.get_writer().unwrap();
 
     writer.add_event(&EVENT);
-    writer.commit().unwrap();
+    writer.force_commit().unwrap();
     index.reload().unwrap();
 
     let searcher = index.get_searcher();
@@ -298,7 +343,7 @@ fn add_events_to_differing_rooms() {
     writer.add_event(&EVENT);
     writer.add_event(&event2);
 
-    writer.commit().unwrap();
+    writer.force_commit().unwrap();
     index.reload().unwrap();
 
     let searcher = index.get_searcher();
@@ -322,7 +367,7 @@ fn switch_languages() {
     let mut writer = index.get_writer().unwrap();
 
     writer.add_event(&EVENT);
-    writer.commit().unwrap();
+    writer.force_commit().unwrap();
     index.reload().unwrap();
 
     let searcher = index.get_searcher();
@@ -353,7 +398,7 @@ fn japanese_tokenizer() {
         writer.add_event(event);
     }
 
-    writer.commit().unwrap();
+    writer.force_commit().unwrap();
     index.reload().unwrap();
 
     let searcher = index.get_searcher();

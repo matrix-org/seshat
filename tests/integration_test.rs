@@ -151,7 +151,7 @@ fn save_and_search() {
     let profile = Profile::new("Alice", "");
 
     db.add_event(EVENT.clone(), profile);
-    db.commit().unwrap();
+    db.force_commit().unwrap();
     db.reload().unwrap();
 
     let result = db.search("Test", &Default::default()).unwrap();
@@ -168,7 +168,7 @@ fn duplicate_events() {
     db.add_event(EVENT.clone(), profile.clone());
     db.add_event(EVENT.clone(), profile);
 
-    db.commit().unwrap();
+    db.force_commit().unwrap();
     db.reload().unwrap();
 
     let searcher = db.get_searcher();
@@ -229,7 +229,7 @@ fn get_size() {
 
         db.add_event(event, profile.clone());
     }
-    db.commit().unwrap();
+    db.force_commit().unwrap();
     assert!(db.get_size().unwrap() > 0);
 }
 
@@ -241,7 +241,7 @@ fn add_differing_events() {
 
     db.add_event(EVENT.clone(), profile.clone());
     db.add_event(TOPIC_EVENT.clone(), profile);
-    db.commit().unwrap();
+    db.force_commit().unwrap();
     db.reload().unwrap();
 
     let searcher = db.get_searcher();
@@ -257,7 +257,7 @@ fn search_with_specific_key() {
     let searcher = db.get_searcher();
 
     db.add_event(EVENT.clone(), profile.clone());
-    db.commit().unwrap();
+    db.force_commit().unwrap();
     db.reload().unwrap();
 
     let result = searcher
@@ -266,7 +266,7 @@ fn search_with_specific_key() {
     assert!(result.is_empty());
 
     db.add_event(TOPIC_EVENT.clone(), profile);
-    db.commit().unwrap();
+    db.force_commit().unwrap();
     db.reload().unwrap();
 
     let searcher = db.get_searcher();
@@ -298,7 +298,7 @@ fn encrypted_save_and_search() {
     let profile = Profile::new("Alice", "");
 
     db.add_event(EVENT.clone(), profile);
-    db.commit().unwrap();
+    db.force_commit().unwrap();
     db.reload().unwrap();
 
     let result = db.search("Test", &Default::default()).unwrap();
@@ -315,7 +315,7 @@ fn load_file_events() {
     db.add_event(EVENT.clone(), profile.clone());
     db.add_event(FILE_EVENT.clone(), profile.clone());
     db.add_event(IMAGE_EVENT.clone(), profile);
-    db.commit().unwrap();
+    db.force_commit().unwrap();
     db.reload().unwrap();
 
     let connection = db.get_connection().unwrap();

@@ -33,7 +33,7 @@ use crate::events::{
     CrawlerCheckpoint, Event, EventContext, EventId, HistoricEventsT, MxId, Profile,
     SerializedEvent,
 };
-use crate::index::{Index, IndexSearcher, Writer};
+use crate::index::{Index, IndexSearcher, Writer as IndexWriter};
 
 #[cfg(test)]
 use fake::{Fake, Faker};
@@ -53,7 +53,7 @@ const FILE_EVENT_TYPES: &str = "'m.image', 'm.file', 'm.audio', 'm.video'";
 pub(crate) enum ThreadMessage {
     Event((Event, Profile)),
     HistoricEvents(HistoricEventsT),
-    Write(Sender<Result<()>>),
+    Write(Sender<Result<()>>, bool),
 }
 
 #[derive(Debug, PartialEq, Default, Clone)]
@@ -75,6 +75,70 @@ pub struct SearchResult {
 pub struct Searcher {
     inner: IndexSearcher,
     database: Arc<PooledConnection<SqliteConnectionManager>>,
+}
+
+struct Writer {
+    inner: IndexWriter,
+    connection: r2d2::PooledConnection<SqliteConnectionManager>,
+    events: Vec<(Event, Profile)>,
+    uncommitted_events: Vec<i64>,
+}
+
+impl Writer {
+    fn new(
+        connection: r2d2::PooledConnection<SqliteConnectionManager>,
+        index_writer: IndexWriter,
+    ) -> Self {
+        Writer {
+            inner: index_writer,
+            connection,
+            events: Vec::new(),
+            uncommitted_events: Vec::new(),
+        }
+    }
+
+    fn add_event(&mut self, event: Event, profile: Profile) {
+        self.events.push((event, profile));
+    }
+
+    fn write_queued_events(&mut self, force_commit: bool) -> Result<()> {
+        Database::write_events(
+            &mut self.connection,
+            &mut self.inner,
+            (None, None, &mut self.events),
+            force_commit,
+            &mut self.uncommitted_events,
+        )?;
+
+        Ok(())
+    }
+
+    fn write_historic_events(
+        &mut self,
+        checkpoint: Option<CrawlerCheckpoint>,
+        old_checkpoint: Option<CrawlerCheckpoint>,
+        mut events: Vec<(Event, Profile)>,
+        force_commit: bool,
+    ) -> Result<bool> {
+        Database::write_events(
+            &mut self.connection,
+            &mut self.inner,
+            (checkpoint, old_checkpoint, &mut events),
+            force_commit,
+            &mut self.uncommitted_events,
+        )
+    }
+
+    fn load_uncommitted_events(&mut self) -> Result<()> {
+        let mut ret = Database::load_uncommitted_events(&self.connection)?;
+
+        for (id, event) in ret.drain(..) {
+            self.uncommitted_events.push(id);
+            self.inner.add_event(&event);
+        }
+
+        Ok(())
+    }
 }
 
 impl Searcher {
@@ -256,7 +320,7 @@ impl Database {
             Database::unlock(&writer_connection, p)?;
         }
 
-        let (t_handle, tx) = Database::spawn_writer(writer_connection, writer);
+        let (t_handle, tx) = Database::spawn_writer(writer_connection, writer)?;
 
         Ok(Database {
             path: path.into(),
@@ -331,99 +395,143 @@ impl Database {
         Ok(Index::new(path, &config)?)
     }
 
+    /// Write the events to the database.
+    /// Returns a tuple containing a boolean and an array if integers. The
+    /// boolean notifies us if all the events were already added to the
+    /// database, the integers are the database ids of our events.
     fn write_events_helper(
         connection: &rusqlite::Connection,
-        index_writer: &mut Writer,
+        index_writer: &mut IndexWriter,
         events: &mut Vec<(Event, Profile)>,
-    ) -> Result<bool> {
+    ) -> Result<(bool, Vec<i64>)> {
         let mut ret = Vec::new();
+        let mut event_ids = Vec::new();
 
         for (e, p) in events.drain(..) {
-            if Database::event_in_store(&connection, &e)? {
-                ret.push(true);
-                continue;
+            let event_id = Database::save_event(&connection, &e, &p)?;
+            match event_id {
+                Some(id) => {
+                    index_writer.add_event(&e);
+                    ret.push(false);
+                    event_ids.push(id);
+                }
+                None => {
+                    ret.push(true);
+                    continue;
+                }
             }
-            Database::save_event(&connection, &e, &p)?;
-            index_writer.add_event(&e);
-            ret.push(false);
         }
 
-        Ok(ret.iter().all(|&x| x))
+        Ok((ret.iter().all(|&x| x), event_ids))
     }
 
-    fn write_queued_events(
+    /// Delete non committed events from the database that were committed
+    fn mark_events_as_indexed(
         connection: &mut rusqlite::Connection,
-        index_writer: &mut Writer,
-        events: &mut Vec<(Event, Profile)>,
+        events: &mut Vec<i64>,
     ) -> Result<()> {
-        let transaction = connection.transaction()?;
-        Database::write_events_helper(&transaction, index_writer, events)?;
-        transaction.commit()?;
-        index_writer.commit()?;
+        if events.is_empty() {
+            return Ok(());
+        }
+
+        let parameter_str = std::iter::repeat(", ?")
+            .take(events.len() - 1)
+            .collect::<String>();
+
+        let mut stmt = connection.prepare(&format!(
+            "DELETE from uncommitted_events
+                 WHERE id IN (?{})",
+            &parameter_str
+        ))?;
+
+        stmt.execute(events.drain(..))?;
 
         Ok(())
     }
 
-    fn write_historic_events(
+    fn write_events(
         connection: &mut rusqlite::Connection,
-        index_writer: &mut Writer,
+        index_writer: &mut IndexWriter,
         message: (
             Option<CrawlerCheckpoint>,
             Option<CrawlerCheckpoint>,
-            Vec<(Event, Profile)>,
+            &mut Vec<(Event, Profile)>,
         ),
+        force_commit: bool,
+        uncommitted_events: &mut Vec<i64>,
     ) -> Result<bool> {
         let (new_checkpoint, old_checkpoint, mut events) = message;
         let transaction = connection.transaction()?;
 
-        let ret = Database::write_events_helper(&transaction, index_writer, &mut events)?;
+        let (ret, event_ids) =
+            Database::write_events_helper(&transaction, index_writer, &mut events)?;
         Database::replace_crawler_checkpoint(
             &transaction,
             new_checkpoint.as_ref(),
             old_checkpoint.as_ref(),
         )?;
 
+        uncommitted_events.extend(event_ids);
+
         transaction.commit()?;
-        index_writer.commit()?;
+
+        let committed = if force_commit {
+            index_writer.force_commit()?;
+            true
+        } else {
+            index_writer.commit()?
+        };
+
+        if committed {
+            Database::mark_events_as_indexed(connection, uncommitted_events)?;
+        }
 
         Ok(ret)
     }
 
     fn spawn_writer(
-        mut connection: PooledConnection<SqliteConnectionManager>,
-        mut index_writer: Writer,
-    ) -> WriterRet {
+        connection: PooledConnection<SqliteConnectionManager>,
+        index_writer: IndexWriter,
+    ) -> Result<WriterRet> {
         let (tx, rx): (_, Receiver<ThreadMessage>) = channel();
 
         let t_handle = thread::spawn(move || {
-            let mut events: Vec<(Event, Profile)> = Vec::new();
+            let mut writer = Writer::new(connection, index_writer);
+            let mut loaded_uncommitted = false;
 
             while let Ok(message) = rx.recv() {
                 match message {
-                    ThreadMessage::Event(e) => events.push(e),
-                    ThreadMessage::Write(sender) => {
-                        let ret = Database::write_queued_events(
-                            &mut connection,
-                            &mut index_writer,
-                            &mut events,
-                        );
+                    ThreadMessage::Event((event, profile)) => writer.add_event(event, profile),
+                    ThreadMessage::Write(sender, force_commit) => {
+                        // We may have events that aren't committed to the index
+                        // but are stored in the db, let us load them from the
+                        // db and commit them to the index now. They will later
+                        // be marked as committed in the database as part of a
+                        // normal write.
+                        if !loaded_uncommitted {
+                            let ret = writer.load_uncommitted_events();
+
+                            loaded_uncommitted = true;
+
+                            if ret.is_err() {
+                                sender.send(ret).unwrap_or(());
+                                continue;
+                            }
+                        }
+                        let ret = writer.write_queued_events(force_commit);
                         // Notify that we are done with the write.
                         sender.send(ret).unwrap_or(());
                     }
                     ThreadMessage::HistoricEvents(m) => {
                         let (check, old_check, events, sender) = m;
-                        let ret = Database::write_historic_events(
-                            &mut connection,
-                            &mut index_writer,
-                            (check, old_check, events),
-                        );
+                        let ret = writer.write_historic_events(check, old_check, events, true);
                         sender.send(ret).unwrap_or(());
                     }
                 };
             }
         });
 
-        (t_handle, tx)
+        Ok((t_handle, tx))
     }
 
     /// Add an event with the given profile to the database.
@@ -433,21 +541,29 @@ impl Database {
     /// * `profile` - The directory where the database will be stored in. This
     ///
     /// This is a fast non-blocking operation, it only queues up the event to be
-    /// added to the database. The events will be commited to the database
+    /// added to the database. The events will be committed to the database
     /// only when the user calls the `commit()` method.
     pub fn add_event(&self, event: Event, profile: Profile) {
         let message = ThreadMessage::Event((event, profile));
         self.tx.send(message).unwrap();
     }
 
+    fn commit_helper(&mut self, force: bool) -> Receiver<Result<()>> {
+        let (sender, receiver): (_, Receiver<Result<()>>) = channel();
+        self.tx.send(ThreadMessage::Write(sender, force)).unwrap();
+        receiver
+    }
+
     /// Commit the currently queued up events. This method will block. A
     /// non-blocking version of this method exists in the `commit_no_wait()`
-    /// method. Getting a Condvar that will signal that the commit was done is
-    /// possible using the `commit_get_cvar()` method.
+    /// method.
     pub fn commit(&mut self) -> Result<()> {
-        let (sender, receiver): (_, Receiver<Result<()>>) = channel();
-        self.tx.send(ThreadMessage::Write(sender)).unwrap();
-        receiver.recv().unwrap()
+        self.commit_helper(false).recv().unwrap()
+    }
+
+    /// Force a commit.
+    pub fn force_commit(&mut self) -> Result<()> {
+        self.commit_helper(true).recv().unwrap()
     }
 
     /// Reload the database so that a search reflects the state of the last
@@ -461,9 +577,7 @@ impl Database {
     /// Commit the currently queued up events without waiting for confirmation
     /// that the operation is done.
     pub fn commit_no_wait(&mut self) -> Receiver<Result<()>> {
-        let (sender, receiver): (_, Receiver<Result<()>>) = channel();
-        self.tx.send(ThreadMessage::Write(sender)).unwrap();
-        receiver
+        self.commit_helper(false)
     }
 
     /// Add the given events from the room history to the database.
@@ -529,6 +643,17 @@ impl Database {
                 FOREIGN KEY (profile_id) REFERENCES profile (id),
                 FOREIGN KEY (room_id) REFERENCES rooms (id),
                 UNIQUE(event_id, room_id)
+            )",
+            NO_PARAMS,
+        )?;
+
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS uncommitted_events (
+                id INTEGER NOT NULL PRIMARY KEY,
+                event_id INTEGER NOT NULL,
+                content_value TEXT NOT NULL,
+                FOREIGN KEY (event_id) REFERENCES events (id),
+                UNIQUE(event_id)
             )",
             NO_PARAMS,
         )?;
@@ -642,47 +767,86 @@ impl Database {
         Ok(room_id)
     }
 
+    pub(crate) fn load_uncommitted_events(
+        connection: &rusqlite::Connection,
+    ) -> rusqlite::Result<Vec<(i64, Event)>> {
+        let mut stmt = connection.prepare(
+                "SELECT uncommitted_events.id, uncommitted_events.event_id, content_value, type, msgtype,
+                 events.event_id, sender, server_ts, rooms.room_id, source
+                 FROM uncommitted_events
+                 INNER JOIN events on events.id = uncommitted_events.event_id
+                 INNER JOIN rooms on rooms.id = events.room_id
+                 ")?;
+
+        let events = stmt.query_map(NO_PARAMS, |row| {
+            Ok((
+                row.get(0)?,
+                Event {
+                    event_type: row.get(3)?,
+                    content_value: row.get(2)?,
+                    msgtype: row.get(4)?,
+                    event_id: row.get(5)?,
+                    sender: row.get(6)?,
+                    server_ts: row.get(7)?,
+                    room_id: row.get(8)?,
+                    source: row.get(9)?,
+                },
+            ))
+        })?;
+
+        events.collect()
+    }
+
     pub(crate) fn save_event_helper(
         connection: &rusqlite::Connection,
         event: &Event,
         profile_id: i64,
-    ) -> Result<()> {
+    ) -> rusqlite::Result<i64> {
         let room_id = Database::get_room_id(connection, &event.room_id)?;
 
-        connection.execute(
+        let mut statement = connection.prepare(
             "
-            INSERT OR IGNORE INTO events (
+            INSERT INTO events (
                 event_id, sender, server_ts, room_id, type,
                 msgtype, source, profile_id
             ) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-            &[
-                &event.event_id,
-                &event.sender,
-                &event.server_ts as &dyn ToSql,
-                &room_id as &dyn ToSql,
-                &event.event_type as &dyn ToSql,
-                &event.msgtype,
-                &event.source,
-                &profile_id as &dyn ToSql,
-            ],
         )?;
 
-        Ok(())
+        let event_id = statement.insert(&[
+            &event.event_id,
+            &event.sender,
+            &event.server_ts as &dyn ToSql,
+            &room_id as &dyn ToSql,
+            &event.event_type as &dyn ToSql,
+            &event.msgtype,
+            &event.source,
+            &profile_id as &dyn ToSql,
+        ])?;
+
+        connection.execute(
+            "
+            INSERT OR IGNORE INTO uncommitted_events (
+                event_id, content_value
+            ) VALUES (?1, ?2)",
+            &[&event_id as &dyn ToSql, &event.content_value],
+        )?;
+
+        Ok(event_id)
     }
 
     pub(crate) fn save_event(
         connection: &rusqlite::Connection,
         event: &Event,
         profile: &Profile,
-    ) -> Result<()> {
+    ) -> Result<Option<i64>> {
         if Database::event_in_store(connection, event)? {
-            return Ok(());
+            return Ok(None);
         }
 
         let profile_id = Database::save_profile(connection, &event.sender, profile)?;
-        Database::save_event_helper(connection, event, profile_id)?;
+        let event_id = Database::save_event_helper(connection, event, profile_id)?;
 
-        Ok(())
+        Ok(Some(event_id))
     }
 
     pub(crate) fn event_in_store(
@@ -1129,7 +1293,8 @@ fn store_event() {
     let profile = Profile::new("Alice", "");
     let id = Database::save_profile(&db.connection, "@alice.example.org", &profile).unwrap();
 
-    Database::save_event_helper(&db.connection, &EVENT, id).unwrap();
+    let id = Database::save_event_helper(&db.connection, &EVENT, id).unwrap();
+    assert_eq!(id, 1);
 }
 
 #[test]
@@ -1436,4 +1601,53 @@ fn change_passphrase() {
         db.is_err(),
         "opening the database without a passphrase should fail"
     );
+}
+
+#[test]
+fn resume_committing() {
+    let tmpdir = tempdir().unwrap();
+    let mut db = Database::new(tmpdir.path()).unwrap();
+    let profile = Profile::new("Alice", "");
+
+    // Check that we don't have any uncommitted events.
+    assert!(Database::load_uncommitted_events(&db.connection)
+        .unwrap()
+        .is_empty());
+
+    db.add_event(EVENT.clone(), profile);
+    db.commit().unwrap();
+    db.reload().unwrap();
+
+    // Now we do have uncommitted events.
+    assert!(!Database::load_uncommitted_events(&db.connection)
+        .unwrap()
+        .is_empty());
+
+    // Since the event wasn't committed to the index the search should fail.
+    assert!(db.search("test", &SearchConfig::new()).unwrap().is_empty());
+
+    // Let us drop the DB to check if we're loading the uncommitted events
+    // correctly.
+    drop(db);
+    let mut db = Database::new(tmpdir.path()).unwrap();
+
+    // We still have uncommitted events.
+    assert_eq!(
+        Database::load_uncommitted_events(&db.connection).unwrap()[0].1,
+        *EVENT
+    );
+
+    db.force_commit().unwrap();
+    db.reload().unwrap();
+
+    // A forced commit gets rid of our uncommitted events.
+    assert!(Database::load_uncommitted_events(&db.connection)
+        .unwrap()
+        .is_empty());
+
+    let result = db.search("test", &SearchConfig::new()).unwrap();
+
+    // The search is now successful.
+    assert!(!result.is_empty());
+    assert_eq!(result[0].event_source, EVENT.source);
 }
