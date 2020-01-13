@@ -561,7 +561,15 @@ impl Database {
         self.commit_helper(false).recv().unwrap()
     }
 
-    /// Force a commit.
+    /// Commit the currently queued up events forcing the commit to the index.
+    ///
+    /// Commits are usually rate limited. This gets around the limit and forces
+    /// the documents to be added to the index.
+    ///
+    /// This method will block. A non-blocking version of this method exists in
+    /// the `force_commit_no_wait()` method.
+    ///
+    /// This should only be used for testing purposes.
     pub fn force_commit(&mut self) -> Result<()> {
         self.commit_helper(true).recv().unwrap()
     }
@@ -576,8 +584,24 @@ impl Database {
 
     /// Commit the currently queued up events without waiting for confirmation
     /// that the operation is done.
+    ///
+    /// Returns a receiver that will receive an empty message once the commit is
+    /// done.
     pub fn commit_no_wait(&mut self) -> Receiver<Result<()>> {
         self.commit_helper(false)
+    }
+
+    /// Commit the currently queued up events forcing the commit to the index.
+    ///
+    /// Commits are usually rate limited. This gets around the limit and forces
+    /// the documents to be added to the index.
+    ///
+    /// This should only be used for testing purposes.
+    ///
+    /// Returns a receiver that will receive an empty message once the commit is
+    /// done.
+    pub fn force_commit_no_wait(&mut self) -> Receiver<Result<()>> {
+        self.commit_helper(true)
     }
 
     /// Add the given events from the room history to the database.
