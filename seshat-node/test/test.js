@@ -160,7 +160,7 @@ describe('Database', function() {
 
     it('should allow events to be commited', function() {
         const db = createDb();
-        db.commitSync(true);
+        db.commitSync(true, true);
 
         ret = db.commitSync(false);
         assert.equal(ret, undefined);
@@ -171,14 +171,14 @@ describe('Database', function() {
 
     it('should allow events to be commited using a promise', async function() {
         const db = createDb();
-        await db.commit();
+        await db.commit(true);
     });
 
     it('should return a search result for the stored event', async function() {
         const db = createDb();
         db.addEvent(matrixEvent);
 
-        await db.commit();
+        await db.commit(true);
         db.reload();
 
         const results = db.searchSync({search_term:'Test'});
@@ -190,7 +190,7 @@ describe('Database', function() {
         const db = createDb();
         db.addEvent(matrixEvent, matrixProfileOnlyDisplayName);
 
-        await db.commit();
+        await db.commit(true);
         db.reload();
 
         const results = await db.search({search_term: 'Test'});
@@ -235,7 +235,7 @@ describe('Database', function() {
         db.addEvent(matrixEvent, matrixProfileOnlyDisplayName);
         db.addEvent(matrixEventRoom2, matrixProfileOnlyDisplayName);
 
-        await db.commit();
+        await db.commit(true);
         db.reload();
 
         const results = await db.search({
@@ -252,7 +252,7 @@ describe('Database', function() {
         db.addEvent(laterMatrixEvent, matrixProfileOnlyDisplayName);
         db.addEvent(beforeMatrixEvent, matrixProfileOnlyDisplayName);
 
-        await db.commit();
+        await db.commit(true);
         db.reload();
 
         const results = await db.search({
@@ -271,7 +271,7 @@ describe('Database', function() {
         db.addEvent(laterMatrixEvent, matrixProfileOnlyDisplayName);
         db.addEvent(beforeMatrixEvent, matrixProfileOnlyDisplayName);
 
-        await db.commit();
+        await db.commit(true);
         db.reload();
 
         const results = await db.search({search_term: 'Test'});
@@ -285,7 +285,7 @@ describe('Database', function() {
         db.addEvent(matrixEvent, matrixProfileOnlyDisplayName);
         db.addEvent(matrixEventRoom2, matrixProfileOnlyDisplayName);
 
-        await db.commit();
+        await db.commit(true);
         let size = await db.getSize();
         assert.isAbove(size, 0)
     });
@@ -296,7 +296,7 @@ describe('Database', function() {
         db.addEvent(topicEvent, matrixProfileOnlyDisplayName);
         db.addEvent(nameEvent, matrixProfileOnlyDisplayName);
 
-        await db.commit();
+        await db.commit(true);
         db.reload();
     });
 
@@ -304,7 +304,7 @@ describe('Database', function() {
         const db = createDb();
         db.addEvent(matrixEvent, matrixProfileOnlyDisplayName);
 
-        await db.commit();
+        await db.commit(true);
         db.reload();
 
         let results = await db.search({
@@ -314,7 +314,7 @@ describe('Database', function() {
         assert.equal(results.count, 0);
 
         db.addEvent(topicEvent);
-        await db.commit();
+        await db.commit(true);
         db.reload();
 
         results = await db.search({
@@ -337,7 +337,7 @@ describe('Database', function() {
         const db = new Seshat(tempDir, {language: "german"});
 
         db.addEvent(matrixEvent, matrixProfileOnlyDisplayName);
-        await db.commit();
+        await db.commit(true);
         db.reload();
 
         results = await db.search({
@@ -351,7 +351,7 @@ describe('Database', function() {
         db.addEvent(matrixEvent, matrixProfileOnlyDisplayName);
 
         db.addEvent(matrixEvent, matrixProfileOnlyDisplayName);
-        await db.commit();
+        await db.commit(true);
         db.reload();
 
         await db.delete()
@@ -364,7 +364,7 @@ describe('Database', function() {
         assert(await db.isEmpty());
 
         db.addEvent(matrixEvent, matrixProfileOnlyDisplayName);
-        await db.commit();
+        await db.commit(true);
 
         assert(!await db.isEmpty());
     });
@@ -375,7 +375,7 @@ describe('Database', function() {
 
         assert(await db.isEmpty());
         db.addEvent(matrixEvent, matrixProfileOnlyDisplayName);
-        await db.commit();
+        await db.commit(true);
         assert(!await db.isEmpty());
 
         expect(() => db = new Seshat(tempDir)).to.throw('');
@@ -387,7 +387,7 @@ describe('Database', function() {
         db.addEvent(fileEvent, matrixProfileOnlyDisplayName);
         db.addEvent(imageEvent, matrixProfileOnlyDisplayName);
 
-        await db.commit();
+        await db.commit(true);
         let events = await db.getFileEvents({roomId: fileEvent.room_id, limit: 10})
         assert(events.length == 2);
 

@@ -402,13 +402,24 @@ declare_types! {
         }
 
         method commit(mut cx) {
-            let f = cx.argument::<JsFunction>(0)?;
+            let force: bool = match cx.argument_opt(0) {
+                Some(w) => w.downcast::<JsBoolean>().or_throw(&mut cx)?.value(),
+                None => false,
+            };
+
+            let f = cx.argument::<JsFunction>(1)?;
             let mut this = cx.this();
 
             let receiver = {
                 let guard = cx.lock();
                 let db = &mut this.borrow_mut(&guard).0;
-                db.as_mut().map_or_else(|| Err("Database has been deleted"), |db| Ok(db.commit_no_wait()))
+                db.as_mut().map_or_else(|| Err("Database has been deleted"), |db| {
+                    if force {
+                        Ok(db.force_commit_no_wait())
+                    } else {
+                        Ok(db.commit_no_wait())
+                    }
+                })
             };
 
             let receiver = match receiver {
@@ -496,6 +507,11 @@ declare_types! {
                 None => false,
             };
 
+            let force: bool = match cx.argument_opt(1) {
+                Some(w) => w.downcast::<JsBoolean>().or_throw(&mut cx)?.value(),
+                None => false,
+            };
+
             let mut this = cx.this();
 
             let ret = {
@@ -503,7 +519,14 @@ declare_types! {
                 let db = &mut this.borrow_mut(&guard).0;
 
                 if wait {
-                    db.as_mut().map_or_else(|| Err("Database has been deleted"), |db| Ok(Some(db.commit())))
+                    db.as_mut().map_or_else(|| Err("Database has been deleted"), |db| {
+                        if force {
+                            Ok(Some(db.force_commit()))
+                        } else {
+                            Ok(Some(db.commit()))
+                        }
+                    }
+                   )
                 } else {
                     db.as_mut().map_or_else(|| Err("Database has been deleted"), |db| { db.commit_no_wait(); Ok(None) } )
                 }

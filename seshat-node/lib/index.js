@@ -112,12 +112,17 @@ class Seshat extends seshat.Seshat {
      * This is the asynchronous equivalent of the <code>commitSync()</code>
      * method.
      *
+     * @param  {boolean} force Force the commit, commits to the index are
+     * usually rate limited. This gets around the limit and forces the
+     * documents to be added to the index. This should only be used for testing
+     * purposes.
+     *
      * @return {Promise<number>} The latest stamp of the commit. The stamp is
      * a unique incrementing number that identifies the commit.
      */
-    async commit() {
+    async commit(force = false) {
         return new Promise((resolve, reject) => {
-            super.commit((err, res) => {
+            super.commit(force, (err, res) => {
                 resolve(res);
             });
         });
@@ -126,14 +131,18 @@ class Seshat extends seshat.Seshat {
     /**
      * Commit the queued up events to the database.
      *
-     * @param  {boolean} wait Wait for the events to be commited. If true will
-     * block until the events are commited.
+     * @param  {boolean} wait Wait for the events to be committed. If true will
+     * block until the events are committed.
+     * @param  {boolean} force Force the commit, commits to the index are
+     * usually rate limited. This gets around the limit and forces the
+     * documents to be added to the index. This should only be used for testing
+     * purposes.
      *
      * @return {number} The latest stamp of the commit. The stamp is a unique
      * incrementing number that identifies the commit.
      */
-    commitSync(wait = false) {
-        return super.commitSync(wait);
+    commitSync(wait = false, force = false) {
+        return super.commitSync(wait, force);
     }
 
     /**
