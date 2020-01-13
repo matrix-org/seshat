@@ -1,43 +1,49 @@
-matrix:
+jobs:
   allow_failures:
     - os: windows
   include:
+
     - os: linux
       dist: bionic
       language: rust
+      before_install:
+          - sudo apt-get update -q
+          - sudo apt-get install libsqlcipher-dev -y
+          - nvm install $TRAVIS_NODE_VERSION
+          - nvm use ${TRAVIS_NODE_VERSION}
       env:
         - TRAVIS_NODE_VERSION="12"
+
     - os: osx
       language: rust
+      before_install:
+          - HOMEBREW_NO_AUTO_UPDATE=1 brew install sqlcipher
+          - nvm install $TRAVIS_NODE_VERSION
+          - nvm use ${TRAVIS_NODE_VERSION}
+      script:
+          - cargo test -- --test-threads=1
+          - cd seshat-node
+          - yarn install
+          - yarn test --timeout 4000
+          - yarn lint
       env:
         - TRAVIS_NODE_VERSION="12"
+
     - os: windows
       language: rust
+      before_install:
+          - git clone --single-branch https://github.com/jasongin/nvs $NVS_HOME
+          - source $NVS_HOME/nvs.sh
+          - nvs --version
+          - nvs add $TRAVIS_NODE_VERSION && nvs use $TRAVIS_NODE_VERSION
+          - choco install sqlite
       env:
         - TRAVIS_NODE_VERSION="12"
+        - NVS_HOME=$ProgramData/nvs
 
 cache: cargo
 
-before_install:
-  - if [[ "$TRAVIS_OS_NAME" == "windows" ]]; then
-    export NVS_HOME=$ProgramData/nvs;
-    git clone --single-branch https://github.com/jasongin/nvs $NVS_HOME;
-    source $NVS_HOME/nvs.sh;
-    nvs --version;
-    nvs add $TRAVIS_NODE_VERSION && nvs use $TRAVIS_NODE_VERSION;
-    choco install sqlite;
-    cd C:\ProgramData\chocolatey\lib\SQLite\tools;
-    lib /def:sqlite3.def /out:sqlite3.lib;
-    elif [[ "$TRAVIS_OS_NAME" == "osx" ]] ; then
-    HOMEBREW_NO_AUTO_UPDATE=1 brew install sqlcipher;
-    nvm install $TRAVIS_NODE_VERSION;
-    nvm use ${TRAVIS_NODE_VERSION};
-    else
-    sudo apt-get update -q;
-    sudo apt-get install libsqlcipher-dev -y;
-    nvm install $TRAVIS_NODE_VERSION;
-    nvm use ${TRAVIS_NODE_VERSION};
-    fi
+install:
   - node -v
   - npm -v
   - npm i -g yarn@latest neon-cli@latest
