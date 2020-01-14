@@ -1656,6 +1656,9 @@ fn resume_committing() {
     let mut counter = 0;
     let mut db = Database::new(tmpdir.path());
 
+    // Tantivy might still be in the process of being shut down
+    // and hold on to the write lock. Meaning that opening the database might
+    // not succeed immediately. Retry a couple of times before giving up.
     while db.is_err() {
         counter += 1;
         if counter > 10 {
