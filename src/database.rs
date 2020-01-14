@@ -1653,7 +1653,19 @@ fn resume_committing() {
     // Let us drop the DB to check if we're loading the uncommitted events
     // correctly.
     drop(db);
-    let mut db = Database::new(tmpdir.path()).unwrap();
+    let mut counter = 0;
+    let mut db = Database::new(tmpdir.path());
+
+    while db.is_err() {
+        counter += 1;
+        if counter > 10 {
+            break;
+        }
+        thread::sleep(time::Duration::from_millis(10));
+        db = Database::new(tmpdir.path())
+    }
+
+    let mut db = db.unwrap();
 
     // We still have uncommitted events.
     assert_eq!(
@@ -1673,5 +1685,6 @@ fn resume_committing() {
 
     // The search is now successful.
     assert!(!result.is_empty());
+    assert_eq!(result.len(), 1);
     assert_eq!(result[0].event_source, EVENT.source);
 }
