@@ -27,7 +27,7 @@ use std::thread;
 use std::thread::JoinHandle;
 use zeroize::Zeroizing;
 
-use crate::config::{Config, SearchConfig};
+use crate::config::{Config, LoadConfig, SearchConfig};
 use crate::error::{Error, Result};
 use crate::events::{
     CrawlerCheckpoint, Event, EventContext, EventId, HistoricEventsT, MxId, Profile,
@@ -229,21 +229,28 @@ impl Connection {
     /// Load events that contain an mxc URL to a file.
     /// # Arguments
     ///
-    /// * `room_id` - The ID of the room for which the events should be loaded.
-    /// * `limit` - The maximum number of events to return.
-    /// * `from_event` - An event id of a previous event returned by this
-    ///     method. If set events that are older than the event with the given
-    ///     event ID will be returned.
+    /// * `load_config` - Configuration deciding which events and how many of
+    /// them should be loaded.
     ///
-    /// Returns a list of serialized events.
+    /// # Examples
+    ///
+    /// ```noexecute
+    /// let config = LoadConfig::new("!testroom:localhost").limit(10);
+    /// let result = connection.load_file_events(&config);
+    /// ```
+    ///
+    /// Returns a list of tuples containing the serialized events and the
+    /// profile of the sender at the time when the event was sent.
     pub fn load_file_events(
         &self,
-        room_id: &str,
-        limit: u32,
-        from_event: Option<&str>,
+        load_config: &LoadConfig,
     ) -> Result<Vec<(SerializedEvent, Profile)>> {
-        let ret = Database::load_file_events(self, room_id, limit, from_event)?;
-        Ok(ret)
+        Ok(Database::load_file_events(
+            self,
+            &load_config.room_id,
+            load_config.limit,
+            load_config.from_event.as_ref().map(|x| &**x),
+        )?)
     }
 }
 
@@ -896,7 +903,7 @@ impl Database {
     pub(crate) fn load_file_events(
         connection: &rusqlite::Connection,
         room_id: &str,
-        limit: u32,
+        limit: usize,
         from_event: Option<&str>,
     ) -> rusqlite::Result<Vec<(SerializedEvent, Profile)>> {
         match from_event {

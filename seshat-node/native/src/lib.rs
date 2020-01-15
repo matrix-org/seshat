@@ -20,7 +20,7 @@ use neon_serde;
 use serde_json;
 use seshat::{
     CheckpointDirection, Config, Connection, CrawlerCheckpoint, Database, Event, EventType,
-    Language, Profile, Receiver, SearchConfig, SearchResult, Searcher,
+    Language, LoadConfig, Profile, Receiver, SearchConfig, SearchResult, Searcher,
 };
 
 #[no_mangle]
@@ -250,9 +250,7 @@ impl Task for DeleteTask {
 
 struct LoadFileEventsTask {
     inner: Connection,
-    room_id: String,
-    limit: u32,
-    from_event: Option<String>,
+    config: LoadConfig,
 }
 
 impl Task for LoadFileEventsTask {
@@ -261,11 +259,7 @@ impl Task for LoadFileEventsTask {
     type JsEvent = JsArray;
 
     fn perform(&self) -> Result<Self::Output, Self::Error> {
-        self.inner.load_file_events(
-            &self.room_id,
-            self.limit,
-            self.from_event.as_ref().map(|x| &**x),
-        )
+        self.inner.load_file_events(&self.config)
     }
 
     fn complete(
@@ -652,20 +646,20 @@ declare_types! {
                     .or_throw(&mut cx)?
                     .value();
 
-            let limit: u32 = args
+            let mut config = LoadConfig::new(room_id);
+
+            let limit = args
                     .get(&mut cx, "limit")?
                     .downcast::<JsNumber>()
                     .or_throw(&mut cx)?
-                    .value() as u32;
+                    .value();
 
-            let from_event = if let Ok(e) = args.get(&mut cx, "fromEvent") {
+            config = config.limit(limit as usize);
+
+            if let Ok(e) = args.get(&mut cx, "fromEvent") {
                 if let Ok(e) = e.downcast::<JsString>() {
-                    Some(e.value())
-                } else {
-                    None
+                    config = config.from_event(e.value());
                 }
-            } else {
-                None
             };
 
             let mut this = cx.this();
@@ -688,9 +682,7 @@ declare_types! {
 
             let task = LoadFileEventsTask {
                 inner: connection,
-                room_id,
-                limit,
-                from_event,
+                config,
             };
 
             task.schedule(f);

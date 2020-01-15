@@ -16,6 +16,8 @@ use zeroize::Zeroizing;
 
 use crate::events::{EventType, RoomId};
 
+const DEFAULT_LOAD_LIMIT: usize = 20;
+
 #[derive(Debug, PartialEq, Clone)]
 /// Search configuration
 /// A search configuration allows users to limit the search to a specific room
@@ -243,5 +245,32 @@ impl Default for Config {
             language: Language::Unknown,
             passphrase: None,
         }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct LoadConfig {
+    pub(crate) room_id: String,
+    pub(crate) limit: usize,
+    pub(crate) from_event: Option<String>,
+}
+
+impl LoadConfig {
+    pub fn new<R: Into<String>>(room_id: R) -> Self {
+        LoadConfig {
+            room_id: room_id.into(),
+            limit: DEFAULT_LOAD_LIMIT,
+            from_event: None,
+        }
+    }
+
+    pub fn limit(mut self, limit: usize) -> Self {
+        self.limit = limit;
+        self
+    }
+
+    pub fn from_event<E: Into<String>>(mut self, event_id: E) -> Self {
+        self.from_event = Some(event_id.into());
+        self
     }
 }

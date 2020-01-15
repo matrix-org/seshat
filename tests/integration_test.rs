@@ -2,8 +2,8 @@
 extern crate lazy_static;
 
 use seshat::{
-    CheckpointDirection, Config, CrawlerCheckpoint, Database, Event, EventType, Profile,
-    SearchConfig,
+    CheckpointDirection, Config, CrawlerCheckpoint, Database, Event, EventType, LoadConfig,
+    Profile, SearchConfig,
 };
 
 use std::path::Path;
@@ -320,8 +320,10 @@ fn load_file_events() {
 
     let connection = db.get_connection().unwrap();
 
+    let mut config = LoadConfig::new(&FILE_EVENT.room_id).limit(10);
+
     let result = connection
-        .load_file_events(&FILE_EVENT.room_id, 10, None)
+        .load_file_events(&config)
         .expect("Can't load file events");
     assert!(!result.is_empty());
     assert!(result.len() == 2);
@@ -329,15 +331,19 @@ fn load_file_events() {
     assert!(result.len() == 2);
     assert_eq!(result[1].0, FILE_EVENT.source);
 
+    config = config.limit(1);
+
     let result = connection
-        .load_file_events(&FILE_EVENT.room_id, 1, None)
+        .load_file_events(&config)
         .expect("Can't load file events");
     assert!(!result.is_empty());
     assert!(result.len() == 1);
     assert_eq!(result[0].0, IMAGE_EVENT.source);
 
+    config = config.from_event(&IMAGE_EVENT.event_id);
+
     let result = connection
-        .load_file_events(&FILE_EVENT.room_id, 1, Some(&IMAGE_EVENT.event_id))
+        .load_file_events(&config)
         .expect("Can't load file events with token");
 
     assert!(!result.is_empty());
