@@ -42,6 +42,18 @@ const imageEvent = {
     origin_server_ts: 1516362244048,
 };
 
+const videoEvent = {
+    type: 'm.room.message',
+    event_id: '$15163622481Evideo:localhost',
+    room_id: '!TESTROOM',
+    sender: '@alice:example.org',
+    content: {
+        body: 'Test video',
+        msgtype: 'm.video',
+    },
+    origin_server_ts: 1516362244100,
+};
+
 const beforeMatrixEvent = {
     type: 'm.room.message',
     event_id: '$15163622445EBvFA:localhost',
@@ -399,6 +411,37 @@ describe('Database', function() {
         assert(events.length == 1);
         assert.deepEqual(events[0].event, fileEvent);
     });
+
+    it('should allow us to continue loading file events in both directions', async function() {
+        const db = createDb();
+        db.addEvent(matrixEvent, matrixProfileOnlyDisplayName);
+        db.addEvent(fileEvent, matrixProfileOnlyDisplayName);
+        db.addEvent(imageEvent, matrixProfileOnlyDisplayName);
+        db.addEvent(videoEvent, matrixProfileOnlyDisplayName);
+
+        await db.commit(true);
+
+        // Get the first event.
+        let events = await db.loadFileEvents({roomId: fileEvent.room_id, limit: 1})
+        assert(events.length == 1);
+
+        // Get the next two.
+        events = await db.loadFileEvents({roomId: fileEvent.room_id, limit: 10, fromEvent: videoEvent.event_id})
+        assert(events.length == 2);
+        assert.deepEqual(events[0].event, imageEvent);
+        assert.deepEqual(events[1].event, fileEvent);
+
+        // Try to get a newer one than the last one.
+        events = await db.loadFileEvents({roomId: fileEvent.room_id, limit: 10, fromEvent: videoEvent.event_id, direction: "forwards"})
+        assert(events.length == 0);
+
+        // Get the two newer events than the last one.
+        events = await db.loadFileEvents({roomId: fileEvent.room_id, limit: 10, fromEvent: fileEvent.event_id, direction: "forwards"})
+        assert(events.length == 2);
+        assert.deepEqual(events[0].event, imageEvent);
+        assert.deepEqual(events[1].event, videoEvent);
+    });
+
 
     it('should throw an error when adding events with missing fields.', function() {
         delete matrixEvent.content;

@@ -350,6 +350,9 @@ class Seshat extends seshat.Seshat {
      * @param  {string} args.fromEvent An event id of a previous event returned
      * by this method. If set events that are older than the event with the
      * given event ID will be returned.
+     * @param {string} args.direction The direction that we are going to
+     * continue lading events to. Can be either "backwards", "b", "forwards" or
+     * "f".
      *
      * @return {Promise<[loadResult]>} A promise that will resolve to an array
      * of Matrix events that contain mxc URLs.

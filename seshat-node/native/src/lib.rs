@@ -20,7 +20,7 @@ use neon_serde;
 use serde_json;
 use seshat::{
     CheckpointDirection, Config, Connection, CrawlerCheckpoint, Database, Event, EventType,
-    Language, LoadConfig, Profile, Receiver, SearchConfig, SearchResult, Searcher,
+    Language, LoadConfig, LoadDirection, Profile, Receiver, SearchConfig, SearchResult, Searcher,
 };
 
 #[no_mangle]
@@ -661,6 +661,19 @@ declare_types! {
                     config = config.from_event(e.value());
                 }
             };
+
+            if let Ok(d) = args.get(&mut cx, "direction") {
+                if let Ok(e) = d.downcast::<JsString>() {
+                    let direction = match e.value().to_lowercase().as_ref() {
+                        "backwards" | "backward" | "b" => LoadDirection::Backwards,
+                        "forwards" | "forward" | "f" => LoadDirection::Forwards,
+                        "" => LoadDirection::Backwards,
+                        d => return cx.throw_error(format!("Unknown load direction {}", d)),
+                    };
+
+                    config = config.direction(direction);
+                }
+            }
 
             let mut this = cx.this();
 
