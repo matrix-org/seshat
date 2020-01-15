@@ -3,7 +3,7 @@ extern crate lazy_static;
 
 use seshat::{
     CheckpointDirection, Config, CrawlerCheckpoint, Database, Event, EventType, LoadConfig,
-    Profile, SearchConfig, LoadDirection,
+    LoadDirection, Profile, SearchConfig,
 };
 
 use std::path::Path;

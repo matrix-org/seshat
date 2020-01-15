@@ -27,7 +27,7 @@ use std::thread;
 use std::thread::JoinHandle;
 use zeroize::Zeroizing;
 
-use crate::config::{Config, LoadConfig, SearchConfig, LoadDirection};
+use crate::config::{Config, LoadConfig, LoadDirection, SearchConfig};
 use crate::error::{Error, Result};
 use crate::events::{
     CrawlerCheckpoint, Event, EventContext, EventId, HistoricEventsT, MxId, Profile,
@@ -929,9 +929,7 @@ impl Database {
                          (server_ts {} ?3)
                      ) ORDER BY server_ts {} LIMIT ?4
                      ",
-                    FILE_EVENT_TYPES,
-                    direction,
-                    sort
+                    FILE_EVENT_TYPES, direction, sort
                 ))?;
 
                 let room_id = Database::get_room_id(connection, &room_id)?;

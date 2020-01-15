@@ -33,7 +33,7 @@ pub use database::{Connection, Database, SearchResult, Searcher};
 
 pub use error::{Error, Result};
 
-pub use config::{Config, Language, SearchConfig, LoadConfig, LoadDirection};
+pub use config::{Config, Language, LoadConfig, LoadDirection, SearchConfig};
 pub use events::{CheckpointDirection, CrawlerCheckpoint, Event, EventType, Profile};
 
 pub use std::sync::mpsc::Receiver;
