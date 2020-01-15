@@ -3,7 +3,7 @@ extern crate lazy_static;
 
 use seshat::{
     CheckpointDirection, Config, CrawlerCheckpoint, Database, Event, EventType, LoadConfig,
-    Profile, SearchConfig,
+    Profile, SearchConfig, LoadDirection,
 };
 
 use std::path::Path;
@@ -67,6 +67,20 @@ pub static IMAGE_SOURCE: &str = "{
     age: 43289803095
 }";
 
+pub static VIDEO_SOURCE: &str = "{
+    content: {
+        body: Test video,
+        msgtype: m.video,
+    },
+    event_id: $15163622449Ebeoj:localhost,
+    origin_server_ts: 1516362244100,
+    sender: @example2:localhost,
+    type: m.room.message,
+    unsigned: {age: 43289803095},
+    user_id: @example2:localhost,
+    age: 43289803095
+}";
+
 lazy_static! {
     pub static ref EVENT: Event = Event::new(
         EventType::Message,
@@ -85,9 +99,9 @@ lazy_static! {
         EventType::Message,
         "Test file",
         Some("m.file"),
-        "$15163622468EBvZJ:localhost",
+        "$15163622468file:localhost",
         "@example2:localhost",
-        151636_2244029,
+        151636_2244000,
         "!test_room:localhost",
         FILE_SOURCE,
     );
@@ -98,11 +112,24 @@ lazy_static! {
         EventType::Message,
         "Test image",
         Some("m.image"),
-        "$15163622471EBvZJ:localhost",
+        "$15163622471image:localhost",
         "@example2:localhost",
-        151636_2244058,
+        151636_2244050,
         "!test_room:localhost",
         IMAGE_SOURCE,
+    );
+}
+
+lazy_static! {
+    pub static ref VIDEO_EVENT: Event = Event::new(
+        EventType::Message,
+        "Test video",
+        Some("m.video"),
+        "$15163622449video:localhost",
+        "@example2:localhost",
+        151636_2244100,
+        "!test_room:localhost",
+        VIDEO_SOURCE,
     );
 }
 
@@ -349,4 +376,46 @@ fn load_file_events() {
     assert!(!result.is_empty());
     assert!(result.len() == 1);
     assert_eq!(result[0].0, FILE_EVENT.source);
+}
+
+#[test]
+fn load_file_events_directions() {
+    let tmpdir = tempdir().unwrap();
+    let mut db = Database::new(tmpdir.path()).unwrap();
+    let profile = Profile::new("Alice", "");
+
+    db.add_event(EVENT.clone(), profile.clone());
+    db.add_event(FILE_EVENT.clone(), profile.clone());
+    db.add_event(IMAGE_EVENT.clone(), profile.clone());
+    db.add_event(VIDEO_EVENT.clone(), profile);
+    db.force_commit().unwrap();
+    db.reload().unwrap();
+
+    let connection = db.get_connection().unwrap();
+
+    // Get the newest event.
+    let mut config = LoadConfig::new(&FILE_EVENT.room_id).limit(1);
+    let result = connection.load_file_events(&config).unwrap();
+
+    assert_eq!(result.len(), 1);
+    assert_eq!(result[0].0, VIDEO_EVENT.source);
+
+    // Get the next two.
+    config = config.from_event(&VIDEO_EVENT.event_id).limit(10);
+    let result = connection.load_file_events(&config).unwrap();
+    assert_eq!(result.len(), 2);
+    assert_eq!(result[0].0, IMAGE_EVENT.source);
+    assert_eq!(result[1].0, FILE_EVENT.source);
+
+    // Try to get a newer one than the last one.
+    config = config.direction(LoadDirection::Forwards);
+    let result = connection.load_file_events(&config).unwrap();
+    assert!(result.is_empty());
+
+    // Get the two newer events than the last one.
+    config = config.from_event(&FILE_EVENT.event_id);
+    let result = connection.load_file_events(&config).unwrap();
+    assert_eq!(result.len(), 2);
+    assert_eq!(result[0].0, IMAGE_EVENT.source);
+    assert_eq!(result[1].0, VIDEO_EVENT.source);
 }

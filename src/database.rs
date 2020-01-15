@@ -27,7 +27,7 @@ use std::thread;
 use std::thread::JoinHandle;
 use zeroize::Zeroizing;
 
-use crate::config::{Config, LoadConfig, SearchConfig};
+use crate::config::{Config, LoadConfig, SearchConfig, LoadDirection};
 use crate::error::{Error, Result};
 use crate::events::{
     CrawlerCheckpoint, Event, EventContext, EventId, HistoricEventsT, MxId, Profile,
@@ -250,6 +250,7 @@ impl Connection {
             &load_config.room_id,
             load_config.limit,
             load_config.from_event.as_ref().map(|x| &**x),
+            &load_config.direction,
         )?)
     }
 }
@@ -905,10 +906,17 @@ impl Database {
         room_id: &str,
         limit: usize,
         from_event: Option<&str>,
+        direction: &LoadDirection,
     ) -> rusqlite::Result<Vec<(SerializedEvent, Profile)>> {
         match from_event {
             Some(e) => {
                 let event = Database::load_event(connection, room_id, e)?;
+
+                let (direction, sort) = match direction {
+                    LoadDirection::Backwards => ("<=", "DESC"),
+                    LoadDirection::Forwards => (">=", "ASC"),
+                };
+
                 let mut stmt = connection.prepare(&format!(
                     "SELECT source, displayname, avatar_url
                      FROM events
@@ -918,10 +926,12 @@ impl Database {
                          (type == 'm.room.message') &
                          (msgtype in ({})) &
                          (event_id != ?2) &
-                         (server_ts <= ?3)
-                     ) ORDER BY server_ts DESC LIMIT ?4
+                         (server_ts {} ?3)
+                     ) ORDER BY server_ts {} LIMIT ?4
                      ",
-                    FILE_EVENT_TYPES
+                    FILE_EVENT_TYPES,
+                    direction,
+                    sort
                 ))?;
 
                 let room_id = Database::get_room_id(connection, &room_id)?;

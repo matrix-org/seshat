@@ -248,6 +248,12 @@ impl Default for Config {
     }
 }
 
+#[derive(Debug, Clone)]
+pub enum LoadDirection {
+    Backwards,
+    Forwards,
+}
+
 /// Configuration for the event loading methods.
 ///
 /// A load configuration allows users to limit the number of events that will be
@@ -258,6 +264,7 @@ pub struct LoadConfig {
     pub(crate) room_id: String,
     pub(crate) limit: usize,
     pub(crate) from_event: Option<String>,
+    pub(crate) direction: LoadDirection,
 }
 
 impl LoadConfig {
@@ -273,6 +280,7 @@ impl LoadConfig {
             room_id: room_id.into(),
             limit: DEFAULT_LOAD_LIMIT,
             from_event: None,
+            direction: LoadDirection::Backwards,
         }
     }
 
@@ -295,6 +303,11 @@ impl LoadConfig {
     /// event ID will be returned.
     pub fn from_event<E: Into<String>>(mut self, event_id: E) -> Self {
         self.from_event = Some(event_id.into());
+        self
+    }
+
+    pub fn direction(mut self, direction: LoadDirection) -> Self {
+        self.direction = direction;
         self
     }
 }
