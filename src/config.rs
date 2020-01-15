@@ -248,6 +248,11 @@ impl Default for Config {
     }
 }
 
+/// Configuration for the event loading methods.
+///
+/// A load configuration allows users to limit the number of events that will be
+/// loaded or to continue loading events from a specific point in the room
+/// history.
 #[derive(Debug, Clone)]
 pub struct LoadConfig {
     pub(crate) room_id: String,
@@ -256,6 +261,13 @@ pub struct LoadConfig {
 }
 
 impl LoadConfig {
+    /// Create a new LoadConfig
+    ///
+    /// The config will be created with a default limit of 20 events.
+    ///
+    /// # Arguments
+    ///
+    /// * `room_id` - The room from which to load the events.
     pub fn new<R: Into<String>>(room_id: R) -> Self {
         LoadConfig {
             room_id: room_id.into(),
@@ -264,11 +276,23 @@ impl LoadConfig {
         }
     }
 
+    /// Set the maximum amount of events that we want to load.
+    /// # Arguments
+    ///
+    /// * `limit` - The new limit that should be set.
     pub fn limit(mut self, limit: usize) -> Self {
         self.limit = limit;
         self
     }
 
+
+    /// Set the event from which we should continue loading events.
+    ///
+    /// # Arguments
+    ///
+    /// * `event_id` - An event id of a previous event returned by this
+    /// method. If set events that are older than the event with the given
+    /// event ID will be returned.
     pub fn from_event<E: Into<String>>(mut self, event_id: E) -> Self {
         self.from_event = Some(event_id.into());
         self
