@@ -248,20 +248,20 @@ impl Task for DeleteTask {
     }
 }
 
-struct GetFileEventsTask {
+struct LoadFileEventsTask {
     inner: Connection,
     room_id: String,
     limit: u32,
     from_event: Option<String>,
 }
 
-impl Task for GetFileEventsTask {
-    type Output = Vec<String>;
+impl Task for LoadFileEventsTask {
+    type Output = Vec<(String, Profile)>;
     type Error = seshat::Error;
     type JsEvent = JsArray;
 
     fn perform(&self) -> Result<Self::Output, Self::Error> {
-        self.inner.get_file_events(
+        self.inner.load_file_events(
             &self.room_id,
             self.limit,
             self.from_event.as_ref().map(|x| &**x),
@@ -280,9 +280,15 @@ impl Task for GetFileEventsTask {
 
         let results = JsArray::new(&mut cx, ret.len() as u32);
 
-        for (i, source) in ret.drain(..).enumerate() {
+        for (i, (source, profile)) in ret.drain(..).enumerate() {
+            let result = JsObject::new(&mut cx);
+
             let event = deserialize_event(&mut cx, &source)?;
-            results.set(&mut cx, i as u32, event)?;
+            let profile = profile_to_js(&mut cx, profile)?;
+            result.set(&mut cx, "event", event)?;
+            result.set(&mut cx, "profile", profile)?;
+
+            results.set(&mut cx, i as u32, result)?;
         }
 
         Ok(results)
@@ -636,7 +642,7 @@ declare_types! {
             Ok(cx.undefined().upcast())
         }
 
-        method getFileEvents(mut cx) {
+        method loadFileEvents(mut cx) {
             let args = cx.argument::<JsObject>(0)?;
             let f = cx.argument::<JsFunction>(1)?;
 
@@ -680,7 +686,7 @@ declare_types! {
                 Err(e) => return cx.throw_type_error(e.to_string()),
             };
 
-            let task = GetFileEventsTask {
+            let task = LoadFileEventsTask {
                 inner: connection,
                 room_id,
                 limit,
@@ -884,7 +890,7 @@ fn search_result_to_js<'a, C: Context<'a>>(
     }
 
     for (sender, profile) in result.profile_info.drain() {
-        let (js_sender, js_profile) = profile_to_js(cx, sender, profile)?;
+        let (js_sender, js_profile) = sender_and_profile_to_js(cx, sender, profile)?;
         profile_info.set(&mut *cx, js_sender, js_profile)?;
     }
 
@@ -901,12 +907,9 @@ fn search_result_to_js<'a, C: Context<'a>>(
 
 fn profile_to_js<'a, C: Context<'a>>(
     cx: &mut C,
-    sender: String,
     profile: Profile,
-) -> Result<(Handle<'a, JsString>, Handle<'a, JsObject>), neon::result::Throw> {
+) -> Result<Handle<'a, JsObject>, neon::result::Throw> {
     let js_profile = JsObject::new(&mut *cx);
-
-    let js_sender = JsString::new(&mut *cx, sender);
 
     match profile.displayname {
         Some(name) => {
@@ -916,7 +919,7 @@ fn profile_to_js<'a, C: Context<'a>>(
         None => {
             js_profile.set(&mut *cx, "displayname", JsNull::new())?;
         }
-    };
+    }
 
     match profile.avatar_url {
         Some(avatar) => {
@@ -927,6 +930,17 @@ fn profile_to_js<'a, C: Context<'a>>(
             js_profile.set(&mut *cx, "avatar_url", JsNull::new())?;
         }
     }
+
+    Ok(js_profile)
+}
+
+fn sender_and_profile_to_js<'a, C: Context<'a>>(
+    cx: &mut C,
+    sender: String,
+    profile: Profile,
+) -> Result<(Handle<'a, JsString>, Handle<'a, JsObject>), neon::result::Throw> {
+    let js_sender = JsString::new(&mut *cx, sender);
+    let js_profile = profile_to_js(cx, profile)?;
 
     Ok((js_sender, js_profile))
 }

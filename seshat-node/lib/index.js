@@ -57,6 +57,13 @@ const seshat = require('../native');
  * one of "b" or "f".
  */
 
+/**
+ * @typedef loadResult
+ * @type {Object}
+ * @property {matrixEvent} event A matrix event that was loaded from the database.
+ * @property {matrixProfile} profile The profile of the sender at the time the
+ * event was sent.
+ */
 
 /**
  * Seshat database.<br>
@@ -334,7 +341,7 @@ class Seshat extends seshat.Seshat {
     }
 
     /**
-     * Get events that contain an mxc URL to a file.
+     * Load events that contain an mxc URL to a file.
      *
      * @param  {object} args Arguments object for the method.
      * @param  {string} args.roomId The ID of the room for which the events
@@ -344,12 +351,12 @@ class Seshat extends seshat.Seshat {
      * by this method. If set events that are older than the event with the
      * given event ID will be returned.
      *
-     * @return {Promise<[matrixEvent]>} A promise that will resolve to an array
+     * @return {Promise<[loadResult]>} A promise that will resolve to an array
      * of Matrix events that contain mxc URLs.
      */
-    async getFileEvents(args) {
+    async loadFileEvents(args) {
         return new Promise((resolve, reject) => {
-            super.getFileEvents(args, (err, res) => {
+            super.loadFileEvents(args, (err, res) => {
                 if (err) reject(err);
                 else resolve(res);
             });

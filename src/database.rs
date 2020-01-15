@@ -226,22 +226,22 @@ impl Connection {
         Ok(event_count == 0 && checkpoint_count == 0)
     }
 
-    /// Get events that contain an mxc URL to a file.
+    /// Load events that contain an mxc URL to a file.
     /// # Arguments
     ///
     /// * `room_id` - The ID of the room for which the events should be loaded.
     /// * `limit` - The maximum number of events to return.
     /// * `from_event` - An event id of a previous event returned by this
-    ///     method.  If set events that are older than the event with the given
+    ///     method. If set events that are older than the event with the given
     ///     event ID will be returned.
     ///
     /// Returns a list of serialized events.
-    pub fn get_file_events(
+    pub fn load_file_events(
         &self,
         room_id: &str,
         limit: u32,
         from_event: Option<&str>,
-    ) -> Result<Vec<SerializedEvent>> {
+    ) -> Result<Vec<(SerializedEvent, Profile)>> {
         let ret = Database::load_file_events(self, room_id, limit, from_event)?;
         Ok(ret)
     }
@@ -898,13 +898,14 @@ impl Database {
         room_id: &str,
         limit: u32,
         from_event: Option<&str>,
-    ) -> rusqlite::Result<Vec<SerializedEvent>> {
-        let events = match from_event {
+    ) -> rusqlite::Result<Vec<(SerializedEvent, Profile)>> {
+        match from_event {
             Some(e) => {
                 let event = Database::load_event(connection, room_id, e)?;
                 let mut stmt = connection.prepare(&format!(
-                    "SELECT source
+                    "SELECT source, displayname, avatar_url
                      FROM events
+                     INNER JOIN profiles on profiles.id = events.profile_id
                      WHERE (
                          (events.room_id == ?1) &
                          (type == 'm.room.message') &
@@ -924,20 +925,23 @@ impl Database {
                         &event.server_ts as &dyn ToSql,
                         &(limit as i64),
                     ],
-                    |row| Ok(row.get(0)),
+                    |row| {
+                        Ok((
+                            row.get(0)?,
+                            Profile {
+                                displayname: row.get(1)?,
+                                avatar_url: row.get(2)?,
+                            },
+                        ))
+                    },
                 )?;
-                let mut ret: Vec<String> = Vec::new();
-
-                for row in events {
-                    let source = row?;
-                    ret.push(source?)
-                }
-                ret
+                events.collect()
             }
             None => {
                 let mut stmt = connection.prepare(&format!(
-                    "SELECT source
+                    "SELECT source, displayname, avatar_url
                      FROM events
+                     INNER JOIN profiles on profiles.id = events.profile_id
                      WHERE (
                          (events.room_id == ?1) &
                          (type == 'm.room.message') &
@@ -948,21 +952,19 @@ impl Database {
                 ))?;
 
                 let room_id = Database::get_room_id(connection, &room_id)?;
-                let events = stmt
-                    .query_map(&vec![&room_id as &dyn ToSql, &(limit as i64)], |row| {
-                        Ok(row.get(0))
+                let events =
+                    stmt.query_map(&vec![&room_id as &dyn ToSql, &(limit as i64)], |row| {
+                        Ok((
+                            row.get(0)?,
+                            Profile {
+                                displayname: row.get(1)?,
+                                avatar_url: row.get(2)?,
+                            },
+                        ))
                     })?;
-                let mut ret: Vec<String> = Vec::new();
-
-                for row in events {
-                    let source = row?;
-                    ret.push(source?)
-                }
-                ret
+                events.collect()
             }
-        };
-
-        Ok(events)
+        }
     }
 
     /// Load events surounding the given event.

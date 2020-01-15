@@ -388,16 +388,16 @@ describe('Database', function() {
         db.addEvent(imageEvent, matrixProfileOnlyDisplayName);
 
         await db.commit(true);
-        let events = await db.getFileEvents({roomId: fileEvent.room_id, limit: 10})
+        let events = await db.loadFileEvents({roomId: fileEvent.room_id, limit: 10})
         assert(events.length == 2);
 
-        events = await db.getFileEvents({roomId: fileEvent.room_id, limit: 1})
+        events = await db.loadFileEvents({roomId: fileEvent.room_id, limit: 1})
         assert(events.length == 1);
-        assert.deepEqual(events[0], imageEvent);
+        assert.deepEqual(events[0].event, imageEvent);
 
-        events = await db.getFileEvents({roomId: fileEvent.room_id, limit: 10, fromEvent: imageEvent.event_id})
+        events = await db.loadFileEvents({roomId: fileEvent.room_id, limit: 10, fromEvent: imageEvent.event_id})
         assert(events.length == 1);
-        assert.deepEqual(events[0], fileEvent);
+        assert.deepEqual(events[0].event, fileEvent);
     });
 
     it('should throw an error when adding events with missing fields.', function() {

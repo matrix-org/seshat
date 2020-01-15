@@ -321,26 +321,26 @@ fn load_file_events() {
     let connection = db.get_connection().unwrap();
 
     let result = connection
-        .get_file_events(&FILE_EVENT.room_id, 10, None)
+        .load_file_events(&FILE_EVENT.room_id, 10, None)
         .expect("Can't load file events");
     assert!(!result.is_empty());
     assert!(result.len() == 2);
-    assert_eq!(result[0], IMAGE_EVENT.source);
+    assert_eq!(result[0].0, IMAGE_EVENT.source);
     assert!(result.len() == 2);
-    assert_eq!(result[1], FILE_EVENT.source);
+    assert_eq!(result[1].0, FILE_EVENT.source);
 
     let result = connection
-        .get_file_events(&FILE_EVENT.room_id, 1, None)
+        .load_file_events(&FILE_EVENT.room_id, 1, None)
         .expect("Can't load file events");
     assert!(!result.is_empty());
     assert!(result.len() == 1);
-    assert_eq!(result[0], IMAGE_EVENT.source);
+    assert_eq!(result[0].0, IMAGE_EVENT.source);
 
     let result = connection
-        .get_file_events(&FILE_EVENT.room_id, 1, Some(&IMAGE_EVENT.event_id))
+        .load_file_events(&FILE_EVENT.room_id, 1, Some(&IMAGE_EVENT.event_id))
         .expect("Can't load file events with token");
 
     assert!(!result.is_empty());
     assert!(result.len() == 1);
-    assert_eq!(result[0], FILE_EVENT.source);
+    assert_eq!(result[0].0, FILE_EVENT.source);
 }
