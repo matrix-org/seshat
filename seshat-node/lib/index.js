@@ -60,7 +60,8 @@ const seshat = require('../native');
 /**
  * @typedef loadResult
  * @type {Object}
- * @property {matrixEvent} event A matrix event that was loaded from the database.
+ * @property {matrixEvent} event A matrix event that was loaded from the
+ * database.
  * @property {matrixProfile} profile The profile of the sender at the time the
  * event was sent.
  */
