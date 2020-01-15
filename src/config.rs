@@ -249,6 +249,7 @@ impl Default for Config {
 }
 
 #[derive(Debug, Clone)]
+#[allow(missing_docs)]
 pub enum LoadDirection {
     Backwards,
     Forwards,
@@ -293,7 +294,6 @@ impl LoadConfig {
         self
     }
 
-
     /// Set the event from which we should continue loading events.
     ///
     /// # Arguments
@@ -306,6 +306,14 @@ impl LoadConfig {
         self
     }
 
+    /// Set the direction that we are going to continue loading events from.
+    ///
+    /// This is only used if we are continuing loading events, that is if
+    /// `from_event()` is also set.
+    ///
+    /// # Arguments
+    ///
+    /// * `direction` - The direction that should be used.
     pub fn direction(mut self, direction: LoadDirection) -> Self {
         self.direction = direction;
         self
