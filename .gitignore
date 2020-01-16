@@ -5,5 +5,7 @@ seshat-node/native/artifacts.json
 seshat-node/**/*~
 seshat-node/**/node_modules
 seshat-node/**/.DS_Store
+seshat-node/coverage
+.gdb_history
 Cargo.lock
 target
