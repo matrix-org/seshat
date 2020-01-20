@@ -479,9 +479,9 @@ impl Database {
             old_checkpoint.as_ref(),
         )?;
 
-        uncommitted_events.extend(event_ids);
-
         transaction.commit()?;
+
+        uncommitted_events.extend(event_ids);
 
         let committed = if force_commit {
             index_writer.force_commit()?;
@@ -855,15 +855,16 @@ impl Database {
             &profile_id as &dyn ToSql,
         ])?;
 
-        connection.execute(
+        let mut stmt = connection.prepare(
             "
             INSERT OR IGNORE INTO uncommitted_events (
                 event_id, content_value
             ) VALUES (?1, ?2)",
-            &[&event_id as &dyn ToSql, &event.content_value],
         )?;
 
-        Ok(event_id)
+        let id = stmt.insert(&[&event_id as &dyn ToSql, &event.content_value])?;
+
+        Ok(id)
     }
 
     pub(crate) fn save_event(
