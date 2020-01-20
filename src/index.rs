@@ -120,6 +120,7 @@ impl Writer {
         doc.add_text(self.room_id_field, &event.room_id);
 
         self.inner.add_document(doc);
+        self.added_events += 1;
     }
 }
 
