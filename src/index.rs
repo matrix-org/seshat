@@ -410,3 +410,19 @@ fn japanese_tokenizer() {
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].1, event_id);
 }
+
+#[test]
+fn event_count() {
+    let tmpdir = TempDir::new().unwrap();
+    let config = Config::new().set_language(&Language::English);
+    let index = Index::new(&tmpdir, &config).unwrap();
+
+    let mut writer = index.get_writer().unwrap();
+
+    assert_eq!(writer.added_events, 0);
+    writer.add_event(&EVENT);
+    assert_eq!(writer.added_events, 1);
+
+    writer.force_commit().unwrap();
+    assert_eq!(writer.added_events, 0);
+}
