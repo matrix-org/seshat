@@ -441,18 +441,24 @@ impl Database {
         if events.is_empty() {
             return Ok(());
         }
+        let transaction = connection.transaction()?;
 
-        let parameter_str = std::iter::repeat(", ?")
-            .take(events.len() - 1)
-            .collect::<String>();
+        for chunk in events.chunks(50) {
+            let parameter_str = std::iter::repeat(", ?")
+                .take(chunk.len() - 1)
+                .collect::<String>();
 
-        let mut stmt = connection.prepare(&format!(
-            "DELETE from uncommitted_events
-                 WHERE id IN (?{})",
-            &parameter_str
-        ))?;
+            let mut stmt = transaction.prepare(&format!(
+                "DELETE from uncommitted_events
+                     WHERE id IN (?{})",
+                &parameter_str
+            ))?;
 
-        stmt.execute(events.drain(..))?;
+            stmt.execute(chunk)?;
+        }
+
+        transaction.commit()?;
+        events.clear();
 
         Ok(())
     }
