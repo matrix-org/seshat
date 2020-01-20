@@ -1,8 +1,6 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const expect = require('chai').expect;
-const assert = require('chai').assert;
 
 const Seshat = require('../');
 
@@ -175,10 +173,10 @@ describe('Database', function() {
         db.commitSync(true, true);
 
         ret = db.commitSync(false);
-        assert.equal(ret, undefined);
+        expect(ret).toBeUndefined();
 
         ret = db.commitSync();
-        assert.equal(ret, undefined);
+        expect(ret).toBeUndefined();
     });
 
     it('should allow events to be commited using a promise', async function() {
@@ -194,8 +192,8 @@ describe('Database', function() {
         db.reload();
 
         const results = db.searchSync({search_term:'Test'});
-        assert.notEqual(results.count, 0);
-        assert.deepEqual(results.results[0].result, matrixEvent);
+        expect(results.count).not.toBe(0);
+        expect(results.results[0].result).toEqual(matrixEvent);
     });
 
     it('should return a search result for the stored event using promises', async function() {
@@ -209,37 +207,37 @@ describe('Database', function() {
         // console.log(results)
         // console.log(results[0].context.profile_info)
         // console.log(results[0].result.content)
-        assert.notEqual(results.count, 0);
-        assert.deepEqual(results.results[0].result, matrixEvent);
+        expect(results.count).not.toBe(0);
+        expect(results.results[0].result).toEqual(matrixEvent);
     });
 
     it('should allow messages from the backlog to be added in a batched way', async function() {
         const db = createDb();
         let ret = db.addHistoricEventsSync(exampleEvents, checkPoint);
-        assert.equal(ret, false);
+        expect(ret).toBeFalsy();
 
         db.reload();
         const results = await db.search({search_term: 'Test'});
-        assert.notEqual(Object.entries(results).length, 0);
+        expect(Object.entries(results).length).not.toBe(0);
 
         let ret2 = db.addHistoricEventsSync(exampleEvents, checkPoint);
-        assert.equal(ret2, true);
+        expect(ret2).toBeTruthy();
     });
 
     it('should allow messages from the backlog to be added using a promise', async function() {
         const db = createDb();
         let ret = await db.addHistoricEvents(exampleEvents, checkPoint)
-        assert.equal(ret, false);
+        expect(ret).toBeFalsy();
         db.reload();
 
         const results = await db.search({search_term: 'Test'});
-        assert.notEqual(Object.entries(results).length, 0);
+        expect(Object.entries(results).length).not.toBe(0);
 
         const checkpoints = await db.loadCheckpoints();
-        assert.deepEqual(checkpoints[0], checkPoint);
+        expect(checkpoints[0]).toEqual(checkPoint);
 
         let ret2 = await db.addHistoricEvents(exampleEvents, checkPoint)
-        assert.equal(ret2, true);
+        expect(ret2).toBeTruthy();
     });
 
     it('should allow to search events in a specific room', async function() {
@@ -254,8 +252,8 @@ describe('Database', function() {
             search_term: 'Test',
             room_id: '!TESTROOM',
         });
-        assert.equal(results.count, 1);
-        assert.deepEqual(results.results[0].result, matrixEvent);
+        expect(results.count).toBe(1);
+        expect(results.results[0].result).toEqual(matrixEvent);
     });
 
     it('should allow us to sort the search results by recency', async function() {
@@ -271,10 +269,10 @@ describe('Database', function() {
             search_term: 'Test',
             order_by_recency: true
         });
-        assert.equal(results.count, 3);
-        assert.deepEqual(results.results[0].result, laterMatrixEvent);
-        assert.deepEqual(results.results[1].result, matrixEvent);
-        assert.deepEqual(results.results[2].result, beforeMatrixEvent);
+        expect(results.count).toBe(3);
+        expect(results.results[0].result).toEqual(laterMatrixEvent);
+        expect(results.results[1].result).toEqual(matrixEvent);
+        expect(results.results[2].result).toEqual(beforeMatrixEvent);
     });
 
     it('should sort the search results by rank by default', async function() {
@@ -287,9 +285,10 @@ describe('Database', function() {
         db.reload();
 
         const results = await db.search({search_term: 'Test'});
-        assert.equal(results.count, 3);
-        assert(results.results[0].rank <= results.results[1].rank);
-        assert(results.results[1].rank <= results.results[2].rank);
+
+        expect(results.count).toBe(3);
+        expect(results.results[0].rank).toBeLessThanOrEqual(results.results[1].rank);
+        expect(results.results[1].rank).toBeLessThanOrEqual(results.results[2].rank);
     });
 
     it('should allow us to get the size of the database', async function() {
@@ -299,7 +298,7 @@ describe('Database', function() {
 
         await db.commit(true);
         let size = await db.getSize();
-        assert.isAbove(size, 0)
+        expect(size).toBeGreaterThan(0)
     });
 
     it('should allow us to add different event types', async function() {
@@ -323,7 +322,7 @@ describe('Database', function() {
             search_term: 'Test',
             keys: ["content.topic"]
         });
-        assert.equal(results.count, 0);
+        expect(results.count).toBe(0);
 
         db.addEvent(topicEvent);
         await db.commit(true);
@@ -333,18 +332,18 @@ describe('Database', function() {
             search_term: 'Test',
             keys: ["content.topic"]
         });
-        assert.equal(results.count, 1);
-        assert.deepEqual(results.results[0].result, topicEvent);
+        expect(results.count).toBe(1);
+        expect(results.results[0].result).toEqual(topicEvent);
 
         results = await db.search({
             search_term: 'Test',
         });
-        assert.equal(results.count, 2);
+        expect(results.count).toBe(2);
     });
 
     it('should allow us to create a db with a specific language', async function() {
         const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'seshat-'));
-        expect(() => new Seshat(tempDir, {language: "unknown"})).to.throw('Unsuported language: unknown');
+        expect(() => new Seshat(tempDir, {language: "unknown"})).toThrow('Unsuported language: unknown');
 
         const db = new Seshat(tempDir, {language: "german"});
 
@@ -355,7 +354,7 @@ describe('Database', function() {
         results = await db.search({
             search_term: 'Test',
         });
-        assert.equal(results.count, 1);
+        expect(results.count).toBe(1);
     });
 
     it('should allow us to delete the db', async function() {
@@ -368,29 +367,29 @@ describe('Database', function() {
 
         await db.delete()
 
-        expect(() => db.addEvent(matrixEvent, matrixProfileOnlyDisplayName)).to.throw('Database has been deleted');
+        expect(() => db.addEvent(matrixEvent, matrixProfileOnlyDisplayName)).toThrow('Database has been deleted');
     });
 
     it('should allow us to check if the db is empty', async function() {
         const db = createDb();
-        assert(await db.isEmpty());
+        expect(await db.isEmpty()).toBeTruthy();
 
         db.addEvent(matrixEvent, matrixProfileOnlyDisplayName);
         await db.commit(true);
 
-        assert(!await db.isEmpty());
+        expect(await db.isEmpty()).toBeFalsy();
     });
 
     it('should allow us to create an encrypted db', async function() {
         const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'seshat-'));
         let db = new Seshat(tempDir, {passphrase: "wordpass"});
 
-        assert(await db.isEmpty());
+        expect(await db.isEmpty()).toBeTruthy();
         db.addEvent(matrixEvent, matrixProfileOnlyDisplayName);
         await db.commit(true);
-        assert(!await db.isEmpty());
+        expect(await db.isEmpty()).toBeFalsy();
 
-        expect(() => db = new Seshat(tempDir)).to.throw('');
+        expect(() => db = new Seshat(tempDir)).toThrow('');
     });
 
     it('should allow us to load events that contain files from the db', async function() {
@@ -401,15 +400,15 @@ describe('Database', function() {
 
         await db.commit(true);
         let events = await db.loadFileEvents({roomId: fileEvent.room_id, limit: 10})
-        assert(events.length == 2);
+        expect(events.length).toBe(2);
 
         events = await db.loadFileEvents({roomId: fileEvent.room_id, limit: 1})
-        assert(events.length == 1);
-        assert.deepEqual(events[0].event, imageEvent);
+        expect(events.length).toBe(1);
+        expect(events[0].event).toEqual(imageEvent);
 
         events = await db.loadFileEvents({roomId: fileEvent.room_id, limit: 10, fromEvent: imageEvent.event_id})
-        assert(events.length == 1);
-        assert.deepEqual(events[0].event, fileEvent);
+        expect(events.length).toBe(1);
+        expect(events[0].event).toEqual(fileEvent);
     });
 
     it('should allow us to continue loading file events in both directions', async function() {
@@ -423,44 +422,44 @@ describe('Database', function() {
 
         // Get the first event.
         let events = await db.loadFileEvents({roomId: fileEvent.room_id, limit: 1})
-        assert(events.length == 1);
+        expect(events.length).toBe(1);
 
         // Get the next two.
         events = await db.loadFileEvents({roomId: fileEvent.room_id, limit: 10, fromEvent: videoEvent.event_id})
-        assert(events.length == 2);
-        assert.deepEqual(events[0].event, imageEvent);
-        assert.deepEqual(events[1].event, fileEvent);
+        expect(events.length).toBe(2);
+        expect(events[0].event).toEqual(imageEvent);
+        expect(events[1].event).toEqual(fileEvent);
 
         // Try to get a newer one than the last one.
         events = await db.loadFileEvents({roomId: fileEvent.room_id, limit: 10, fromEvent: videoEvent.event_id, direction: "forwards"})
-        assert(events.length == 0);
+        expect(events.length).toBe(0);
 
         // Get the two newer events than the last one.
         events = await db.loadFileEvents({roomId: fileEvent.room_id, limit: 10, fromEvent: fileEvent.event_id, direction: "forwards"})
-        assert(events.length == 2);
-        assert.deepEqual(events[0].event, imageEvent);
-        assert.deepEqual(events[1].event, videoEvent);
+        expect(events.length).toBe(2);
+        expect(events[0].event).toEqual(imageEvent);
+        expect(events[1].event).toEqual(videoEvent);
     });
 
 
     it('should throw an error when adding events with missing fields.', function() {
         delete matrixEvent.content;
-        expect(() => db.addEvent(matrixEvent, matrixProfile)).to.throw('Event doesn\'t contain any content');
+        expect(() => db.addEvent(matrixEvent, matrixProfile)).toThrow('Event doesn\'t contain any content');
 
         delete matrixEvent.room_id;
-        expect(() => db.addEvent(matrixEvent, matrixProfile)).to.throw('Event doesn\'t contain a valid room id');
+        expect(() => db.addEvent(matrixEvent, matrixProfile)).toThrow('Event doesn\'t contain a valid room id');
 
         delete matrixEvent.origin_server_ts;
-        expect(() => db.addEvent(matrixEvent, matrixProfile)).to.throw('Event doesn\'t contain a valid timestamp');
+        expect(() => db.addEvent(matrixEvent, matrixProfile)).toThrow('Event doesn\'t contain a valid timestamp');
 
         delete matrixEvent.event_id;
-        expect(() => db.addEvent(matrixEvent, matrixProfile)).to.throw('Event doesn\'t contain a valid event id');
+        expect(() => db.addEvent(matrixEvent, matrixProfile)).toThrow('Event doesn\'t contain a valid event id');
 
         delete matrixEvent.sender;
-        expect(() => db.addEvent(matrixEvent, matrixProfile)).to.throw('Event doesn\'t contain a valid sender');
+        expect(() => db.addEvent(matrixEvent, matrixProfile)).toThrow('Event doesn\'t contain a valid sender');
     });
 
     it('should throw an error when adding events with fields that don\'t typecheck.', function() {
-        expect(() => db.addEvent(badEvent, matrixProfile)).to.throw('Event doesn\'t contain a valid timestamp');
+        expect(() => db.addEvent(badEvent, matrixProfile)).toThrow('Event doesn\'t contain a valid timestamp');
     });
 });

@@ -20,12 +20,6 @@ jobs:
           - HOMEBREW_NO_AUTO_UPDATE=1 brew install sqlcipher
           - nvm install $TRAVIS_NODE_VERSION
           - nvm use ${TRAVIS_NODE_VERSION}
-      script:
-          - cargo test -- --test-threads=1
-          - cd seshat-node
-          - yarn install
-          - yarn test --timeout 4000
-          - yarn lint
       env:
         - TRAVIS_NODE_VERSION="12"
 
@@ -49,8 +43,8 @@ install:
   - npm i -g yarn@latest neon-cli@latest
 
 script:
-  - cargo test -- --test-threads=1
+  - cargo test
   - cd seshat-node
   - yarn install
-  - yarn test
+  - yarn test --coverage
   - yarn lint
