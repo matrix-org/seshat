@@ -1715,3 +1715,26 @@ fn resume_committing() {
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].event_source, EVENT.source);
 }
+
+#[test]
+fn delete_uncommitted() {
+    let tmpdir = tempdir().unwrap();
+    let db_config = Config::new().set_passphrase("test");
+    let mut db = Database::new_with_config(tmpdir.path(), &db_config).unwrap();
+    let profile = Profile::new("Alice", "");
+
+    for i in 1..1000 {
+        let mut event: Event = Faker.fake();
+        event.server_ts += i;
+        db.add_event(event, profile.clone());
+
+        if i % 100 == 0 {
+            db.commit().unwrap();
+        }
+    }
+
+    db.force_commit().unwrap();
+    assert!(Database::load_uncommitted_events(&db.connection)
+        .unwrap()
+        .is_empty());
+}
