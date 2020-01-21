@@ -71,6 +71,16 @@ pub struct SearchResult {
     pub profile_info: HashMap<MxId, Profile>,
 }
 
+/// Statistical information about the database.
+pub struct DatabaseStats {
+    /// The number number of bytes the database is using on disk.
+    pub size: u64,
+    /// The number of events that the database knows about.
+    pub event_count: u64,
+    /// The number of rooms that the database knows about.
+    pub room_count: u64,
+}
+
 /// The main entry point to the index and database.
 pub struct Searcher {
     inner: IndexSearcher,
@@ -183,7 +193,10 @@ pub struct Database {
 /// A Seshat database connection.
 /// The connection can be used to read data out of the database using a
 /// separate thread.
-pub struct Connection(PooledConnection<SqliteConnectionManager>);
+pub struct Connection {
+    inner: PooledConnection<SqliteConnectionManager>,
+    path: PathBuf,
+}
 
 impl Connection {
     /// Load all the previously stored crawler checkpoints from the database.
@@ -215,8 +228,7 @@ impl Connection {
     /// Is the database empty.
     /// Returns true if the database is empty, false otherwise.
     pub fn is_empty(&self) -> Result<bool> {
-        let event_count: i64 =
-            self.query_row("SELECT COUNT(*) FROM events", NO_PARAMS, |row| row.get(0))?;
+        let event_count: i64 = Database::get_event_count(&self.inner)?;
         let checkpoint_count: i64 = self.query_row(
             "SELECT COUNT(*) FROM crawlercheckpoints",
             NO_PARAMS,
@@ -224,6 +236,18 @@ impl Connection {
         )?;
 
         Ok(event_count == 0 && checkpoint_count == 0)
+    }
+
+    /// Get statistical information of the database.
+    pub fn get_stats(&self) -> Result<DatabaseStats> {
+        let event_count = Database::get_event_count(&self.inner)? as u64;
+        let room_count = Database::get_room_count(&self.inner)? as u64;
+        let size = dir::get_size(&self.path)?;
+        Ok(DatabaseStats {
+            size,
+            event_count,
+            room_count,
+        })
     }
 
     /// Load events that contain an mxc URL to a file.
@@ -259,13 +283,13 @@ impl Deref for Connection {
     type Target = PooledConnection<SqliteConnectionManager>;
 
     fn deref(&self) -> &Self::Target {
-        &self.0
+        &self.inner
     }
 }
 
 impl DerefMut for Connection {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
+        &mut self.inner
     }
 }
 
@@ -736,6 +760,16 @@ impl Database {
         )?;
 
         Ok(())
+    }
+
+    pub(crate) fn get_event_count(connection: &rusqlite::Connection) -> rusqlite::Result<i64> {
+        connection.query_row("SELECT COUNT(*) FROM events", NO_PARAMS, |row| row.get(0))
+    }
+
+    pub(crate) fn get_room_count(connection: &rusqlite::Connection) -> rusqlite::Result<i64> {
+        // TODO once we support upgraded rooms we should return only leaf rooms
+        // here, rooms that are not ancestors to another one.
+        connection.query_row("SELECT COUNT(*) FROM rooms", NO_PARAMS, |row| row.get(0))
     }
 
     pub(crate) fn save_profile(
@@ -1284,7 +1318,10 @@ impl Database {
             Database::unlock(&connection, p)?;
         }
 
-        Ok(Connection(connection))
+        Ok(Connection {
+            inner: connection,
+            path: self.path.clone(),
+        })
     }
 
     /// Delete the database.
@@ -1737,4 +1774,28 @@ fn delete_uncommitted() {
     assert!(Database::load_uncommitted_events(&db.connection)
         .unwrap()
         .is_empty());
+}
+
+#[test]
+fn stats_getting() {
+    let tmpdir = tempdir().unwrap();
+    let db_config = Config::new().set_passphrase("test");
+    let mut db = Database::new_with_config(tmpdir.path(), &db_config).unwrap();
+    let profile = Profile::new("Alice", "");
+
+    for i in 0..1000 {
+        let mut event: Event = Faker.fake();
+        event.server_ts += i;
+        db.add_event(event, profile.clone());
+    }
+
+    db.commit().unwrap();
+
+    let connection = db.get_connection().unwrap();
+
+    let stats = connection.get_stats().unwrap();
+
+    assert_eq!(stats.event_count, 1000);
+    assert_eq!(stats.room_count, 1);
+    assert!(stats.size > 0);
 }

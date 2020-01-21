@@ -29,7 +29,7 @@ mod events;
 mod index;
 mod japanese_tokenizer;
 
-pub use database::{Connection, Database, SearchResult, Searcher};
+pub use database::{Connection, Database, DatabaseStats, SearchResult, Searcher};
 
 pub use error::{Error, Result};
 

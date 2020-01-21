@@ -441,6 +441,24 @@ describe('Database', function() {
         expect(events[1].event).toEqual(videoEvent);
     });
 
+    it('should allow us query the database for statistics', async function() {
+        const db = createDb();
+
+        let stats = await db.getStats(true);
+        expect(stats.eventCount).toBe(0);
+        expect(stats.roomCount).toBe(0);
+
+        db.addEvent(matrixEvent, matrixProfileOnlyDisplayName);
+        db.addEvent(fileEvent, matrixProfileOnlyDisplayName);
+        db.addEvent(imageEvent, matrixProfileOnlyDisplayName);
+        db.addEvent(videoEvent, matrixProfileOnlyDisplayName);
+
+        await db.commit(true);
+        stats = await db.getStats(true);
+        expect(stats.eventCount).toBe(4);
+        expect(stats.roomCount).toBe(1);
+        expect(stats.size).toBeGreaterThan(0);
+    });
 
     it('should throw an error when adding events with missing fields.', function() {
         delete matrixEvent.content;

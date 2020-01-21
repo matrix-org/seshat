@@ -19,8 +19,9 @@ use neon::prelude::*;
 use neon_serde;
 use serde_json;
 use seshat::{
-    CheckpointDirection, Config, Connection, CrawlerCheckpoint, Database, Event, EventType,
-    Language, LoadConfig, LoadDirection, Profile, Receiver, SearchConfig, SearchResult, Searcher,
+    CheckpointDirection, Config, Connection, CrawlerCheckpoint, Database, DatabaseStats, Event,
+    EventType, Language, LoadConfig, LoadDirection, Profile, Receiver, SearchConfig, SearchResult,
+    Searcher,
 };
 
 #[no_mangle]
@@ -193,6 +194,40 @@ impl Task for IsEmptyTask {
     ) -> JsResult<Self::JsEvent> {
         match result {
             Ok(r) => Ok(JsBoolean::new(&mut cx, r)),
+            Err(e) => cx.throw_type_error(e.to_string()),
+        }
+    }
+}
+
+struct StatsTask {
+    connection: Connection,
+}
+
+impl Task for StatsTask {
+    type Output = DatabaseStats;
+    type Error = seshat::Error;
+    type JsEvent = JsObject;
+
+    fn perform(&self) -> Result<Self::Output, Self::Error> {
+        self.connection.get_stats()
+    }
+
+    fn complete(
+        self,
+        mut cx: TaskContext,
+        result: Result<Self::Output, Self::Error>,
+    ) -> JsResult<Self::JsEvent> {
+        match result {
+            Ok(r) => {
+                let result = JsObject::new(&mut cx);
+                let event_count = JsNumber::new(&mut cx, r.event_count as f64);
+                let room_count = JsNumber::new(&mut cx, r.room_count as f64);
+                let size = JsNumber::new(&mut cx, r.size as f64);
+                result.set(&mut cx, "eventCount", event_count)?;
+                result.set(&mut cx, "roomCount", room_count)?;
+                result.set(&mut cx, "size", size)?;
+                Ok(result)
+            }
             Err(e) => cx.throw_type_error(e.to_string()),
         }
     }
@@ -452,6 +487,32 @@ declare_types! {
                 },
                 Err(e) => cx.throw_type_error(e),
             }
+        }
+
+        method getStats(mut cx) {
+            let f = cx.argument::<JsFunction>(0)?;
+
+            let mut this = cx.this();
+
+            let connection = {
+                let guard = cx.lock();
+                let db = &mut this.borrow_mut(&guard).0;
+
+                db.as_mut().map_or_else(|| Err("Database has been deleted"), |db| Ok(db.get_connection()))
+            };
+
+            let connection = match connection {
+                Ok(c) => match c {
+                    Ok(c) => c,
+                    Err(e) => return cx.throw_type_error(format!("Unable to get a database connection {}", e.to_string())),
+                },
+                Err(e) => return cx.throw_type_error(e),
+            };
+
+            let task = StatsTask { connection };
+            task.schedule(f);
+
+            Ok(cx.undefined().upcast())
         }
 
         method getSize(mut cx) {

@@ -67,6 +67,16 @@ const seshat = require('../native');
  */
 
 /**
+ * @typedef databaseStats
+ * @type {Object}
+ * @property {number} size The number of bytes that the database is consuming on
+ * the disk.
+ * @property {number} eventCount The number events that are stored in the
+ * database.
+ * @property {number} roomCount The number of rooms the database knows about.
+ */
+
+/**
  * Seshat database.<br>
  *
  * A Seshat database can be used to store and index Matrix events. A full-text
@@ -304,6 +314,21 @@ class Seshat extends seshat.Seshat {
     async getSize() {
         return new Promise((resolve, reject) => {
             super.getSize((err, res) => {
+                if (err) reject(err);
+                else resolve(res);
+            });
+        });
+    }
+
+    /**
+     * Get statistical information of the database.
+     *
+     * @return {Promise<databaseStats>} A promise that will resolve to an object
+     * containing statistical information of the database.
+     */
+    async getStats() {
+        return new Promise((resolve, reject) => {
+            super.getStats((err, res) => {
                 if (err) reject(err);
                 else resolve(res);
             });
