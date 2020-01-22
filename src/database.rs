@@ -700,6 +700,7 @@ impl Database {
                 room_id INTEGER NOT NULL,
                 type TEXT NOT NULL,
                 msgtype TEXT,
+                content_value TEXT NOT NULL,
                 source TEXT NOT NULL,
                 profile_id INTEGER NOT NULL,
                 FOREIGN KEY (profile_id) REFERENCES profile (id),
@@ -713,7 +714,6 @@ impl Database {
             "CREATE TABLE IF NOT EXISTS uncommitted_events (
                 id INTEGER NOT NULL PRIMARY KEY,
                 event_id INTEGER NOT NULL,
-                content_value TEXT NOT NULL,
                 FOREIGN KEY (event_id) REFERENCES events (id),
                 UNIQUE(event_id)
             )",
@@ -843,8 +843,9 @@ impl Database {
         connection: &rusqlite::Connection,
     ) -> rusqlite::Result<Vec<(i64, Event)>> {
         let mut stmt = connection.prepare(
-                "SELECT uncommitted_events.id, uncommitted_events.event_id, content_value, type, msgtype,
-                 events.event_id, sender, server_ts, rooms.room_id, source
+                "SELECT uncommitted_events.id, uncommitted_events.event_id,
+                 content_value, type, msgtype, events.event_id, sender,
+                 server_ts, rooms.room_id, source
                  FROM uncommitted_events
                  INNER JOIN events on events.id = uncommitted_events.event_id
                  INNER JOIN rooms on rooms.id = events.room_id
@@ -880,8 +881,8 @@ impl Database {
             "
             INSERT INTO events (
                 event_id, sender, server_ts, room_id, type,
-                msgtype, source, profile_id
-            ) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                msgtype, content_value, source, profile_id
+            ) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
         )?;
 
         let event_id = statement.insert(&[
@@ -891,18 +892,17 @@ impl Database {
             &room_id as &dyn ToSql,
             &event.event_type as &dyn ToSql,
             &event.msgtype,
+            &event.content_value,
             &event.source,
             &profile_id as &dyn ToSql,
         ])?;
 
         let mut stmt = connection.prepare(
             "
-            INSERT OR IGNORE INTO uncommitted_events (
-                event_id, content_value
-            ) VALUES (?1, ?2)",
+            INSERT OR IGNORE INTO uncommitted_events (event_id) VALUES (?1)",
         )?;
 
-        let id = stmt.insert(&[&event_id as &dyn ToSql, &event.content_value])?;
+        let id = stmt.insert(&[&event_id as &dyn ToSql])?;
 
         Ok(id)
     }
@@ -1131,7 +1131,7 @@ impl Database {
         let room_id = Database::get_room_id(connection, &room_id)?;
 
         connection.query_row(
-            "SELECT type, msgtype, event_id, sender,
+            "SELECT type, content_value, msgtype, event_id, sender,
              server_ts, rooms.room_id, source
              FROM events
              INNER JOIN rooms on rooms.id = events.room_id
@@ -1140,13 +1140,13 @@ impl Database {
             |row| {
                 Ok(Event {
                     event_type: row.get(0)?,
-                    content_value: "".to_string(),
-                    msgtype: row.get(1)?,
-                    event_id: row.get(2)?,
-                    sender: row.get(3)?,
-                    server_ts: row.get(4)?,
-                    room_id: row.get(5)?,
-                    source: row.get(6)?,
+                    content_value: row.get(1)?,
+                    msgtype: row.get(2)?,
+                    event_id: row.get(3)?,
+                    sender: row.get(4)?,
+                    server_ts: row.get(5)?,
+                    room_id: row.get(6)?,
+                    source: row.get(7)?,
                 })
             },
         )
@@ -1170,7 +1170,7 @@ impl Database {
 
         let mut stmt = if order_by_recency {
             connection.prepare(&format!(
-                "SELECT type, msgtype, event_id, sender,
+                "SELECT type, content_value, msgtype, event_id, sender,
                  server_ts, rooms.room_id, source, displayname, avatar_url
                  FROM events
                  INNER JOIN profiles on profiles.id = events.profile_id
@@ -1182,7 +1182,7 @@ impl Database {
             ))?
         } else {
             connection.prepare(&format!(
-                "SELECT type, msgtype, event_id, sender,
+                "SELECT type, content_value, msgtype, event_id, sender,
                  server_ts, rooms.room_id, source, displayname, avatar_url
                  FROM events
                  INNER JOIN profiles on profiles.id = events.profile_id
@@ -1208,17 +1208,17 @@ impl Database {
             Ok((
                 Event {
                     event_type: row.get(0)?,
-                    content_value: "".to_string(),
-                    msgtype: row.get(1)?,
-                    event_id: row.get(2)?,
-                    sender: row.get(3)?,
-                    server_ts: row.get(4)?,
-                    room_id: row.get(5)?,
-                    source: row.get(6)?,
+                    content_value: row.get(1)?,
+                    msgtype: row.get(2)?,
+                    event_id: row.get(3)?,
+                    sender: row.get(4)?,
+                    server_ts: row.get(5)?,
+                    room_id: row.get(6)?,
+                    source: row.get(7)?,
                 },
                 Profile {
-                    displayname: row.get(7)?,
-                    avatar_url: row.get(8)?,
+                    displayname: row.get(8)?,
+                    avatar_url: row.get(9)?,
                 },
             ))
         })?;
