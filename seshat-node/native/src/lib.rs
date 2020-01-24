@@ -21,11 +21,6 @@ use seshat::{Config, Database, Language, LoadConfig, LoadDirection, Profile};
 use crate::tasks::*;
 use crate::utils::*;
 
-#[no_mangle]
-pub extern "C" fn __cxa_pure_virtual() {
-    loop {}
-}
-
 pub struct SeshatDatabase(Option<Database>);
 
 declare_types! {
