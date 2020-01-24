@@ -15,13 +15,12 @@
 use fs_extra::dir;
 use std::path::PathBuf;
 
+use crate::utils::*;
 use neon::prelude::*;
 use seshat::{
-    CheckpointDirection, Connection, CrawlerCheckpoint, DatabaseStats,
-    LoadConfig, Profile, Receiver, SearchConfig, SearchResult,
-    Searcher,
+    CheckpointDirection, Connection, CrawlerCheckpoint, DatabaseStats, LoadConfig, Profile,
+    Receiver, SearchConfig, SearchResult, Searcher,
 };
-use crate::utils::*;
 
 pub(crate) struct CommitTask {
     pub(crate) receiver: Receiver<seshat::Result<()>>,

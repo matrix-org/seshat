@@ -18,8 +18,8 @@ mod utils;
 use neon::prelude::*;
 use seshat::{Config, Database, Language, LoadConfig, LoadDirection, Profile};
 
-use crate::utils::*;
 use crate::tasks::*;
+use crate::utils::*;
 
 #[no_mangle]
 pub extern "C" fn __cxa_pure_virtual() {

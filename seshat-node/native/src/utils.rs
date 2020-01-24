@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::Seshat;
 use neon::prelude::*;
 use neon_serde;
 use serde_json;
-use crate::Seshat;
 use seshat::{
-    CheckpointDirection, CrawlerCheckpoint, Event,
-    EventType, Profile, Receiver, SearchConfig, SearchResult,
+    CheckpointDirection, CrawlerCheckpoint, Event, EventType, Profile, Receiver, SearchConfig,
+    SearchResult,
 };
 
 pub(crate) fn parse_search_object(
