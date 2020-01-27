@@ -14,10 +14,10 @@
 
 use r2d2_sqlite::SqliteConnectionManager;
 
-use crate::Database;
-use crate::index::{Writer as IndexWriter};
-use crate::events::{CrawlerCheckpoint, Event, Profile};
 use crate::error::Result;
+use crate::events::{CrawlerCheckpoint, Event, Profile};
+use crate::index::Writer as IndexWriter;
+use crate::Database;
 
 pub(crate) struct Writer {
     inner: IndexWriter,

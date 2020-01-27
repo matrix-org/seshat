@@ -18,19 +18,16 @@ use std::collections::HashMap;
 use rusqlite::{ToSql, NO_PARAMS};
 
 #[cfg(test)]
-use r2d2_sqlite::SqliteConnectionManager;
-#[cfg(test)]
 use r2d2::PooledConnection;
+#[cfg(test)]
+use r2d2_sqlite::SqliteConnectionManager;
 
-use crate::index::Writer as IndexWriter;
-use crate::database::{DATABASE_VERSION, SearchResult};
-use crate::{Database};
 use crate::config::LoadDirection;
+use crate::database::{SearchResult, DATABASE_VERSION};
 use crate::error::Result;
-use crate::events::{
-    CrawlerCheckpoint, Event, EventContext, EventId, Profile,
-    SerializedEvent,
-};
+use crate::events::{CrawlerCheckpoint, Event, EventContext, EventId, Profile, SerializedEvent};
+use crate::index::Writer as IndexWriter;
+use crate::Database;
 
 const FILE_EVENT_TYPES: &str = "'m.image', 'm.file', 'm.audio', 'm.video'";
 

@@ -15,7 +15,6 @@
 /// A Seshat database connection.
 /// The connection can be used to read data out of the database using a
 /// separate thread.
-
 use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
 
@@ -24,10 +23,10 @@ use r2d2::PooledConnection;
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::NO_PARAMS;
 
-use crate::error::Result;
-use crate::Database;
-use crate::events::{CrawlerCheckpoint, Profile, SerializedEvent};
 use crate::config::LoadConfig;
+use crate::error::Result;
+use crate::events::{CrawlerCheckpoint, Profile, SerializedEvent};
+use crate::Database;
 
 /// Statistical information about the database.
 pub struct DatabaseStats {

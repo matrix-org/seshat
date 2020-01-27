@@ -12,17 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use r2d2::PooledConnection;
 use r2d2_sqlite::SqliteConnectionManager;
 
+use crate::config::SearchConfig;
+use crate::error::Result;
+use crate::events::{MxId, Profile, SerializedEvent};
 use crate::index::IndexSearcher;
 use crate::Database;
-use crate::events::{MxId, Profile, SerializedEvent};
-use crate::error::Result;
-use crate::config::SearchConfig;
 
 #[derive(Debug, PartialEq, Default, Clone)]
 /// A search result

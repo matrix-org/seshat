@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod searcher;
-mod writer;
 mod connection;
+mod searcher;
 mod static_methods;
+mod writer;
 
 use fs_extra::dir;
 use r2d2::PooledConnection;
@@ -30,12 +30,12 @@ use std::thread::JoinHandle;
 use zeroize::Zeroizing;
 
 use crate::config::{Config, SearchConfig};
+pub use crate::database::connection::{Connection, DatabaseStats};
+pub use crate::database::searcher::{SearchResult, Searcher};
+use crate::database::writer::Writer;
 use crate::error::{Error, Result};
 use crate::events::{CrawlerCheckpoint, Event, HistoricEventsT, Profile};
 use crate::index::{Index, Writer as IndexWriter};
-pub use crate::database::searcher::{Searcher, SearchResult};
-pub use crate::database::connection::{Connection, DatabaseStats};
-use crate::database::writer::Writer;
 
 #[cfg(test)]
 use fake::{Fake, Faker};
