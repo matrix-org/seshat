@@ -14,6 +14,7 @@
 
 mod searcher;
 mod writer;
+mod connection;
 
 use fs_extra::dir;
 use r2d2::PooledConnection;
@@ -22,7 +23,6 @@ use rusqlite::{ToSql, NO_PARAMS};
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::fs;
-use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::Arc;
@@ -30,7 +30,7 @@ use std::thread;
 use std::thread::JoinHandle;
 use zeroize::Zeroizing;
 
-use crate::config::{Config, LoadConfig, LoadDirection, SearchConfig};
+use crate::config::{Config, LoadDirection, SearchConfig};
 use crate::error::{Error, Result};
 use crate::events::{
     CrawlerCheckpoint, Event, EventContext, EventId, HistoricEventsT, Profile,
@@ -38,6 +38,7 @@ use crate::events::{
 };
 use crate::index::{Index, Writer as IndexWriter};
 pub use crate::database::searcher::{Searcher, SearchResult};
+pub use crate::database::connection::{Connection, DatabaseStats};
 use crate::database::writer::Writer;
 
 #[cfg(test)]
@@ -61,16 +62,6 @@ pub(crate) enum ThreadMessage {
     Write(Sender<Result<()>>, bool),
 }
 
-/// Statistical information about the database.
-pub struct DatabaseStats {
-    /// The number number of bytes the database is using on disk.
-    pub size: u64,
-    /// The number of events that the database knows about.
-    pub event_count: u64,
-    /// The number of rooms that the database knows about.
-    pub room_count: u64,
-}
-
 /// The Seshat database.
 pub struct Database {
     path: PathBuf,
@@ -80,109 +71,6 @@ pub struct Database {
     tx: Sender<ThreadMessage>,
     index: Index,
     passphrase: Option<Zeroizing<String>>,
-}
-
-/// A Seshat database connection.
-/// The connection can be used to read data out of the database using a
-/// separate thread.
-pub struct Connection {
-    inner: PooledConnection<SqliteConnectionManager>,
-    path: PathBuf,
-}
-
-impl Connection {
-    /// Load all the previously stored crawler checkpoints from the database.
-    /// # Arguments
-    pub fn load_checkpoints(&self) -> Result<Vec<CrawlerCheckpoint>> {
-        let mut stmt = self.prepare(
-            "SELECT room_id, token, full_crawl, direction
-                                    FROM crawlercheckpoints",
-        )?;
-
-        let rows = stmt.query_map(NO_PARAMS, |row| {
-            Ok(CrawlerCheckpoint {
-                room_id: row.get(0)?,
-                token: row.get(1)?,
-                full_crawl: row.get(2)?,
-                direction: row.get(3)?,
-            })
-        })?;
-
-        let mut checkpoints = Vec::new();
-
-        for row in rows {
-            let checkpoint: CrawlerCheckpoint = row?;
-            checkpoints.push(checkpoint);
-        }
-        Ok(checkpoints)
-    }
-
-    /// Is the database empty.
-    /// Returns true if the database is empty, false otherwise.
-    pub fn is_empty(&self) -> Result<bool> {
-        let event_count: i64 = Database::get_event_count(&self.inner)?;
-        let checkpoint_count: i64 = self.query_row(
-            "SELECT COUNT(*) FROM crawlercheckpoints",
-            NO_PARAMS,
-            |row| row.get(0),
-        )?;
-
-        Ok(event_count == 0 && checkpoint_count == 0)
-    }
-
-    /// Get statistical information of the database.
-    pub fn get_stats(&self) -> Result<DatabaseStats> {
-        let event_count = Database::get_event_count(&self.inner)? as u64;
-        let room_count = Database::get_room_count(&self.inner)? as u64;
-        let size = dir::get_size(&self.path)?;
-        Ok(DatabaseStats {
-            size,
-            event_count,
-            room_count,
-        })
-    }
-
-    /// Load events that contain an mxc URL to a file.
-    /// # Arguments
-    ///
-    /// * `load_config` - Configuration deciding which events and how many of
-    /// them should be loaded.
-    ///
-    /// # Examples
-    ///
-    /// ```noexecute
-    /// let config = LoadConfig::new("!testroom:localhost").limit(10);
-    /// let result = connection.load_file_events(&config);
-    /// ```
-    ///
-    /// Returns a list of tuples containing the serialized events and the
-    /// profile of the sender at the time when the event was sent.
-    pub fn load_file_events(
-        &self,
-        load_config: &LoadConfig,
-    ) -> Result<Vec<(SerializedEvent, Profile)>> {
-        Ok(Database::load_file_events(
-            self,
-            &load_config.room_id,
-            load_config.limit,
-            load_config.from_event.as_ref().map(|x| &**x),
-            &load_config.direction,
-        )?)
-    }
-}
-
-impl Deref for Connection {
-    type Target = PooledConnection<SqliteConnectionManager>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.inner
-    }
-}
-
-impl DerefMut for Connection {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.inner
-    }
 }
 
 type WriterRet = (JoinHandle<()>, Sender<ThreadMessage>);
