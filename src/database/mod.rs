@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod searcher;
+mod writer;
 
 use fs_extra::dir;
 use r2d2::PooledConnection;
@@ -37,6 +38,7 @@ use crate::events::{
 };
 use crate::index::{Index, Writer as IndexWriter};
 pub use crate::database::searcher::{Searcher, SearchResult};
+use crate::database::writer::Writer;
 
 #[cfg(test)]
 use fake::{Fake, Faker};
@@ -67,70 +69,6 @@ pub struct DatabaseStats {
     pub event_count: u64,
     /// The number of rooms that the database knows about.
     pub room_count: u64,
-}
-
-struct Writer {
-    inner: IndexWriter,
-    connection: r2d2::PooledConnection<SqliteConnectionManager>,
-    events: Vec<(Event, Profile)>,
-    uncommitted_events: Vec<i64>,
-}
-
-impl Writer {
-    fn new(
-        connection: r2d2::PooledConnection<SqliteConnectionManager>,
-        index_writer: IndexWriter,
-    ) -> Self {
-        Writer {
-            inner: index_writer,
-            connection,
-            events: Vec::new(),
-            uncommitted_events: Vec::new(),
-        }
-    }
-
-    fn add_event(&mut self, event: Event, profile: Profile) {
-        self.events.push((event, profile));
-    }
-
-    fn write_queued_events(&mut self, force_commit: bool) -> Result<()> {
-        Database::write_events(
-            &mut self.connection,
-            &mut self.inner,
-            (None, None, &mut self.events),
-            force_commit,
-            &mut self.uncommitted_events,
-        )?;
-
-        Ok(())
-    }
-
-    fn write_historic_events(
-        &mut self,
-        checkpoint: Option<CrawlerCheckpoint>,
-        old_checkpoint: Option<CrawlerCheckpoint>,
-        mut events: Vec<(Event, Profile)>,
-        force_commit: bool,
-    ) -> Result<bool> {
-        Database::write_events(
-            &mut self.connection,
-            &mut self.inner,
-            (checkpoint, old_checkpoint, &mut events),
-            force_commit,
-            &mut self.uncommitted_events,
-        )
-    }
-
-    fn load_uncommitted_events(&mut self) -> Result<()> {
-        let mut ret = Database::load_uncommitted_events(&self.connection)?;
-
-        for (id, event) in ret.drain(..) {
-            self.uncommitted_events.push(id);
-            self.inner.add_event(&event);
-        }
-
-        Ok(())
-    }
 }
 
 /// The Seshat database.
