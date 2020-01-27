@@ -6,10 +6,14 @@ edition = "2018"
 license = "Apache-2.0"
 description = "A matrix message logger with full text search support"
 
+[features]
+default = ["encryption"]
+encryption = ["rusqlite/sqlcipher"]
+
 [dependencies]
 tantivy = "0.11.3"
 tinysegmenter = "0.1.1"
-rusqlite = { version = "0.21.0", features = ["sqlcipher"] }
+rusqlite = "0.21.0"
 fs_extra = "1.1.0"
 r2d2_sqlite = "0.13.0"
 r2d2 = "0.8.8"

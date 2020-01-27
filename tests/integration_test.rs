@@ -2,9 +2,12 @@
 extern crate lazy_static;
 
 use seshat::{
-    CheckpointDirection, Config, CrawlerCheckpoint, Database, Event, EventType, LoadConfig,
+    CheckpointDirection, CrawlerCheckpoint, Database, Event, EventType, LoadConfig,
     LoadDirection, Profile, SearchConfig,
 };
+
+#[cfg(feature = "encryption")]
+use seshat::Config;
 
 use std::path::Path;
 use tempfile::tempdir;
@@ -317,6 +320,7 @@ fn delete() {
     assert!(!path.exists());
 }
 
+#[cfg(feature = "encryption")]
 #[test]
 fn encrypted_save_and_search() {
     let tmpdir = tempdir().unwrap();
