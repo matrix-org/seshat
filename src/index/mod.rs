@@ -12,15 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod encrypted_dir;
+mod encrypted_stream;
+mod japanese_tokenizer;
+
 use std::path::Path;
 use std::time::Duration;
 use tantivy as tv;
 use tantivy::tokenizer::Tokenizer;
 
 use crate::config::{Config, Language, SearchConfig};
-use crate::encrypted_dir::{EncryptedMmapDirectory, PBKDF_COUNT};
 use crate::events::{Event, EventId, EventType};
-use crate::japanese_tokenizer::TinySegmenterTokenizer;
+use crate::index::encrypted_dir::{EncryptedMmapDirectory, PBKDF_COUNT};
+use crate::index::japanese_tokenizer::TinySegmenterTokenizer;
 
 // Tantivy requires at least 3MB per writer thread and will panic if we
 // give it less than 3MB for the total writer heap size. The amount of writer

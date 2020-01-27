@@ -22,12 +22,9 @@ extern crate lazy_static;
 
 mod config;
 mod database;
-mod encrypted_dir;
-mod encrypted_stream;
 mod error;
 mod events;
 mod index;
-mod japanese_tokenizer;
 
 pub use database::{Connection, Database, DatabaseStats, SearchResult, Searcher};
 

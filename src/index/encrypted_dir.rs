@@ -43,7 +43,7 @@ use tantivy::directory::{
 
 use zeroize::Zeroizing;
 
-use crate::encrypted_stream::{AesReader, AesWriter};
+use crate::index::encrypted_stream::{AesReader, AesWriter};
 
 /// KeyBuffer type that makes sure that the buffer is zeroed out before being
 /// dropped.
