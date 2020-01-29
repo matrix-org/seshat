@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#[cfg(feature = "encryption")]
 mod encrypted_dir;
+#[cfg(feature = "encryption")]
 mod encrypted_stream;
 mod japanese_tokenizer;
 
@@ -23,6 +25,7 @@ use tantivy::tokenizer::Tokenizer;
 
 use crate::config::{Config, Language, SearchConfig};
 use crate::events::{Event, EventId, EventType};
+#[cfg(feature = "encryption")]
 use crate::index::encrypted_dir::{EncryptedMmapDirectory, PBKDF_COUNT};
 use crate::index::japanese_tokenizer::TinySegmenterTokenizer;
 
@@ -216,17 +219,7 @@ impl Index {
 
         let schema = schemabuilder.build();
 
-        let index = match &config.passphrase {
-            Some(p) => {
-                let dir = EncryptedMmapDirectory::open_or_create(path, &p, PBKDF_COUNT)?;
-                tv::Index::open_or_create(dir, schema)?
-            }
-            None => {
-                let dir = tv::directory::MmapDirectory::open(path)?;
-                tv::Index::open_or_create(dir, schema)?
-            }
-        };
-
+        let index = Index::open_index(path, config, schema)?;
         let reader = index.reader()?;
 
         match config.language {
@@ -256,6 +249,35 @@ impl Index {
         })
     }
 
+    #[cfg(feature = "encryption")]
+    fn open_index<P: AsRef<Path>>(
+        path: P,
+        config: &Config,
+        schema: tv::schema::Schema,
+    ) -> tv::Result<tv::Index> {
+        match &config.passphrase {
+            Some(p) => {
+                let dir = EncryptedMmapDirectory::open_or_create(path, &p, PBKDF_COUNT)?;
+                tv::Index::open_or_create(dir, schema)
+            }
+            None => {
+                let dir = tv::directory::MmapDirectory::open(path)?;
+                tv::Index::open_or_create(dir, schema)
+            }
+        }
+    }
+
+    #[cfg(not(feature = "encryption"))]
+    fn open_index<P: AsRef<Path>>(
+        path: P,
+        _config: &Config,
+        schema: tv::schema::Schema,
+    ) -> tv::Result<tv::Index> {
+        let dir = tv::directory::MmapDirectory::open(path)?;
+        tv::Index::open_or_create(dir, schema)
+    }
+
+    #[cfg(feature = "encryption")]
     pub fn change_passphrase<P: AsRef<Path>>(
         path: P,
         old_passphrase: &str,

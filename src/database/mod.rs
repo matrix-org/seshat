@@ -20,6 +20,7 @@ mod writer;
 use fs_extra::dir;
 use r2d2::PooledConnection;
 use r2d2_sqlite::SqliteConnectionManager;
+#[cfg(feature = "encryption")]
 use rusqlite::{ToSql, NO_PARAMS};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -27,7 +28,6 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::Arc;
 use std::thread;
 use std::thread::JoinHandle;
-use zeroize::Zeroizing;
 
 use crate::config::{Config, SearchConfig};
 pub use crate::database::connection::{Connection, DatabaseStats};
@@ -65,7 +65,7 @@ pub struct Database {
     _write_thread: JoinHandle<()>,
     tx: Sender<ThreadMessage>,
     index: Index,
-    passphrase: Option<Zeroizing<String>>,
+    config: Config,
 }
 
 type WriterRet = (JoinHandle<()>, Sender<ThreadMessage>);
@@ -100,9 +100,7 @@ impl Database {
 
         let connection = Arc::new(pool.get()?);
 
-        if let Some(ref p) = config.passphrase {
-            Database::unlock(&connection, p)?;
-        }
+        Database::unlock(&connection, config)?;
 
         Database::create_tables(&connection)?;
 
@@ -123,9 +121,7 @@ impl Database {
         // a new database and we'll end up with two connections using differing
         // keys and writes/reads to one of the connections might fail.
         let writer_connection = pool.get()?;
-        if let Some(ref p) = config.passphrase {
-            Database::unlock(&writer_connection, p)?;
-        }
+        Database::unlock(&writer_connection, config)?;
 
         let (t_handle, tx) = Database::spawn_writer(writer_connection, writer)?;
 
@@ -136,7 +132,7 @@ impl Database {
             _write_thread: t_handle,
             tx,
             index,
-            passphrase: config.passphrase.clone(),
+            config: config.clone(),
         })
     }
 
@@ -152,8 +148,9 @@ impl Database {
     /// should be an empty directory if a new database should be created.
     /// * `new_passphrase` - The passphrase that should be used instead of the
     /// current one.
+    #[cfg(feature = "encryption")]
     pub fn change_passphrase(self, new_passphrase: &str) -> Result<()> {
-        match self.passphrase {
+        match self.config.passphrase {
             Some(p) => {
                 Index::change_passphrase(&self.path, &p, new_passphrase)?;
                 self.connection
@@ -161,10 +158,18 @@ impl Database {
             }
             None => panic!("Database isn't encrypted"),
         }
+
         Ok(())
     }
 
-    fn unlock(connection: &rusqlite::Connection, passphrase: &str) -> Result<()> {
+    #[cfg(feature = "encryption")]
+    fn unlock(connection: &rusqlite::Connection, config: &Config) -> Result<()> {
+        let passphrase: &String = if let Some(ref p) = config.passphrase {
+            p
+        } else {
+            return Ok(());
+        };
+
         let mut statement = connection.prepare("PRAGMA cipher_version")?;
         let results = statement.query_map(NO_PARAMS, |row| row.get::<usize, String>(0))?;
 
@@ -174,7 +179,7 @@ impl Database {
             ));
         }
 
-        connection.pragma_update(None, "key", &passphrase as &dyn ToSql)?;
+        connection.pragma_update(None, "key", passphrase as &dyn ToSql)?;
 
         let count: std::result::Result<i64, rusqlite::Error> =
             connection.query_row("SELECT COUNT(*) FROM sqlite_master", NO_PARAMS, |row| {
@@ -185,6 +190,11 @@ impl Database {
             Ok(_) => Ok(()),
             Err(_) => Err(Error::DatabaseUnlockError("Invalid passphrase".to_owned())),
         }
+    }
+
+    #[cfg(not(feature = "encryption"))]
+    fn unlock(_: &rusqlite::Connection, _: &Config) -> Result<()> {
+        Ok(())
     }
 
     /// Get the size of the database.
@@ -365,9 +375,7 @@ impl Database {
     pub fn get_connection(&self) -> Result<Connection> {
         let connection = self.pool.get()?;
 
-        if let Some(ref p) = self.passphrase {
-            Database::unlock(&connection, p)?;
-        }
+        Database::unlock(&connection, &self.config)?;
 
         Ok(Connection {
             inner: connection,
@@ -655,6 +663,7 @@ fn is_empty() {
     assert!(!connection.is_empty().unwrap());
 }
 
+#[cfg(feature = "encryption")]
 #[test]
 fn encrypted_db() {
     let tmpdir = tempdir().unwrap();
@@ -695,6 +704,7 @@ fn encrypted_db() {
     );
 }
 
+#[cfg(feature = "encryption")]
 #[test]
 fn change_passphrase() {
     let tmpdir = tempdir().unwrap();
@@ -807,8 +817,7 @@ fn resume_committing() {
 #[test]
 fn delete_uncommitted() {
     let tmpdir = tempdir().unwrap();
-    let db_config = Config::new().set_passphrase("test");
-    let mut db = Database::new_with_config(tmpdir.path(), &db_config).unwrap();
+    let mut db = Database::new(tmpdir.path()).unwrap();
     let profile = Profile::new("Alice", "");
 
     for i in 1..1000 {
@@ -830,8 +839,7 @@ fn delete_uncommitted() {
 #[test]
 fn stats_getting() {
     let tmpdir = tempdir().unwrap();
-    let db_config = Config::new().set_passphrase("test");
-    let mut db = Database::new_with_config(tmpdir.path(), &db_config).unwrap();
+    let mut db = Database::new(tmpdir.path()).unwrap();
     let profile = Profile::new("Alice", "");
 
     for i in 0..1000 {

@@ -34,6 +34,10 @@ jobs:
       env:
         - TRAVIS_NODE_VERSION="12"
         - NVS_HOME=$ProgramData/nvs
+      script:
+          # There is no easy way to install SQLCipher under Windows so let's at
+          # least run tests not requiring it.
+          - cargo test --no-default-features
 
 cache: cargo
 
