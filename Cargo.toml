@@ -5,6 +5,7 @@ authors = ["Damir Jelić <poljar@termina.org.uk>"]
 edition = "2018"
 license = "Apache-2.0"
 description = "A matrix message logger with full text search support"
+readme="README.md"
 
 [features]
 default = ["encryption"]
