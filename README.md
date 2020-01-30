@@ -1,4 +1,8 @@
 [![Build Status](https://travis-ci.org/matrix-org/seshat.svg?branch=master)](https://travis-ci.org/matrix-org/seshat)
+[![Crates.io](https://img.shields.io/crates/v/seshat.svg)](https://crates.io/crates/seshat)
+[![Documentation](https://docs.rs/seshat/badge.svg)](https://docs.rs/seshat)
+[![#seshat](https://img.shields.io/badge/matrix-%23seshat:matrix.org-blue.svg)](https://matrix.to/#/!VYQqtuzngcvIzsyyOV:matrix.org?via=matrix.org&via=t2l.io&via=t2bot.io)
+
 
 # Seshat
 
