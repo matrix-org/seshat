@@ -12,7 +12,7 @@ Its main use is to be used as a full text search backend for Matrix clients.
 
 ## JavaScript bindings
 
-Sethat provides JavaScript bindings which can be found in the
+Seshat provides JavaScript bindings which can be found in the
 [seshat-node](seshat-node) subdir.
 
 ## Usage
