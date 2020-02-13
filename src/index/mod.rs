@@ -323,7 +323,7 @@ impl Index {
 
     pub fn get_writer(&self) -> Result<Writer, tv::Error> {
         Ok(Writer {
-            inner: self.index.writer(TANTIVY_WRITER_HEAP_SIZE)?,
+            inner: self.index.writer_with_num_threads(1, TANTIVY_WRITER_HEAP_SIZE)?,
             body_field: self.body_field,
             topic_field: self.topic_field,
             name_field: self.name_field,
