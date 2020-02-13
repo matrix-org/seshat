@@ -96,9 +96,10 @@ impl Writer {
     }
 
     fn commit_helper(&mut self, force: bool) -> Result<bool, tv::Error> {
-        if force
-            || self.added_events >= COMMIT_RATE
-            || self.commit_timestamp.elapsed() >= COMMIT_TIME
+        if self.added_events > 0
+            && (force
+                || self.added_events >= COMMIT_RATE
+                || self.commit_timestamp.elapsed() >= COMMIT_TIME)
         {
             self.inner.commit()?;
             self.added_events = 0;
