@@ -99,6 +99,7 @@ impl Database {
         let pool = r2d2::Pool::new(manager)?;
 
         let connection = Arc::new(pool.get()?);
+        connection.pragma_update(None, "foreign_keys", &1 as &dyn ToSql)?;
 
         Database::unlock(&connection, config)?;
 
@@ -121,6 +122,7 @@ impl Database {
         // a new database and we'll end up with two connections using differing
         // keys and writes/reads to one of the connections might fail.
         let writer_connection = pool.get()?;
+        writer_connection.pragma_update(None, "foreign_keys", &1 as &dyn ToSql)?;
         Database::unlock(&writer_connection, config)?;
 
         let (t_handle, tx) = Database::spawn_writer(writer_connection, writer)?;
@@ -374,6 +376,7 @@ impl Database {
     /// Note that this connection should only be used for reading.
     pub fn get_connection(&self) -> Result<Connection> {
         let connection = self.pool.get()?;
+        connection.pragma_update(None, "foreign_keys", &1 as &dyn ToSql)?;
 
         Database::unlock(&connection, &self.config)?;
 
