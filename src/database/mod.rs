@@ -49,7 +49,7 @@ use crate::events::CheckpointDirection;
 #[cfg(test)]
 use crate::EVENT;
 
-const DATABASE_VERSION: i64 = 1;
+const DATABASE_VERSION: i64 = 2;
 
 pub(crate) enum ThreadMessage {
     Event((Event, Profile)),
@@ -102,12 +102,12 @@ impl Database {
 
         Database::unlock(&connection, config)?;
 
-        Database::create_tables(&connection)?;
-
         let version = match Database::get_version(&connection) {
             Ok(v) => v,
             Err(e) => return Err(Error::DatabaseOpenError(e.to_string())),
         };
+
+        Database::create_tables(&connection)?;
 
         if version != DATABASE_VERSION {
             return Err(Error::DatabaseVersionError);
@@ -635,7 +635,7 @@ fn duplicate_empty_profiles() {
 
     let mut stmt = db
         .connection
-        .prepare("SELECT id FROM profiles WHERE user_id=?1")
+        .prepare("SELECT id FROM profile WHERE user_id=?1")
         .unwrap();
 
     let profile_ids = stmt.query_map(&[user_id], |row| row.get(0)).unwrap();

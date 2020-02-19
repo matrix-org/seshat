@@ -134,26 +134,61 @@ impl Database {
 
     pub(crate) fn get_version(connection: &rusqlite::Connection) -> Result<i64> {
         connection.execute(
+            "CREATE TABLE IF NOT EXISTS version (
+                id INTEGER NOT NULL PRIMARY KEY CHECK (id = 1),
+                version INTEGER NOT NULL
+            )",
+            NO_PARAMS,
+        )?;
+
+        connection.execute(
             "INSERT OR IGNORE INTO version ( version ) VALUES(?1)",
             &[DATABASE_VERSION],
         )?;
 
-        let version: i64 =
+        let mut version: i64 =
             connection.query_row("SELECT version FROM version", NO_PARAMS, |row| row.get(0))?;
 
         // Do database migrations here before bumping the database version.
+
+        if version == 1 {
+            // rusqlite claims that this execute call returns rows even though
+            // it does not, running it using query() fails as well. We catch the
+            // error and check if it's the ExecuteReturnedResults error, if it
+            // is we safely ignore it.
+            let result = connection.execute("ALTER TABLE profiles RENAME TO profile", NO_PARAMS);
+            match result {
+                Ok(_) => (),
+                Err(e) => match e {
+                    rusqlite::Error::ExecuteReturnedResults => (),
+                    _ => return Err(e.into()),
+                },
+            }
+            connection.execute("UPDATE version SET version = '2'", NO_PARAMS)?;
+
+            version = 2;
+        }
 
         Ok(version)
     }
 
     pub(crate) fn create_tables(conn: &rusqlite::Connection) -> Result<()> {
         conn.execute(
-            "CREATE TABLE IF NOT EXISTS profiles (
+            "CREATE TABLE IF NOT EXISTS profile (
                 id INTEGER NOT NULL PRIMARY KEY,
                 user_id TEXT NOT NULL,
                 displayname TEXT NOT NULL,
                 avatar_url TEXT NOT NULL,
                 UNIQUE(user_id,displayname,avatar_url)
+            )",
+            NO_PARAMS,
+        )?;
+
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS rooms (
+                id INTEGER NOT NULL PRIMARY KEY,
+                room_id TEXT NOT NULL,
+                UNIQUE(room_id)
             )",
             NO_PARAMS,
         )?;
@@ -188,15 +223,6 @@ impl Database {
         )?;
 
         conn.execute(
-            "CREATE TABLE IF NOT EXISTS rooms (
-                id INTEGER NOT NULL PRIMARY KEY,
-                room_id TEXT NOT NULL,
-                UNIQUE(room_id)
-            )",
-            NO_PARAMS,
-        )?;
-
-        conn.execute(
             "CREATE TABLE IF NOT EXISTS crawlercheckpoints (
                 id INTEGER NOT NULL PRIMARY KEY,
                 room_id TEXT NOT NULL,
@@ -204,14 +230,6 @@ impl Database {
                 full_crawl BOOLEAN NOT NULL,
                 direction TEXT NOT NULL,
                 UNIQUE(room_id,token,full_crawl,direction)
-            )",
-            NO_PARAMS,
-        )?;
-
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS version (
-                id INTEGER NOT NULL PRIMARY KEY CHECK (id = 1),
-                version INTEGER NOT NULL
             )",
             NO_PARAMS,
         )?;
@@ -254,7 +272,7 @@ impl Database {
 
         connection.execute(
             "
-            INSERT OR IGNORE INTO profiles (
+            INSERT OR IGNORE INTO profile (
                 user_id, displayname, avatar_url
             ) VALUES(?1, ?2, ?3)",
             &[user_id, displayname, avatar_url],
@@ -262,7 +280,7 @@ impl Database {
 
         let profile_id: i64 = connection.query_row(
             "
-            SELECT id FROM profiles WHERE (
+            SELECT id FROM profile WHERE (
                 user_id=?1
                 and displayname=?2
                 and avatar_url=?3)",
@@ -279,7 +297,7 @@ impl Database {
         profile_id: i64,
     ) -> Result<Profile> {
         let profile = connection.query_row(
-            "SELECT displayname, avatar_url FROM profiles WHERE id=?1",
+            "SELECT displayname, avatar_url FROM profile WHERE id=?1",
             &[profile_id],
             |row| {
                 Ok(Profile {
@@ -428,7 +446,7 @@ impl Database {
                 let mut stmt = connection.prepare(&format!(
                     "SELECT source, displayname, avatar_url
                      FROM events
-                     INNER JOIN profiles on profiles.id = events.profile_id
+                     INNER JOIN profile on profile.id = events.profile_id
                      WHERE (
                          (events.room_id == ?1) &
                          (type == 'm.room.message') &
@@ -464,7 +482,7 @@ impl Database {
                 let mut stmt = connection.prepare(&format!(
                     "SELECT source, displayname, avatar_url
                      FROM events
-                     INNER JOIN profiles on profiles.id = events.profile_id
+                     INNER JOIN profile on profile.id = events.profile_id
                      WHERE (
                          (events.room_id == ?1) &
                          (type == 'm.room.message') &
@@ -506,7 +524,7 @@ impl Database {
             let mut stmt = connection.prepare(
                 "SELECT source, sender, displayname, avatar_url
                  FROM events
-                 INNER JOIN profiles on profiles.id = events.profile_id
+                 INNER JOIN profile on profile.id = events.profile_id
                  WHERE (
                      (event_id != ?1) &
                      (room_id == ?2) &
@@ -549,7 +567,7 @@ impl Database {
             let mut stmt = connection.prepare(
                 "SELECT source, sender, displayname, avatar_url
                  FROM events
-                 INNER JOIN profiles on profiles.id = events.profile_id
+                 INNER JOIN profile on profile.id = events.profile_id
                  WHERE (
                      (event_id != ?1) &
                      (room_id == ?2) &
@@ -640,7 +658,7 @@ impl Database {
                 "SELECT type, msgtype, event_id, sender,
                  server_ts, rooms.room_id, source, displayname, avatar_url
                  FROM events
-                 INNER JOIN profiles on profiles.id = events.profile_id
+                 INNER JOIN profile on profile.id = events.profile_id
                  INNER JOIN rooms on rooms.id = events.room_id
                  WHERE event_id IN (?{})
                  ORDER BY server_ts DESC
@@ -652,7 +670,7 @@ impl Database {
                 "SELECT type, msgtype, event_id, sender,
                  server_ts, rooms.room_id, source, displayname, avatar_url
                  FROM events
-                 INNER JOIN profiles on profiles.id = events.profile_id
+                 INNER JOIN profile on profile.id = events.profile_id
                  INNER JOIN rooms on rooms.id = events.room_id
                  WHERE event_id IN (?{})
                  ",
