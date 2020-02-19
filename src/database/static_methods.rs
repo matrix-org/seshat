@@ -62,6 +62,62 @@ impl Database {
         Ok((ret.iter().all(|&x| x), event_ids))
     }
 
+    pub(crate) fn delete_event_helper(
+        connection: &mut rusqlite::Connection,
+        index_writer: &mut IndexWriter,
+        event_id: EventId,
+        undeleted_events: &mut Vec<EventId>,
+    ) -> Result<bool> {
+        let transaction = connection.transaction()?;
+
+        transaction.execute("DELETE from events WHERE event_id == ?1", &[&event_id])?;
+        transaction.execute(
+            "INSERT OR IGNORE INTO undeleted_events (event_id) VALUES (?1)",
+            &[&event_id],
+        )?;
+        transaction.commit().unwrap();
+
+        index_writer.delete_event(&event_id);
+        undeleted_events.push(event_id);
+
+        let committed = index_writer.commit()?;
+
+        if committed {
+            Database::mark_events_as_deleted(connection, undeleted_events)?;
+        }
+
+        Ok(true)
+    }
+
+    pub(crate) fn mark_events_as_deleted(
+        connection: &mut rusqlite::Connection,
+        events: &mut Vec<EventId>,
+    ) -> Result<()> {
+        if events.is_empty() {
+            return Ok(());
+        }
+        let transaction = connection.transaction()?;
+
+        for chunk in events.chunks(50) {
+            let parameter_str = std::iter::repeat(", ?")
+                .take(chunk.len() - 1)
+                .collect::<String>();
+
+            let mut stmt = transaction.prepare(&format!(
+                "DELETE from undeleted_events
+                     WHERE event_id IN (?{})",
+                &parameter_str
+            ))?;
+
+            stmt.execute(chunk)?;
+        }
+
+        transaction.commit()?;
+        events.clear();
+
+        Ok(())
+    }
+
     /// Delete non committed events from the database that were committed
     pub(crate) fn mark_events_as_indexed(
         connection: &mut rusqlite::Connection,
@@ -102,7 +158,7 @@ impl Database {
         ),
         force_commit: bool,
         uncommitted_events: &mut Vec<i64>,
-    ) -> Result<bool> {
+    ) -> Result<(bool, bool)> {
         let (new_checkpoint, old_checkpoint, mut events) = message;
         let transaction = connection.transaction()?;
 
@@ -129,7 +185,7 @@ impl Database {
             Database::mark_events_as_indexed(connection, uncommitted_events)?;
         }
 
-        Ok(ret)
+        Ok((ret, committed))
     }
 
     pub(crate) fn get_version(connection: &mut rusqlite::Connection) -> Result<(i64, bool)> {
@@ -253,6 +309,15 @@ impl Database {
         )?;
 
         conn.execute(
+            "CREATE TABLE IF NOT EXISTS undeleted_events (
+                id INTEGER NOT NULL PRIMARY KEY,
+                event_id TEXT NOT NULL,
+                UNIQUE(event_id)
+            )",
+            NO_PARAMS,
+        )?;
+
+        conn.execute(
             "CREATE TABLE IF NOT EXISTS crawlercheckpoints (
                 id INTEGER NOT NULL PRIMARY KEY,
                 room_id TEXT NOT NULL,
@@ -352,6 +417,15 @@ impl Database {
             })?;
 
         Ok(room_id)
+    }
+
+    pub(crate) fn load_undeleted_events(
+        connection: &rusqlite::Connection,
+    ) -> rusqlite::Result<Vec<EventId>> {
+        let mut stmt = connection.prepare("SELECT event_id from undeleted_events")?;
+        let events = stmt.query_map(NO_PARAMS, |row| Ok(row.get(0)?))?;
+
+        events.collect()
     }
 
     pub(crate) fn load_uncommitted_events(
