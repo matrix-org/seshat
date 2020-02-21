@@ -2,8 +2,8 @@
 extern crate lazy_static;
 
 use seshat::{
-    CheckpointDirection, CrawlerCheckpoint, Database, Event, EventType, LoadConfig,
-    LoadDirection, Profile, SearchConfig,
+    CheckpointDirection, CrawlerCheckpoint, Database, Event, EventType, LoadConfig, LoadDirection,
+    Profile, SearchConfig,
 };
 
 #[cfg(feature = "encryption")]

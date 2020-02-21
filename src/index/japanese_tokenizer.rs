@@ -31,7 +31,7 @@
 // Either I'm doing something wrong or the compiler is not smart enough.
 
 use std::iter::Enumerate;
-use tantivy::tokenizer::{Token, BoxTokenStream, TokenStream, Tokenizer};
+use tantivy::tokenizer::{BoxTokenStream, Token, TokenStream, Tokenizer};
 
 #[derive(Debug, Clone, Default)]
 pub struct TinySegmenterTokenizer;
