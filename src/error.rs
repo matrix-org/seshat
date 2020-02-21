@@ -34,7 +34,7 @@ pub enum Error {
     DatabaseError(rusqlite::Error),
     #[fail(display = "Index error: {}", _0)]
     /// Error signaling that there was an error with the event indexer.
-    IndexError(tantivy::Error),
+    IndexError(tantivy::TantivyError),
     #[fail(display = "File system error: {}", _0)]
     /// Error signaling that there was an error while reading from the
     /// filesystem.
@@ -65,8 +65,8 @@ impl From<rusqlite::Error> for Error {
     }
 }
 
-impl From<tantivy::Error> for Error {
-    fn from(err: tantivy::Error) -> Self {
+impl From<tantivy::TantivyError> for Error {
+    fn from(err: tantivy::TantivyError) -> Self {
         Error::IndexError(err)
     }
 }

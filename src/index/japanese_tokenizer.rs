@@ -31,7 +31,7 @@
 // Either I'm doing something wrong or the compiler is not smart enough.
 
 use std::iter::Enumerate;
-use tantivy::tokenizer::{Token, TokenStream, Tokenizer};
+use tantivy::tokenizer::{Token, BoxTokenStream, TokenStream, Tokenizer};
 
 #[derive(Debug, Clone, Default)]
 pub struct TinySegmenterTokenizer;
@@ -42,10 +42,9 @@ impl TinySegmenterTokenizer {
     }
 }
 
-impl<'a> Tokenizer<'a> for TinySegmenterTokenizer {
-    type TokenStreamImpl = TinySegmenterTokenStream;
-    fn token_stream(&self, text: &'a str) -> Self::TokenStreamImpl {
-        TinySegmenterTokenStream::new(text)
+impl Tokenizer for TinySegmenterTokenizer {
+    fn token_stream<'a>(&self, text: &'a str) -> BoxTokenStream<'a> {
+        TinySegmenterTokenStream::new(text).into()
     }
 }
 

@@ -622,7 +622,7 @@ impl Directory for EncryptedMmapDirectory {
         self.mmap_dir.atomic_write(path, &encrypted)
     }
 
-    fn watch(&self, watch_callback: WatchCallback) -> Result<WatchHandle, tantivy::Error> {
+    fn watch(&self, watch_callback: WatchCallback) -> Result<WatchHandle, tantivy::TantivyError> {
         self.mmap_dir.watch(watch_callback)
     }
 

@@ -91,11 +91,11 @@ pub(crate) struct Writer {
 }
 
 impl Writer {
-    pub fn commit(&mut self) -> Result<bool, tv::Error> {
+    pub fn commit(&mut self) -> Result<bool, tv::TantivyError> {
         self.commit_helper(false)
     }
 
-    fn commit_helper(&mut self, force: bool) -> Result<bool, tv::Error> {
+    fn commit_helper(&mut self, force: bool) -> Result<bool, tv::TantivyError> {
         if self.added_events > 0
             && (force
                 || self.added_events >= COMMIT_RATE
@@ -110,7 +110,7 @@ impl Writer {
         }
     }
 
-    pub fn force_commit(&mut self) -> Result<(), tv::Error> {
+    pub fn force_commit(&mut self) -> Result<(), tv::TantivyError> {
         self.commit_helper(true)?;
         Ok(())
     }
@@ -148,7 +148,7 @@ impl IndexSearcher {
         &self,
         term: &str,
         config: &SearchConfig,
-    ) -> Result<Vec<(f32, EventId)>, tv::Error> {
+    ) -> Result<Vec<(f32, EventId)>, tv::TantivyError> {
         let mut keys = Vec::new();
 
         let term = if let Some(room) = &config.room_id {
@@ -205,7 +205,7 @@ impl IndexSearcher {
 }
 
 impl Index {
-    pub fn new<P: AsRef<Path>>(path: P, config: &Config) -> Result<Index, tv::Error> {
+    pub fn new<P: AsRef<Path>>(path: P, config: &Config) -> Result<Index, tv::TantivyError> {
         let tokenizer_name = config.language.as_tokenizer_name();
 
         let text_field_options = Index::create_text_options(&tokenizer_name);
@@ -231,7 +231,7 @@ impl Index {
                     .register(&tokenizer_name, TinySegmenterTokenizer::new());
             }
             _ => {
-                let tokenizer = tv::tokenizer::SimpleTokenizer
+                let tokenizer = tv::tokenizer::TextAnalyzer::from(tv::tokenizer::SimpleTokenizer)
                     .filter(tv::tokenizer::RemoveLongFilter::limit(40))
                     .filter(tv::tokenizer::LowerCaser)
                     .filter(tv::tokenizer::Stemmer::new(config.language.as_tantivy()));
@@ -283,7 +283,7 @@ impl Index {
         path: P,
         old_passphrase: &str,
         new_passphrase: &str,
-    ) -> Result<(), tv::Error> {
+    ) -> Result<(), tv::TantivyError> {
         EncryptedMmapDirectory::change_passphrase(
             path,
             old_passphrase,
@@ -317,11 +317,11 @@ impl Index {
         }
     }
 
-    pub fn reload(&self) -> Result<(), tv::Error> {
+    pub fn reload(&self) -> Result<(), tv::TantivyError> {
         self.reader.reload()
     }
 
-    pub fn get_writer(&self) -> Result<Writer, tv::Error> {
+    pub fn get_writer(&self) -> Result<Writer, tv::TantivyError> {
         Ok(Writer {
             inner: self.index.writer_with_num_threads(1, TANTIVY_WRITER_HEAP_SIZE)?,
             body_field: self.body_field,

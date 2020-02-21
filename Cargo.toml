@@ -12,7 +12,7 @@ default = ["encryption"]
 encryption = ["rusqlite/sqlcipher"]
 
 [dependencies]
-tantivy = "0.11.3"
+tantivy = "0.12.0"
 tinysegmenter = "0.1.1"
 rusqlite = "0.21.0"
 fs_extra = "1.1.0"
