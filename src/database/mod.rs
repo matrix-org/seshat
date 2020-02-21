@@ -861,3 +861,17 @@ fn stats_getting() {
     assert_eq!(stats.room_count, 1);
     assert!(stats.size > 0);
 }
+
+#[test]
+fn database_upgrade_v1() {
+    let mut path = PathBuf::from(file!());
+    path.pop();
+    path.pop();
+    path.pop();
+    path.push("data/database/v1");
+    let db = Database::new(path).unwrap();
+
+    let version = Database::get_version(&db.connection).unwrap();
+
+    assert_eq!(version, DATABASE_VERSION);
+}

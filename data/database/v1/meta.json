@@ -1,0 +1,69 @@
+{
+  "segments": [
+    {
+      "segment_id": "960ea6f6-0824-48c0-bd15-5b7811ee5c52",
+      "max_doc": 2947,
+      "deletes": null
+    },
+    {
+      "segment_id": "9d004a20-4a49-41f8-a0e2-99084afeba37",
+      "max_doc": 53,
+      "deletes": null
+    }
+  ],
+  "schema": [
+    {
+      "name": "body",
+      "type": "text",
+      "options": {
+        "indexing": {
+          "record": "position",
+          "tokenizer": "default"
+        },
+        "stored": false
+      }
+    },
+    {
+      "name": "topic",
+      "type": "text",
+      "options": {
+        "indexing": {
+          "record": "position",
+          "tokenizer": "default"
+        },
+        "stored": false
+      }
+    },
+    {
+      "name": "name",
+      "type": "text",
+      "options": {
+        "indexing": {
+          "record": "position",
+          "tokenizer": "default"
+        },
+        "stored": false
+      }
+    },
+    {
+      "name": "room_id",
+      "type": "text",
+      "options": {
+        "indexing": {
+          "record": "basic",
+          "tokenizer": "raw"
+        },
+        "stored": false
+      }
+    },
+    {
+      "name": "event_id",
+      "type": "text",
+      "options": {
+        "indexing": null,
+        "stored": true
+      }
+    }
+  ],
+  "opstamp": 3026
+}
