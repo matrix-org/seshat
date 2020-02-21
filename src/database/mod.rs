@@ -872,6 +872,8 @@ fn database_upgrade_v1() {
     let db = Database::new(path).unwrap();
 
     let version = Database::get_version(&db.connection).unwrap();
-
     assert_eq!(version, DATABASE_VERSION);
+
+    let result = db.search("Hello", &SearchConfig::new()).unwrap();
+    assert!(!result.is_empty())
 }
