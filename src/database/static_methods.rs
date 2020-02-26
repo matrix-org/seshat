@@ -132,7 +132,7 @@ impl Database {
         Ok(ret)
     }
 
-    pub(crate) fn get_version(connection: &rusqlite::Connection) -> Result<i64> {
+    pub(crate) fn get_version(connection: &mut rusqlite::Connection) -> Result<(i64, bool)> {
         connection.execute(
             "CREATE TABLE IF NOT EXISTS version (
                 id INTEGER NOT NULL PRIMARY KEY CHECK (id = 1),
@@ -142,12 +142,31 @@ impl Database {
         )?;
 
         connection.execute(
+            "CREATE TABLE IF NOT EXISTS reindex_needed (
+                id INTEGER NOT NULL PRIMARY KEY CHECK (id = 1),
+                reindex_needed BOOL NOT NULL
+            )",
+            NO_PARAMS,
+        )?;
+
+        connection.execute(
+            "INSERT OR IGNORE INTO reindex_needed ( reindex_needed ) VALUES(?1)",
+            &[false],
+        )?;
+
+        connection.execute(
             "INSERT OR IGNORE INTO version ( version ) VALUES(?1)",
             &[DATABASE_VERSION],
         )?;
 
         let mut version: i64 =
             connection.query_row("SELECT version FROM version", NO_PARAMS, |row| row.get(0))?;
+
+        let mut reindex_needed: bool = connection.query_row(
+            "SELECT reindex_needed FROM reindex_needed",
+            NO_PARAMS,
+            |row| row.get(0),
+        )?;
 
         // Do database migrations here before bumping the database version.
 
@@ -169,7 +188,21 @@ impl Database {
             version = 2;
         }
 
-        Ok(version)
+        if version == 2 {
+            let transaction = connection.transaction()?;
+
+            transaction.execute(
+                "UPDATE reindex_needed SET reindex_needed = ?1",
+                &[true],
+            )?;
+            transaction.execute("UPDATE version SET version = '3'", NO_PARAMS)?;
+            transaction.commit()?;
+
+            reindex_needed = true;
+            version = 3;
+        }
+
+        Ok((version, reindex_needed))
     }
 
     pub(crate) fn create_tables(conn: &rusqlite::Connection) -> Result<()> {

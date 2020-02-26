@@ -49,7 +49,7 @@ use crate::events::CheckpointDirection;
 #[cfg(test)]
 use crate::EVENT;
 
-const DATABASE_VERSION: i64 = 2;
+const DATABASE_VERSION: i64 = 3;
 
 pub(crate) enum ThreadMessage {
     Event((Event, Profile)),
@@ -98,13 +98,13 @@ impl Database {
         let manager = SqliteConnectionManager::file(&db_path);
         let pool = r2d2::Pool::new(manager)?;
 
-        let connection = Arc::new(pool.get()?);
+        let mut connection = pool.get()?;
         connection.pragma_update(None, "foreign_keys", &1 as &dyn ToSql)?;
 
         Database::unlock(&connection, config)?;
 
-        let version = match Database::get_version(&connection) {
-            Ok(v) => v,
+        let (version, reindex_needed) = match Database::get_version(&mut connection) {
+            Ok(ret) => ret,
             Err(e) => return Err(Error::DatabaseOpenError(e.to_string())),
         };
 
@@ -112,6 +112,10 @@ impl Database {
 
         if version != DATABASE_VERSION {
             return Err(Error::DatabaseVersionError);
+        }
+
+        if reindex_needed {
+            return Err(Error::ReindexError)
         }
 
         let index = Database::create_index(&path, &config)?;
@@ -129,7 +133,7 @@ impl Database {
 
         Ok(Database {
             path: path.into(),
-            connection,
+            connection: Arc::new(connection),
             pool,
             _write_thread: t_handle,
             tx,
@@ -869,9 +873,10 @@ fn database_upgrade_v1() {
     path.pop();
     path.pop();
     path.push("data/database/v1");
-    let db = Database::new(path).unwrap();
+    let mut db = Database::new(path).unwrap();
+    let mut connection = db.get_connection().unwrap();
 
-    let version = Database::get_version(&db.connection).unwrap();
+    let (version, _) = Database::get_version(&mut connection).unwrap();
     assert_eq!(version, DATABASE_VERSION);
 
     let result = db.search("Hello", &SearchConfig::new()).unwrap();

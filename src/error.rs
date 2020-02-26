@@ -51,6 +51,9 @@ pub enum Error {
     /// Error signaling that sqlcipher support is missing.
     #[fail(display = "Sqlcipher error: {}", _0)]
     SqlCipherError(String),
+    /// Error indicating that the index needs to be rebuild.
+    #[fail(display = "Error opening the database, the index needs to be rebuild.")]
+    ReindexError,
 }
 
 impl From<r2d2::Error> for Error {
