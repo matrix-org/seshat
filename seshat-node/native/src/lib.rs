@@ -16,41 +16,44 @@ mod tasks;
 mod utils;
 
 use neon::prelude::*;
-use seshat::{Config, Database, Language, LoadConfig, LoadDirection, Profile};
+use seshat::{Config, Database, LoadConfig, LoadDirection, Profile};
 
 use crate::tasks::*;
 use crate::utils::*;
 
 pub struct SeshatDatabase(Option<Database>);
 
+pub struct DatabaseManager {
+    path: std::path::PathBuf,
+    total_events: u64,
+    completed_events: u64,
+    config: Config,
+}
+
 declare_types! {
+    pub class Test for DatabaseManager {
+        init(mut cx) {
+            let db_path: String = cx.argument::<JsString>(0)?.value();
+            let args =  cx.argument_opt(1);
+            let config = parse_database_config(&mut cx, args)?;
+
+            Ok(
+                DatabaseManager {
+                    path: db_path.into(),
+                    total_events: 0,
+                    completed_events: 0,
+                    config,
+                }
+            )
+        }
+    }
+
     pub class Seshat for SeshatDatabase {
         init(mut cx) {
             let db_path: String = cx.argument::<JsString>(0)?.value();
-            let mut config = Config::new();
+            let args =  cx.argument_opt(1);
 
-            if let Some(c) =  cx.argument_opt(1) {
-                let c = c.downcast::<JsObject>().or_throw(&mut cx)?;
-
-                if let Ok(l) = c.get(&mut cx, "language") {
-                    if let Ok(l) = l.downcast::<JsString>() {
-                        let language = Language::from(l.value().as_ref());
-                        match language {
-                            Language::Unknown => return cx.throw_type_error(
-                                format!("Unsuported language: {}", l.value())
-                            ),
-                            _ => {config = config.set_language(&language);}
-                        }
-                    }
-                }
-
-                if let Ok(p) = c.get(&mut cx, "passphrase") {
-                    if let Ok(p) = p.downcast::<JsString>() {
-                        let passphrase: String = p.value();
-                        config = config.set_passphrase(passphrase);
-                    }
-                }
-            }
+            let config = parse_database_config(&mut cx, args)?;
 
             let db = match Database::new_with_config(&db_path, &config) {
                 Ok(db) => db,

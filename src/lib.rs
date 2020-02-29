@@ -60,7 +60,7 @@ mod error;
 mod events;
 mod index;
 
-pub use database::{Connection, Database, DatabaseStats, SearchResult, Searcher};
+pub use database::{Connection, ReadOnlyDatabase, Database, DatabaseStats, SearchResult, Searcher};
 
 pub use error::{Error, Result};
 
