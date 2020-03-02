@@ -18,9 +18,11 @@ mod encrypted_dir;
 mod encrypted_stream;
 mod japanese_tokenizer;
 
+use std::convert::TryInto;
 use std::path::Path;
 use std::time::Duration;
 use tantivy as tv;
+use tantivy::chrono::{NaiveDateTime, Utc};
 
 use crate::config::{Config, Language, SearchConfig};
 use crate::events::{Event, EventId, EventType};
@@ -75,6 +77,8 @@ pub(crate) struct Index {
     topic_field: tv::schema::Field,
     name_field: tv::schema::Field,
     event_id_field: tv::schema::Field,
+    sender_field: tv::schema::Field,
+    date_field: tv::schema::Field,
     room_id_field: tv::schema::Field,
 }
 
@@ -84,6 +88,8 @@ pub(crate) struct Writer {
     pub(crate) topic_field: tv::schema::Field,
     pub(crate) name_field: tv::schema::Field,
     pub(crate) event_id_field: tv::schema::Field,
+    pub(crate) sender_field: tv::schema::Field,
+    pub(crate) date_field: tv::schema::Field,
     pub(crate) added_events: usize,
     pub(crate) commit_timestamp: std::time::Instant,
     room_id_field: tv::schema::Field,
@@ -125,6 +131,18 @@ impl Writer {
 
         doc.add_text(self.event_id_field, &event.event_id);
         doc.add_text(self.room_id_field, &event.room_id);
+        doc.add_text(self.sender_field, &event.sender);
+
+        let seconds: i64 = event.server_ts / 1000;
+        let nano_seconds: u32 = ((event.server_ts % 1000) * 1000)
+            .try_into()
+            .unwrap_or_default();
+        let naive_date = NaiveDateTime::from_timestamp_opt(seconds, nano_seconds);
+
+        if let Some(d) = naive_date {
+            let date = tv::DateTime::from_utc(d, Utc);
+            doc.add_date(self.date_field, &date);
+        }
 
         self.inner.add_document(doc);
         self.added_events += 1;
@@ -139,6 +157,10 @@ pub(crate) struct IndexSearcher {
     pub(crate) topic_field: tv::schema::Field,
     pub(crate) name_field: tv::schema::Field,
     pub(crate) room_id_field: tv::schema::Field,
+    #[used]
+    pub(crate) sender_field: tv::schema::Field,
+    #[used]
+    pub(crate) date_field: tv::schema::Field,
     pub(crate) event_id_field: tv::schema::Field,
 }
 
@@ -213,7 +235,11 @@ impl Index {
         let body_field = schemabuilder.add_text_field("body", text_field_options.clone());
         let topic_field = schemabuilder.add_text_field("topic", text_field_options.clone());
         let name_field = schemabuilder.add_text_field("name", text_field_options);
+
+        let date_field = schemabuilder.add_date_field("date", tv::schema::INDEXED);
+
         let room_id_field = schemabuilder.add_text_field("room_id", tv::schema::STRING);
+        let sender_field = schemabuilder.add_text_field("sender", tv::schema::STRING);
 
         let event_id_field = schemabuilder.add_text_field("event_id", tv::schema::STORED);
 
@@ -245,6 +271,8 @@ impl Index {
             topic_field,
             name_field,
             event_id_field,
+            sender_field,
+            date_field,
             room_id_field,
         })
     }
@@ -312,6 +340,8 @@ impl Index {
             topic_field: self.topic_field,
             name_field: self.name_field,
             room_id_field: self.room_id_field,
+            sender_field: self.sender_field,
+            date_field: self.date_field,
             event_id_field: self.event_id_field,
         }
     }
@@ -330,6 +360,8 @@ impl Index {
             name_field: self.name_field,
             event_id_field: self.event_id_field,
             room_id_field: self.room_id_field,
+            sender_field: self.sender_field,
+            date_field: self.date_field,
             added_events: 0,
             commit_timestamp: std::time::Instant::now(),
         })
