@@ -191,10 +191,7 @@ impl Database {
         if version == 2 {
             let transaction = connection.transaction()?;
 
-            transaction.execute(
-                "UPDATE reindex_needed SET reindex_needed = ?1",
-                &[true],
-            )?;
+            transaction.execute("UPDATE reindex_needed SET reindex_needed = ?1", &[true])?;
             transaction.execute("UPDATE version SET version = '3'", NO_PARAMS)?;
             transaction.commit()?;
 

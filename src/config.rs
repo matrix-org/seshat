@@ -305,6 +305,7 @@ impl LoadConfig {
     /// * `event_id` - An event id of a previous event returned by this
     /// method. If set events that are older than the event with the given
     /// event ID will be returned.
+    #[allow(clippy::wrong_self_convention)]
     pub fn from_event<E: Into<String>>(mut self, event_id: E) -> Self {
         self.from_event = Some(event_id.into());
         self

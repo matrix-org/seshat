@@ -29,7 +29,7 @@ use std::sync::Arc;
 use std::thread;
 use std::thread::JoinHandle;
 
-use crate::config::{Config, SearchConfig, LoadConfig};
+use crate::config::{Config, LoadConfig, SearchConfig};
 pub use crate::database::connection::{Connection, DatabaseStats};
 pub use crate::database::searcher::{SearchResult, Searcher};
 use crate::database::writer::Writer;
@@ -141,14 +141,14 @@ impl ReadOnlyDatabase {
             // Skip removing directories, we don't create subdirs in our
             // database dir.
             if path.is_dir() {
-                continue
+                continue;
             }
 
             if let Some(file_name) = path.file_name() {
                 // Skip removing the events database, those will be needed for
                 // reindexing.
                 if file_name == EVENTS_DB_NAME {
-                    continue
+                    continue;
                 }
 
                 fs::remove_file(path)?
@@ -219,7 +219,7 @@ impl Database {
         }
 
         if reindex_needed {
-            return Err(Error::ReindexError)
+            return Err(Error::ReindexError);
         }
 
         let index = Database::create_index(&path, &config)?;
