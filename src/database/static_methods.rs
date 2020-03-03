@@ -457,6 +457,48 @@ impl Database {
         }
     }
 
+    pub(crate) fn load_all_events(
+        connection: &rusqlite::Connection,
+        limit: usize,
+        from_event: Option<&Event>,
+    ) -> rusqlite::Result<Vec<SerializedEvent>> {
+        match from_event {
+            Some(event) => {
+                let mut stmt = connection.prepare(
+                    "SELECT source FROM events
+                     WHERE (
+                         (type == 'm.room.message') &
+                         (event_id != ?1) &
+                         (server_ts <= ?2)
+                     ) ORDER BY server_ts DESC LIMIT ?3
+                     ",
+                )?;
+
+                let events = stmt.query_map(
+                    &vec![
+                        &event.event_id as &dyn ToSql,
+                        &event.server_ts as &dyn ToSql,
+                        &(limit as i64),
+                    ],
+                    |row| { Ok(row.get(0)?) },
+                )?;
+                events.collect()
+            }
+            None => {
+                let mut stmt = connection.prepare(
+                    "SELECT source FROM events
+                     WHERE type == 'm.room.message' 
+                     ORDER BY server_ts DESC LIMIT ?1
+                     ",
+                )?;
+
+                let events =
+                    stmt.query_map(&vec![&(limit as i64)], |row| { Ok(row.get(0)?) })?;
+                events.collect()
+            }
+        }
+    }
+
     pub(crate) fn load_file_events(
         connection: &rusqlite::Connection,
         room_id: &str,
