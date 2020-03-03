@@ -480,7 +480,7 @@ impl Database {
                         &event.server_ts as &dyn ToSql,
                         &(limit as i64),
                     ],
-                    |row| { Ok(row.get(0)?) },
+                    |row| Ok(row.get(0)?),
                 )?;
                 events.collect()
             }
@@ -492,8 +492,7 @@ impl Database {
                      ",
                 )?;
 
-                let events =
-                    stmt.query_map(&vec![&(limit as i64)], |row| { Ok(row.get(0)?) })?;
+                let events = stmt.query_map(&vec![&(limit as i64)], |row| Ok(row.get(0)?))?;
                 events.collect()
             }
         }

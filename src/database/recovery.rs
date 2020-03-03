@@ -1,18 +1,18 @@
-use std::path::{Path, PathBuf};
-use std::sync::atomic::AtomicU64;
-use std::sync::Arc;
 use std::fs;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 
 use r2d2::PooledConnection;
 use r2d2_sqlite::SqliteConnectionManager;
-use rusqlite::{ToSql};
+use rusqlite::ToSql;
 
-use crate::events::{Event, SerializedEvent};
-use crate::error::{Error, Result};
-use crate::config::{Config};
-use crate::Database;
-use crate::index::{Index, Writer};
+use crate::config::Config;
 use crate::database::{DATABASE_VERSION, EVENTS_DB_NAME};
+use crate::error::{Error, Result};
+use crate::events::{Event, SerializedEvent};
+use crate::index::{Index, Writer};
+use crate::Database;
 
 pub struct RecoveryDatabase {
     path: PathBuf,
@@ -35,6 +35,10 @@ pub struct RecoveryInfo {
 impl RecoveryInfo {
     pub fn total_events(&self) -> u64 {
         self.total_event_count
+    }
+
+    pub fn reindexed_events(&self) -> &AtomicU64 {
+        &self.reindexed_events
     }
 }
 
@@ -162,25 +166,32 @@ impl RecoveryDatabase {
             None => panic!("Index wasn't deleted"),
         }
 
+        self.recovery_info
+            .reindexed_events
+            .fetch_add(events.len() as u64, Ordering::SeqCst);
+
         Ok(())
     }
 
     /// Commit the recovery database and mark is as reindexed.
     pub fn commit(mut self) -> Result<()> {
         self.index_writer.as_mut().unwrap().force_commit()?;
-        self.connection.execute("UPDATE reindex_needed SET reindex_needed = ?1", &[false])?;
+        self.connection
+            .execute("UPDATE reindex_needed SET reindex_needed = ?1", &[false])?;
         Ok(())
     }
 }
 
 #[cfg(test)]
 mod test {
+    use crate::{Database, Error, Event, EventType, RecoveryDatabase};
+    use serde_json::Value;
     use std::path::PathBuf;
-    use crate::{Database, Event, EventType, Error, RecoveryDatabase};
-    use serde_json::{Value};
+    use std::sync::atomic::Ordering;
 
     fn event_from_json(event_source: &str) -> Event {
-        let object: Value = serde_json::from_str(event_source).expect("Can't deserialize event source");
+        let object: Value =
+            serde_json::from_str(event_source).expect("Can't deserialize event source");
         let content = &object["content"];
         let event_type = &object["type"];
 
@@ -192,7 +203,7 @@ mod test {
         };
 
         let (content_value, msgtype) = match event_type {
-            EventType::Message => (content["body"].as_str().unwrap(), Some(content["msgtype"].as_str().unwrap())),
+            EventType::Message => (content["body"].as_str().unwrap(), Some("m.text")),
             EventType::Topic => (content["topic"].as_str().unwrap(), None),
             EventType::Name => (content["name"].as_str().unwrap(), None),
         };
@@ -215,7 +226,7 @@ mod test {
         path.pop();
         path.pop();
         path.pop();
-        path.push("data/database/v1");
+        path.push("data/database/v2");
         let db = Database::new(&path);
 
         match db {
@@ -223,17 +234,60 @@ mod test {
             Err(e) => match e {
                 Error::ReindexError => (),
                 e => panic!("Database doesn't need a reindex: {}", e),
-            }
+            },
         }
 
         let mut recovery_db = RecoveryDatabase::new(path).expect("Can't open recovery db");
         assert_ne!(recovery_db.info().total_events(), 0);
-        recovery_db.delete_the_index().unwrap();
+        recovery_db
+            .delete_the_index()
+            .expect("Can't delete the index");
+        recovery_db
+            .open_index()
+            .expect("Can't open the new the index");
 
-        let events = recovery_db.load_events(10, None).unwrap();
+        let events = recovery_db
+            .load_events(10, None)
+            .expect("Can't load events");
 
         assert!(!events.is_empty());
+        assert_eq!(events.len(), 10);
 
-        let events: Vec<Event> = events.iter().map(|e| event_from_json(e)).collect();
+        let mut events: Vec<Event> = events.iter().map(|e| event_from_json(e)).collect();
+
+        recovery_db.index_events(&events).unwrap();
+        assert_eq!(
+            recovery_db
+                .info()
+                .reindexed_events()
+                .load(Ordering::Relaxed),
+            10
+        );
+
+        loop {
+            let serialized_events = recovery_db
+                .load_events(10, events.last())
+                .expect("Can't load events");
+
+            if serialized_events.is_empty() {
+                break;
+            }
+
+            events = serialized_events
+                .iter()
+                .map(|e| event_from_json(e))
+                .collect();
+            recovery_db.index_events(&events).unwrap();
+        }
+
+        assert_eq!(
+            recovery_db
+                .info()
+                .reindexed_events()
+                .load(Ordering::Relaxed),
+            999
+        );
+
+        recovery_db.commit().unwrap();
     }
 }
