@@ -3,15 +3,15 @@ use std::fs;
 
 use r2d2::PooledConnection;
 use r2d2_sqlite::SqliteConnectionManager;
-use rusqlite::{ToSql, NO_PARAMS};
+use rusqlite::{ToSql};
 
-use crate::events::{CrawlerCheckpoint, Event, HistoricEventsT, Profile, SerializedEvent};
+use crate::events::{Profile, SerializedEvent};
 use crate::error::{Error, Result};
-use crate::config::{Config, LoadConfig, SearchConfig};
+use crate::config::{Config, LoadConfig};
 use crate::Database;
 use crate::database::{DATABASE_VERSION, EVENTS_DB_NAME};
 
-pub struct ReadOnlyDatabase {
+pub struct RecoveryDatabase {
     path: PathBuf,
     connection: PooledConnection<SqliteConnectionManager>,
     pool: r2d2::Pool<SqliteConnectionManager>,
@@ -19,7 +19,7 @@ pub struct ReadOnlyDatabase {
     index_deleted: bool,
 }
 
-impl ReadOnlyDatabase {
+impl RecoveryDatabase {
     /// Open a read-only Seshat database.
     ///
     /// # Arguments
@@ -33,7 +33,7 @@ impl ReadOnlyDatabase {
         Self::new_with_config(path, &Config::new())
     }
 
-    /// Open a read-only Seshat database with the provided config.
+    /// Open a recovery Seshat database with the provided config.
     ///
     /// # Arguments
     ///
@@ -75,6 +75,8 @@ impl ReadOnlyDatabase {
     }
 
     /// Delete the Seshat index, leaving only the events database.
+    ///
+    /// After this operation is done, the index can be rebuilt.
     pub fn delete_the_index(&mut self) -> std::io::Result<()> {
         for entry in fs::read_dir(&self.path)? {
             let entry = entry?;

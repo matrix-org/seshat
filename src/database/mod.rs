@@ -16,7 +16,7 @@ mod connection;
 mod searcher;
 mod static_methods;
 mod writer;
-mod read_only;
+mod recovery;
 
 use fs_extra::dir;
 use r2d2::PooledConnection;
@@ -30,13 +30,13 @@ use std::sync::Arc;
 use std::thread;
 use std::thread::JoinHandle;
 
-use crate::config::{Config, LoadConfig, SearchConfig};
+use crate::config::{Config, SearchConfig};
 pub use crate::database::connection::{Connection, DatabaseStats};
 pub use crate::database::searcher::{SearchResult, Searcher};
-pub use crate::database::read_only::ReadOnlyDatabase;
+pub use crate::database::recovery::RecoveryDatabase;
 use crate::database::writer::Writer;
 use crate::error::{Error, Result};
-use crate::events::{CrawlerCheckpoint, Event, HistoricEventsT, Profile, SerializedEvent};
+use crate::events::{CrawlerCheckpoint, Event, HistoricEventsT, Profile};
 use crate::index::{Index, Writer as IndexWriter};
 
 #[cfg(test)]
