@@ -111,6 +111,12 @@ impl RecoveryDatabase {
     ///
     /// After this operation is done, the index can be rebuilt.
     pub fn delete_the_index(&mut self) -> std::io::Result<()> {
+        let writer = self.index_writer.take();
+        let index = self.index.take();
+
+        drop(writer);
+        drop(index);
+
         for entry in fs::read_dir(&self.path)? {
             let entry = entry?;
             let path = entry.path();
@@ -148,6 +154,10 @@ impl RecoveryDatabase {
     }
 
     pub fn open_index(&mut self) -> Result<()> {
+        if !self.index_deleted {
+            return Err(Error::ReindexError);
+        }
+
         let index = Index::new(&self.path, &self.config)?;
         let writer = index.get_writer()?;
         self.index = Some(index);
@@ -160,7 +170,15 @@ impl RecoveryDatabase {
         &self.recovery_info
     }
 
-    pub fn index_events(&mut self, events: &Vec<Event>) -> Result<()> {
+    /// Re-index a batch of events.
+    ///
+    /// # Arguments
+    ///
+    /// * `events` - The events that should be reindexed.
+    ///
+    /// Returns `ReindexError` if the index wasn't previously deleted and
+    /// opened.
+    pub fn index_events(&mut self, events: &[Event]) -> Result<()> {
         match self.index_writer.as_mut() {
             Some(writer) => events.iter().map(|e| writer.add_event(e)).collect(),
             None => panic!("Index wasn't deleted"),
@@ -173,12 +191,37 @@ impl RecoveryDatabase {
         Ok(())
     }
 
-    /// Commit the recovery database and mark is as reindexed.
-    pub fn commit(mut self) -> Result<()> {
-        self.index_writer.as_mut().unwrap().force_commit()?;
-        self.connection
-            .execute("UPDATE reindex_needed SET reindex_needed = ?1", &[false])?;
-        Ok(())
+    /// Commit to the index.
+    ///
+    /// Returns true if the commit was forwarded, false if not enough events are
+    /// queued up.
+    ///
+    /// Returns `ReindexError` if the index wasn't previously deleted and
+    /// opened.
+    pub fn commit(&mut self) -> Result<bool> {
+        match self.index_writer.as_mut() {
+            Some(writer) => {
+                let ret = writer.commit()?;
+                Ok(ret)
+            }
+            None => Err(Error::ReindexError),
+        }
+    }
+
+    /// Commit the remaining added events and mark the reindex as done.
+    ///
+    /// Returns `ReindexError` if the index wasn't previously deleted and
+    /// opened.
+    pub fn commit_and_close(mut self) -> Result<()> {
+        match self.index_writer.as_mut() {
+            Some(writer) => {
+                writer.force_commit()?;
+                self.connection
+                    .execute("UPDATE reindex_needed SET reindex_needed = ?1", &[false])?;
+                Ok(())
+            }
+            None => Err(Error::ReindexError),
+        }
     }
 }
 
