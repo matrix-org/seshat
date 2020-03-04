@@ -227,7 +227,9 @@ impl RecoveryDatabase {
 
 #[cfg(test)]
 mod test {
-    use crate::{Database, Error, Event, EventType, RecoveryDatabase};
+    use crate::{Database, Error, Event, EventType, RecoveryDatabase, SearchConfig};
+    use crate::database::DATABASE_VERSION;
+
     use serde_json::Value;
     use std::path::PathBuf;
     use std::sync::atomic::Ordering;
@@ -280,7 +282,7 @@ mod test {
             },
         }
 
-        let mut recovery_db = RecoveryDatabase::new(path).expect("Can't open recovery db");
+        let mut recovery_db = RecoveryDatabase::new(&path).expect("Can't open recovery db");
         assert_ne!(recovery_db.info().total_events(), 0);
         recovery_db
             .delete_the_index()
@@ -331,6 +333,17 @@ mod test {
             999
         );
 
-        recovery_db.commit().unwrap();
+        recovery_db.commit_and_close().unwrap();
+
+        let db = Database::new(&path).unwrap();
+        let mut connection = db.get_connection().unwrap();
+
+        let (version, reindex_needed) = Database::get_version(&mut connection).unwrap();
+
+        assert_eq!(version, DATABASE_VERSION);
+        assert_eq!(reindex_needed, false);
+
+        let result = db.search("Hello", &SearchConfig::new()).unwrap();
+        assert!(!result.is_empty())
     }
 }
