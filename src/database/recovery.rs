@@ -14,6 +14,11 @@ use crate::events::{Event, SerializedEvent};
 use crate::index::{Index, Writer};
 use crate::Database;
 
+/// Database that can be used to reindex the events.
+///
+/// Reindexing the database may be needed if the index schema changes. This may
+/// happen occasionally on upgrades or if language settings for the database
+/// change.
 pub struct RecoveryDatabase {
     path: PathBuf,
     connection: PooledConnection<SqliteConnectionManager>,
@@ -27,16 +32,27 @@ pub struct RecoveryDatabase {
 }
 
 #[derive(Debug, Clone)]
+/// Info about the recovery process.
+///
+/// This can be used to track the progress of the reindex.
+///
+/// `RecoveryInfo` implements `Send` and `Sync` so it can be shared between
+/// threads if for example the UI is in a separate thread.
 pub struct RecoveryInfo {
     total_event_count: u64,
     reindexed_events: Arc<AtomicU64>,
 }
 
+unsafe impl Send for RecoveryInfo {}
+unsafe impl Sync for RecoveryInfo {}
+
 impl RecoveryInfo {
+    /// The total number of events that the database holds.
     pub fn total_events(&self) -> u64 {
         self.total_event_count
     }
 
+    /// The number of events that are processed and reindexed.
     pub fn reindexed_events(&self) -> &AtomicU64 {
         &self.reindexed_events
     }
@@ -141,6 +157,10 @@ impl RecoveryDatabase {
         Ok(())
     }
 
+    /// Load serialized events from the database.
+    ///
+    /// * `limit` - The number of events to load.
+    /// * `from_event` - The event where to continue loading from.
     pub fn load_events(
         &self,
         limit: usize,
@@ -153,6 +173,9 @@ impl RecoveryDatabase {
         )?)
     }
 
+    /// Create and open a new index.
+    ///
+    /// Returns `ReindexError` if the index wasn't deleted first.
     pub fn open_index(&mut self) -> Result<()> {
         if !self.index_deleted {
             return Err(Error::ReindexError);
@@ -166,6 +189,7 @@ impl RecoveryDatabase {
         Ok(())
     }
 
+    /// Get the recovery info for the database.
     pub fn info(&self) -> &RecoveryInfo {
         &self.recovery_info
     }
