@@ -897,9 +897,53 @@ fn database_upgrade_v1() {
     path.pop();
     path.pop();
     path.push("data/database/v1");
-    let mut db = Database::new(path).unwrap();
-    let mut connection = db.get_connection().unwrap();
+    let db = Database::new(path);
 
+    // Sadly the v1 database has invalid json in the source field, reindexing it
+    // won't be possible. Let's check that it's marked for a reindex.
+    match db {
+        Ok(_) => panic!("Database doesn't need a reindex."),
+        Err(e) => match e {
+            Error::ReindexError => (),
+            e => panic!("Database doesn't need a reindex: {}", e),
+        },
+    }
+}
+
+#[cfg(test)]
+use crate::database::recovery::test::{event_from_json, reindex_loop};
+
+#[test]
+fn database_upgrade_v1_2() {
+    let mut path = PathBuf::from(file!());
+    path.pop();
+    path.pop();
+    path.pop();
+    path.push("data/database/v1_2");
+    let db = Database::new(&path);
+    match db {
+        Ok(_) => panic!("Database doesn't need a reindex."),
+        Err(e) => match e {
+            Error::ReindexError => (),
+            e => panic!("Database doesn't need a reindex: {}", e),
+        },
+    }
+
+    let mut recovery_db = RecoveryDatabase::new(&path).expect("Can't open recovery db");
+
+    recovery_db.delete_the_index().unwrap();
+    recovery_db.open_index().unwrap();
+
+    let events = recovery_db.load_events(100, None).unwrap();
+    let events: Vec<Event> = events.iter().map(|e| event_from_json(e)).collect();
+
+    recovery_db.index_events(&events).unwrap();
+    reindex_loop(&mut recovery_db, events).unwrap();
+    recovery_db.commit_and_close().unwrap();
+
+    let db = Database::new(&path).expect("Can't open the db event after a reindex");
+
+    let mut connection = db.get_connection().unwrap();
     let (version, _) = Database::get_version(&mut connection).unwrap();
     assert_eq!(version, DATABASE_VERSION);
 

@@ -226,15 +226,15 @@ impl RecoveryDatabase {
 }
 
 #[cfg(test)]
-mod test {
-    use crate::{Database, Error, Event, EventType, RecoveryDatabase, SearchConfig};
+pub(crate) mod test {
+    use crate::{Database, Result, Error, Event, EventType, RecoveryDatabase, SearchConfig};
     use crate::database::DATABASE_VERSION;
 
     use serde_json::Value;
     use std::path::PathBuf;
     use std::sync::atomic::Ordering;
 
-    fn event_from_json(event_source: &str) -> Event {
+    pub(crate) fn event_from_json(event_source: &str) -> Event {
         let object: Value =
             serde_json::from_str(event_source).expect("Can't deserialize event source");
         let content = &object["content"];
@@ -263,6 +263,26 @@ mod test {
             object["room_id"].as_str().unwrap(),
             &event_source,
         )
+    }
+
+    pub(crate) fn reindex_loop(db: &mut RecoveryDatabase, initial_events: Vec<Event>) -> Result<()> {
+        let mut events = initial_events;
+
+        loop {
+            let serialized_events = db.load_events(10, events.last())?;
+            if serialized_events.is_empty() {
+                break;
+            }
+
+            events = serialized_events
+                .iter()
+                .map(|e| event_from_json(e))
+                .collect();
+
+            db.index_events(&events)?;
+            db.commit()?;
+        }
+        Ok(())
     }
 
     #[test]
@@ -309,21 +329,7 @@ mod test {
             10
         );
 
-        loop {
-            let serialized_events = recovery_db
-                .load_events(10, events.last())
-                .expect("Can't load events");
-
-            if serialized_events.is_empty() {
-                break;
-            }
-
-            events = serialized_events
-                .iter()
-                .map(|e| event_from_json(e))
-                .collect();
-            recovery_db.index_events(&events).unwrap();
-        }
+        reindex_loop(&mut recovery_db, events).expect("Can't reindex the db");
 
         assert_eq!(
             recovery_db
