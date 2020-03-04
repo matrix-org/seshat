@@ -155,6 +155,7 @@ impl Event {
     /// * `room_id` - The unique identifier of the room that the event belongs
     /// to.
     /// * `source` - The serialized version of the event.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         event_type: EventType,
         content_value: &str,

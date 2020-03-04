@@ -342,7 +342,7 @@ pub(crate) mod test {
         assert!(!events.is_empty());
         assert_eq!(events.len(), 10);
 
-        let mut events: Vec<Event> = events.iter().map(|e| event_from_json(e)).collect();
+        let events: Vec<Event> = events.iter().map(|e| event_from_json(e)).collect();
 
         recovery_db.index_events(&events).unwrap();
         assert_eq!(

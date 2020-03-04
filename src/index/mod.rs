@@ -23,7 +23,6 @@ use std::path::Path;
 use std::time::Duration;
 use tantivy as tv;
 use tantivy::chrono::{NaiveDateTime, Utc};
-use tantivy::tokenizer::Tokenizer;
 use tantivy::Term;
 
 use crate::config::{Config, Language, SearchConfig};

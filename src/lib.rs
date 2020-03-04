@@ -48,7 +48,7 @@
 //! let result = database.search("test", &SearchConfig::new()).unwrap();
 //! ```
 
-#![warn(missing_docs)]
+#![deny(missing_docs)]
 
 #[cfg(test)]
 #[macro_use]
