@@ -16,7 +16,7 @@ mod tasks;
 mod utils;
 
 use neon::prelude::*;
-use seshat::{Database, LoadConfig, LoadDirection, Profile, RecoveryDatabase, RecoveryInfo};
+use seshat::{Database, Error, LoadConfig, LoadDirection, Profile, RecoveryDatabase, RecoveryInfo};
 use std::sync::atomic::Ordering;
 use std::sync::Mutex;
 
@@ -102,8 +102,11 @@ declare_types! {
             let db = match Database::new_with_config(&db_path, &config) {
                 Ok(db) => db,
                 Err(e) => {
-                    let message = format!("Error opening the database: {:?}", e);
-                    panic!(message)
+                    let error = match e {
+                        Error::ReindexError => cx.throw_range_error("Database needs to be reindexed"),
+                        e => cx.throw_error(format!("Error opening the database: {:?}", e))
+                    };
+                    return error;
                 }
             };
 
