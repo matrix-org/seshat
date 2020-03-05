@@ -17,8 +17,8 @@ use neon::prelude::*;
 use neon_serde;
 use serde_json;
 use seshat::{
-    CheckpointDirection, CrawlerCheckpoint, Event, EventType, Profile, Receiver, SearchConfig,
-    SearchResult, Config, Language
+    CheckpointDirection, Config, CrawlerCheckpoint, Event, EventType, Language, Profile, Receiver,
+    SearchConfig, SearchResult,
 };
 
 pub(crate) fn parse_database_config(
@@ -34,10 +34,12 @@ pub(crate) fn parse_database_config(
             if let Ok(l) = l.downcast::<JsString>() {
                 let language = Language::from(l.value().as_ref());
                 match language {
-                    Language::Unknown => return cx.throw_type_error(
-                        format!("Unsuported language: {}", l.value())
-                    ),
-                    _ => {config = config.set_language(&language);}
+                    Language::Unknown => {
+                        return cx.throw_type_error(format!("Unsuported language: {}", l.value()))
+                    }
+                    _ => {
+                        config = config.set_language(&language);
+                    }
                 }
             }
         }

@@ -393,4 +393,22 @@ class Seshat extends seshat.Seshat {
     }
 }
 
-module.exports = Seshat;
+class SeshatRecovery extends seshat.SeshatRecovery {
+    info() {
+        return super.info();
+    }
+
+    async reindex() {
+        return new Promise((resolve, reject) => {
+            super.reindex((err, res) => {
+                if (err) reject(err);
+                else resolve(res);
+            });
+        });
+    }
+}
+
+module.exports = {
+    Seshat: Seshat,
+    SeshatRecovery: SeshatRecovery,
+}

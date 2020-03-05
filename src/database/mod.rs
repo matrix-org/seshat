@@ -32,7 +32,7 @@ use std::thread::JoinHandle;
 
 use crate::config::{Config, SearchConfig};
 pub use crate::database::connection::{Connection, DatabaseStats};
-pub use crate::database::recovery::RecoveryDatabase;
+pub use crate::database::recovery::{RecoveryDatabase, RecoveryInfo};
 pub use crate::database::searcher::{SearchResult, Searcher};
 use crate::database::writer::Writer;
 use crate::error::{Error, Result};

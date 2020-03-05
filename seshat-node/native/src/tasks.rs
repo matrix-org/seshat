@@ -14,12 +14,13 @@
 
 use fs_extra::dir;
 use std::path::PathBuf;
+use std::sync::Mutex;
 
 use crate::utils::*;
 use neon::prelude::*;
 use seshat::{
-    CheckpointDirection, Connection, CrawlerCheckpoint, DatabaseStats, LoadConfig, Profile,
-    Receiver, SearchConfig, SearchResult, Searcher,
+    CheckpointDirection, Connection, CrawlerCheckpoint, DatabaseStats, Event, LoadConfig, Profile,
+    Receiver, RecoveryDatabase, SearchConfig, SearchResult, Searcher,
 };
 
 pub(crate) struct CommitTask {
@@ -312,5 +313,50 @@ impl Task for LoadFileEventsTask {
         }
 
         Ok(results)
+    }
+}
+
+pub(crate) struct ReindexTask {
+    pub(crate) inner: Mutex<Option<RecoveryDatabase>>,
+}
+
+impl Task for ReindexTask {
+    type Output = ();
+    type Error = seshat::Error;
+    type JsEvent = JsUndefined;
+
+    fn perform(&self) -> Result<Self::Output, Self::Error> {
+        let mut db = self.inner.lock().unwrap().take().unwrap();
+        db.delete_the_index()?;
+        db.open_index()?;
+
+        let mut events = db.load_events(100, None)?;
+        db.index_events(&events)?;
+
+        loop {
+            events = db.load_events(100, events.last())?;
+
+            if events.is_empty() {
+                break;
+            }
+
+            db.index_events(&events)?;
+            db.commit()?;
+        }
+
+        db.commit_and_close()?;
+
+        Ok(())
+    }
+
+    fn complete(
+        self,
+        mut cx: TaskContext,
+        result: Result<Self::Output, Self::Error>,
+    ) -> JsResult<Self::JsEvent> {
+        match result {
+            Ok(_) => Ok(cx.undefined()),
+            Err(e) => cx.throw_type_error(e.to_string()),
+        }
     }
 }

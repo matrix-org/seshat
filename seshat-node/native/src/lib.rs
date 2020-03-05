@@ -16,35 +16,79 @@ mod tasks;
 mod utils;
 
 use neon::prelude::*;
-use seshat::{Config, Database, LoadConfig, LoadDirection, Profile};
+use seshat::{Database, LoadConfig, LoadDirection, Profile, RecoveryDatabase, RecoveryInfo};
+use std::sync::atomic::Ordering;
+use std::sync::Mutex;
 
 use crate::tasks::*;
 use crate::utils::*;
 
 pub struct SeshatDatabase(Option<Database>);
-
-pub struct DatabaseManager {
-    path: std::path::PathBuf,
-    total_events: u64,
-    completed_events: u64,
-    config: Config,
+pub struct SeshatRecoveryDb {
+    database: Option<RecoveryDatabase>,
+    info: RecoveryInfo,
 }
 
 declare_types! {
-    pub class Test for DatabaseManager {
+    pub class SeshatRecovery for SeshatRecoveryDb {
         init(mut cx) {
             let db_path: String = cx.argument::<JsString>(0)?.value();
             let args =  cx.argument_opt(1);
             let config = parse_database_config(&mut cx, args)?;
+            let database = RecoveryDatabase::new_with_config(db_path, &config)
+                .expect("Can't open recovery database.");
+            let info = database.info().clone();
 
-            Ok(
-                DatabaseManager {
-                    path: db_path.into(),
-                    total_events: 0,
-                    completed_events: 0,
-                    config,
-                }
-            )
+            Ok(SeshatRecoveryDb{
+                database: Some(database),
+                info
+            })
+        }
+
+        method reindex(mut cx) {
+            let f = cx.argument::<JsFunction>(0)?;
+            let mut this = cx.this();
+
+            let database = {
+                let guard = cx.lock();
+                let db = &mut this.borrow_mut(&guard).database;
+                db.take()
+            };
+
+            let database = match database {
+                Some(db) => db,
+                None => return cx.throw_type_error("A reindex has been already done"),
+            };
+
+            let task = ReindexTask { inner: Mutex::new(Some(database)) };
+            task.schedule(f);
+
+            Ok(cx.undefined().upcast())
+        }
+
+        method info(mut cx) {
+            let mut this = cx.this();
+
+            let (total, reindexed) = {
+                let guard = cx.lock();
+                let info = &this.borrow_mut(&guard).info;
+
+                let total = info.total_events();
+                let reindexed = info.reindexed_events().load(Ordering::Relaxed);
+                (total, reindexed)
+            };
+
+            let done: f64 = reindexed as f64 / total as f64;
+            let total = JsNumber::new(&mut cx, total as f64);
+            let reindexed = JsNumber::new(&mut cx, reindexed as f64);
+            let done = JsNumber::new(&mut cx, done);
+
+            let info = JsObject::new(&mut cx);
+            info.set(&mut cx, "totalEvents", total)?;
+            info.set(&mut cx, "reindexedEvents", reindexed)?;
+            info.set(&mut cx, "done", done)?;
+
+            Ok(info.upcast())
         }
     }
 
@@ -468,4 +512,8 @@ declare_types! {
     }
 }
 
-register_module!(mut cx, { cx.export_class::<Seshat>("Seshat") });
+register_module!(mut cx, {
+    cx.export_class::<Seshat>("Seshat")?;
+    cx.export_class::<SeshatRecovery>("SeshatRecovery")?;
+    Ok(())
+});

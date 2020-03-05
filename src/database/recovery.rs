@@ -14,6 +14,9 @@ use crate::events::{Event, SerializedEvent};
 use crate::index::{Index, Writer};
 use crate::Database;
 
+use crate::EventType;
+use serde_json::Value;
+
 /// Database that can be used to reindex the events.
 ///
 /// Reindexing the database may be needed if the index schema changes. This may
@@ -126,7 +129,7 @@ impl RecoveryDatabase {
     /// Delete the Seshat index, leaving only the events database.
     ///
     /// After this operation is done, the index can be rebuilt.
-    pub fn delete_the_index(&mut self) -> std::io::Result<()> {
+    pub fn delete_the_index(&mut self) -> Result<()> {
         let writer = self.index_writer.take();
         let index = self.index.take();
 
@@ -157,20 +160,50 @@ impl RecoveryDatabase {
         Ok(())
     }
 
+    fn event_from_json(event_source: &str) -> Event {
+        let object: Value =
+            serde_json::from_str(event_source).expect("Can't deserialize event source");
+        let content = &object["content"];
+        let event_type = &object["type"];
+
+        let event_type = match event_type.as_str().unwrap() {
+            "m.room.message" => EventType::Message,
+            "m.room.name" => EventType::Name,
+            "m.room.topic" => EventType::Topic,
+            _ => panic!("Invalid event type"),
+        };
+
+        let (content_value, msgtype) = match event_type {
+            EventType::Message => (content["body"].as_str().unwrap(), Some("m.text")),
+            EventType::Topic => (content["topic"].as_str().unwrap(), None),
+            EventType::Name => (content["name"].as_str().unwrap(), None),
+        };
+
+        Event::new(
+            event_type,
+            content_value,
+            msgtype,
+            object["event_id"].as_str().unwrap(),
+            object["sender"].as_str().unwrap(),
+            object["origin_server_ts"].as_u64().unwrap() as i64,
+            object["room_id"].as_str().unwrap(),
+            &event_source,
+        )
+    }
+
     /// Load serialized events from the database.
     ///
     /// * `limit` - The number of events to load.
     /// * `from_event` - The event where to continue loading from.
-    pub fn load_events(
-        &self,
-        limit: usize,
-        from_event: Option<&Event>,
-    ) -> Result<Vec<SerializedEvent>> {
-        Ok(Database::load_all_events(
-            &self.connection,
-            limit,
-            from_event,
-        )?)
+    pub fn load_events(&self, limit: usize, from_event: Option<&Event>) -> Result<Vec<Event>> {
+        let serialized_events = Database::load_all_events(&self.connection, limit, from_event)?;
+
+        let events = serialized_events
+            .iter()
+            .map(|e| RecoveryDatabase::event_from_json(e))
+            .collect();
+
+        Ok(events)
     }
 
     /// Create and open a new index.
@@ -251,8 +284,8 @@ impl RecoveryDatabase {
 
 #[cfg(test)]
 pub(crate) mod test {
-    use crate::{Database, Result, Error, Event, EventType, RecoveryDatabase, SearchConfig};
     use crate::database::DATABASE_VERSION;
+    use crate::{Database, Error, Event, EventType, RecoveryDatabase, Result, SearchConfig};
 
     use serde_json::Value;
     use std::path::PathBuf;
@@ -289,7 +322,10 @@ pub(crate) mod test {
         )
     }
 
-    pub(crate) fn reindex_loop(db: &mut RecoveryDatabase, initial_events: Vec<Event>) -> Result<()> {
+    pub(crate) fn reindex_loop(
+        db: &mut RecoveryDatabase,
+        initial_events: Vec<Event>,
+    ) -> Result<()> {
         let mut events = initial_events;
 
         loop {
@@ -298,10 +334,10 @@ pub(crate) mod test {
                 break;
             }
 
-            events = serialized_events
-                .iter()
-                .map(|e| event_from_json(e))
-                .collect();
+            // events = serialized_events
+            //     .iter()
+            //     .map(|e| event_from_json(e))
+            //     .collect();
 
             db.index_events(&events)?;
             db.commit()?;
@@ -342,7 +378,7 @@ pub(crate) mod test {
         assert!(!events.is_empty());
         assert_eq!(events.len(), 10);
 
-        let events: Vec<Event> = events.iter().map(|e| event_from_json(e)).collect();
+        // let events: Vec<Event> = events.iter().map(|e| event_from_json(e)).collect();
 
         recovery_db.index_events(&events).unwrap();
         assert_eq!(

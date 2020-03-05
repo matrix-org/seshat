@@ -2,7 +2,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-const Seshat = require('../');
+const {Seshat} = require('../');
 
 const matrixEvent = {
     type: 'm.room.message',

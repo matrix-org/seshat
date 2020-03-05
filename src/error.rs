@@ -39,6 +39,9 @@ pub enum Error {
     /// Error signaling that there was an error while reading from the
     /// filesystem.
     FsError(fs_extra::error::Error),
+    #[fail(display = "IO error: {}", _0)]
+    /// Error signaling that there was an error while doing a IO operation.
+    IOError(std::io::Error),
     /// Error signaling that the database passphrase was incorrect.
     #[fail(display = "Error unlocking the database: {}", _0)]
     DatabaseUnlockError(String),
@@ -77,5 +80,11 @@ impl From<tantivy::TantivyError> for Error {
 impl From<fs_extra::error::Error> for Error {
     fn from(err: fs_extra::error::Error) -> Self {
         Error::FsError(err)
+    }
+}
+
+impl From<std::io::Error> for Error {
+    fn from(err: std::io::Error) -> Self {
+        Error::IOError(err)
     }
 }
