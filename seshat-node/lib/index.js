@@ -76,6 +76,19 @@ const seshat = require('../native');
  * @property {number} roomCount The number of rooms the database knows about.
  */
 
+
+class ReindexError extends Error {
+    constructor(...params) {
+        super(...params);
+
+        if (Error.captureStackTrace) {
+            Error.captureStackTrace(this, ReindexError)
+        }
+        this.name = 'ReindexError';
+        this.message = 'The Seshat database needs to be reindexed.';
+    }
+}
+
 /**
  * Seshat database.<br>
  *
@@ -106,6 +119,18 @@ const seshat = require('../native');
  * let results = await db.search('Test');
  */
 class Seshat extends seshat.Seshat {
+    constructor(path, config = undefined) {
+        config = config || {};
+        try {
+            super(path, config);
+        } catch (e) {
+            if (e.constructor.name === "RangeError") {
+                throw new ReindexError();
+            } else {
+                throw e;
+            }
+        }
+    }
     /**
      * Add an event to the database.
      *
@@ -411,4 +436,5 @@ class SeshatRecovery extends seshat.SeshatRecovery {
 module.exports = {
     Seshat: Seshat,
     SeshatRecovery: SeshatRecovery,
+    ReindexError: ReindexError,
 }
