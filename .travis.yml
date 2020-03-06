@@ -49,6 +49,9 @@ install:
 script:
   - cargo test
   - cd seshat-node
+    # Reset our test data before running the Javascript tests
+  - rm -r data/database
+  - git reset --hard HEAD
   - yarn install
   - yarn test --coverage
   - yarn lint
