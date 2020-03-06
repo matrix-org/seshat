@@ -19,7 +19,7 @@ use std::sync::Mutex;
 use crate::utils::*;
 use neon::prelude::*;
 use seshat::{
-    CheckpointDirection, Connection, CrawlerCheckpoint, DatabaseStats, Event, LoadConfig, Profile,
+    CheckpointDirection, Connection, CrawlerCheckpoint, DatabaseStats, LoadConfig, Profile,
     Receiver, RecoveryDatabase, SearchConfig, SearchResult, Searcher,
 };
 
@@ -330,11 +330,11 @@ impl Task for ReindexTask {
         db.delete_the_index()?;
         db.open_index()?;
 
-        let mut events = db.load_events(100, None)?;
+        let mut events = db.load_events_deserialized(500, None)?;
         db.index_events(&events)?;
 
         loop {
-            events = db.load_events(100, events.last())?;
+            events = db.load_events_deserialized(500, events.last())?;
 
             if events.is_empty() {
                 break;
