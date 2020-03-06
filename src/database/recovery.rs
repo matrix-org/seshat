@@ -3,6 +3,9 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
+use std::convert::TryInto;
+use std::io::{Error as IoError, ErrorKind};
+
 use r2d2::PooledConnection;
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::ToSql;
@@ -160,50 +163,102 @@ impl RecoveryDatabase {
         Ok(())
     }
 
-    fn event_from_json(event_source: &str) -> Event {
-        let object: Value =
-            serde_json::from_str(event_source).expect("Can't deserialize event source");
+    fn event_from_json(event_source: &str) -> std::io::Result<Event> {
+        let object: Value = serde_json::from_str(event_source)?;
         let content = &object["content"];
         let event_type = &object["type"];
 
-        let event_type = match event_type.as_str().unwrap() {
+        let event_type = match event_type.as_str().unwrap_or_default() {
             "m.room.message" => EventType::Message,
             "m.room.name" => EventType::Name,
             "m.room.topic" => EventType::Topic,
-            _ => panic!("Invalid event type"),
+            _ => return Err(IoError::new(ErrorKind::Other, "Invalid event type.")),
         };
 
         let (content_value, msgtype) = match event_type {
-            EventType::Message => (content["body"].as_str().unwrap(), Some("m.text")),
-            EventType::Topic => (content["topic"].as_str().unwrap(), None),
-            EventType::Name => (content["name"].as_str().unwrap(), None),
+            EventType::Message => (
+                content["body"]
+                    .as_str()
+                    .ok_or_else(|| IoError::new(ErrorKind::Other, "No content value found"))?,
+                Some("m.text"),
+            ),
+            EventType::Topic => (
+                content["topic"]
+                    .as_str()
+                    .ok_or_else(|| IoError::new(ErrorKind::Other, "No content value found"))?,
+                None,
+            ),
+            EventType::Name => (
+                content["name"]
+                    .as_str()
+                    .ok_or_else(|| IoError::new(ErrorKind::Other, "No content value found"))?,
+                None,
+            ),
         };
 
-        Event::new(
+        let event_id = object["event_id"]
+            .as_str()
+            .ok_or_else(|| IoError::new(ErrorKind::Other, "No event id found"))?;
+        let sender = object["sender"]
+            .as_str()
+            .ok_or_else(|| IoError::new(ErrorKind::Other, "No sender found"))?;
+        let server_ts = object["origin_server_ts"]
+            .as_u64()
+            .ok_or_else(|| IoError::new(ErrorKind::Other, "No server timestamp found"))?;
+        let room_id = object["room_id"]
+            .as_str()
+            .ok_or_else(|| IoError::new(ErrorKind::Other, "No room id found"))?;
+
+        Ok(Event::new(
             event_type,
             content_value,
             msgtype,
-            object["event_id"].as_str().unwrap(),
-            object["sender"].as_str().unwrap(),
-            object["origin_server_ts"].as_u64().unwrap() as i64,
-            object["room_id"].as_str().unwrap(),
+            event_id,
+            sender,
+            server_ts.try_into().map_err(|_e| {
+                IoError::new(ErrorKind::Other, "Server timestamp out of valid range")
+            })?,
+            room_id,
             &event_source,
-        )
+        ))
+    }
+
+    /// Load deserialized events from the database.
+    ///
+    /// * `limit` - The number of events to load.
+    /// * `from_event` - The event where to continue loading from.
+    ///
+    /// Events that fail to be deserialized will be filtered out.
+    pub fn load_events_deserialized(
+        &self,
+        limit: usize,
+        from_event: Option<&Event>,
+    ) -> Result<Vec<Event>> {
+        let serialized_events = self.load_events(limit, from_event)?;
+
+        let events = serialized_events
+            .iter()
+            .map(|e| RecoveryDatabase::event_from_json(e))
+            .filter_map(std::io::Result::ok)
+            .collect();
+
+        Ok(events)
     }
 
     /// Load serialized events from the database.
     ///
     /// * `limit` - The number of events to load.
     /// * `from_event` - The event where to continue loading from.
-    pub fn load_events(&self, limit: usize, from_event: Option<&Event>) -> Result<Vec<Event>> {
-        let serialized_events = Database::load_all_events(&self.connection, limit, from_event)?;
-
-        let events = serialized_events
-            .iter()
-            .map(|e| RecoveryDatabase::event_from_json(e))
-            .collect();
-
-        Ok(events)
+    pub fn load_events(
+        &self,
+        limit: usize,
+        from_event: Option<&Event>,
+    ) -> Result<Vec<SerializedEvent>> {
+        Ok(Database::load_all_events(
+            &self.connection,
+            limit,
+            from_event,
+        )?)
     }
 
     /// Create and open a new index.
