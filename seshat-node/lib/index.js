@@ -97,6 +97,9 @@ const seshat = require('../native');
  *
  */
 class ReindexError extends Error {
+    /**
+     * Create a new ReindexError
+     */
     constructor(...params) {
         super(...params);
 
@@ -123,11 +126,11 @@ class Seshat extends seshat.Seshat {
      * database already exist in the given folder the database will be reused.
      * @param {object} config Additional configuration for the database.
      * database already exist in the given folder the database will be reused.
-     * @param  {string} config.language The language that the database should use
-     * for indexing. Picking the correct indexing language may improve the search.
-     * @param  {string} config.passphrase The passphrase that should be used to
-     * encrypt the database. The database is left unencrypted it no passphrase is
-     * set.
+     * @param  {string} config.language The language that the database should
+     * use for indexing. Picking the correct indexing language may improve the
+     * search.  @param  {string} config.passphrase The passphrase that should be
+     * used to encrypt the database. The database is left unencrypted it no
+     * passphrase is set.
      *
      * @constructor
      *
@@ -485,7 +488,7 @@ class SeshatRecovery extends seshat.SeshatRecovery {
     /**
      * Re-index the database.
      *
-     * @return {Promise<>} A promise that will resolve once the database has
+     * @return {Promise} A promise that will resolve once the database has
      * been re-indexed.
      */
     async reindex() {
