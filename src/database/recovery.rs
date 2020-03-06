@@ -341,41 +341,11 @@ impl RecoveryDatabase {
 pub(crate) mod test {
     use crate::database::DATABASE_VERSION;
     use crate::{Database, Error, Event, EventType, RecoveryDatabase, Result, SearchConfig};
+    use crate::events::SerializedEvent;
 
     use serde_json::Value;
     use std::path::PathBuf;
     use std::sync::atomic::Ordering;
-
-    pub(crate) fn event_from_json(event_source: &str) -> Event {
-        let object: Value =
-            serde_json::from_str(event_source).expect("Can't deserialize event source");
-        let content = &object["content"];
-        let event_type = &object["type"];
-
-        let event_type = match event_type.as_str().unwrap() {
-            "m.room.message" => EventType::Message,
-            "m.room.name" => EventType::Name,
-            "m.room.topic" => EventType::Topic,
-            _ => panic!("Invalid event type"),
-        };
-
-        let (content_value, msgtype) = match event_type {
-            EventType::Message => (content["body"].as_str().unwrap(), Some("m.text")),
-            EventType::Topic => (content["topic"].as_str().unwrap(), None),
-            EventType::Name => (content["name"].as_str().unwrap(), None),
-        };
-
-        Event::new(
-            event_type,
-            content_value,
-            msgtype,
-            object["event_id"].as_str().unwrap(),
-            object["sender"].as_str().unwrap(),
-            object["origin_server_ts"].as_u64().unwrap() as i64,
-            object["room_id"].as_str().unwrap(),
-            &event_source,
-        )
-    }
 
     pub(crate) fn reindex_loop(
         db: &mut RecoveryDatabase,
@@ -389,10 +359,11 @@ pub(crate) mod test {
                 break;
             }
 
-            // events = serialized_events
-            //     .iter()
-            //     .map(|e| event_from_json(e))
-            //     .collect();
+            events = serialized_events
+                .iter()
+                .map(|e| RecoveryDatabase::event_from_json(e))
+                .filter_map(std::io::Result::ok)
+                .collect();
 
             db.index_events(&events)?;
             db.commit()?;
@@ -427,13 +398,11 @@ pub(crate) mod test {
             .expect("Can't open the new the index");
 
         let events = recovery_db
-            .load_events(10, None)
+            .load_events_deserialized(10, None)
             .expect("Can't load events");
 
         assert!(!events.is_empty());
         assert_eq!(events.len(), 10);
-
-        // let events: Vec<Event> = events.iter().map(|e| event_from_json(e)).collect();
 
         recovery_db.index_events(&events).unwrap();
         assert_eq!(

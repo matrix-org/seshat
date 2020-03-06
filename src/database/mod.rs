@@ -911,7 +911,7 @@ fn database_upgrade_v1() {
 }
 
 #[cfg(test)]
-use crate::database::recovery::test::{event_from_json, reindex_loop};
+use crate::database::recovery::test::reindex_loop;
 
 #[test]
 fn database_upgrade_v1_2() {
@@ -934,8 +934,7 @@ fn database_upgrade_v1_2() {
     recovery_db.delete_the_index().unwrap();
     recovery_db.open_index().unwrap();
 
-    let events = recovery_db.load_events(100, None).unwrap();
-    let events: Vec<Event> = events.iter().map(|e| event_from_json(e)).collect();
+    let events = recovery_db.load_events_deserialized(100, None).unwrap();
 
     recovery_db.index_events(&events).unwrap();
     reindex_loop(&mut recovery_db, events).unwrap();
