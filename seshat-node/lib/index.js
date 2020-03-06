@@ -146,7 +146,9 @@ class Seshat extends seshat.Seshat {
         try {
             super(path, config);
         } catch (e) {
-            if (e.constructor.name === "RangeError") {
+            // The Rust side throws a RangeError, this is a bit silly so convert
+            // it to a custom error.
+            if (e.constructor.name === 'RangeError') {
                 throw new ReindexError();
             } else {
                 throw e;

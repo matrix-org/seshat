@@ -102,6 +102,10 @@ declare_types! {
             let db = match Database::new_with_config(&db_path, &config) {
                 Ok(db) => db,
                 Err(e) => {
+                    // There doesn't seem to be a way to construct custom
+                    // Javascript errors from the Rust side, since we never
+                    // throw a RangeError here, let's hack around this by using
+                    // one here.
                     let error = match e {
                         Error::ReindexError => cx.throw_range_error("Database needs to be reindexed"),
                         e => cx.throw_error(format!("Error opening the database: {:?}", e))
