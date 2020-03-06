@@ -2,7 +2,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-const {Seshat, ReindexError} = require('../');
+const {Seshat, ReindexError, SeshatRecovery} = require('../');
 
 const matrixEvent = {
     type: 'm.room.message',
@@ -484,5 +484,12 @@ describe('Database', function() {
     it('should allow us to reindex a database', async function() {
         const dir = '../data/database/v2';
         expect(() => new Seshat(dir)).toThrow(ReindexError);
+
+        const recovery = new SeshatRecovery(dir);
+        await recovery.reindex();
+
+        const db = new Seshat(dir);
+        const results = await db.search({search_term: 'Hello'});
+        expect(results.count).not.toBe(0);
     });
 });
