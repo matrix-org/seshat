@@ -340,10 +340,8 @@ impl RecoveryDatabase {
 #[cfg(test)]
 pub(crate) mod test {
     use crate::database::DATABASE_VERSION;
-    use crate::{Database, Error, Event, EventType, RecoveryDatabase, Result, SearchConfig};
-    use crate::events::SerializedEvent;
+    use crate::{Database, Error, Event, RecoveryDatabase, Result, SearchConfig};
 
-    use serde_json::Value;
     use std::path::PathBuf;
     use std::sync::atomic::Ordering;
 
