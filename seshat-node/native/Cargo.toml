@@ -1,6 +1,6 @@
 [package]
 name = "seshat-node"
-version = "1.0.0"
+version = "1.1.0"
 authors = ["Damir Jelić <poljar@termina.org.uk>"]
 license = "Apache-2.0"
 build = "build.rs"
@@ -23,4 +23,4 @@ neon = "=0.3.3"
 fs_extra = "1.1.0"
 serde_json = "1.0.44"
 neon-serde = "=0.3.0"
-seshat = { path = "../../" }
+seshat = "1.1.0"
