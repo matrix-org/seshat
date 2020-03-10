@@ -54,7 +54,7 @@ pub enum Error {
     /// Error signaling that sqlcipher support is missing.
     #[fail(display = "Sqlcipher error: {}", _0)]
     SqlCipherError(String),
-    /// Error indicating that the index needs to be rebuild.
+    /// Error indicating that the index needs to be rebuilt.
     #[fail(display = "Error opening the database, the index needs to be rebuild.")]
     ReindexError,
 }
