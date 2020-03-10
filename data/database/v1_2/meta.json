@@ -1,0 +1,99 @@
+{
+  "segments": [
+    {
+      "segment_id": "bf6498b5-a1e9-48d0-9013-1605048ecbcd",
+      "max_doc": 356,
+      "deletes": null
+    },
+    {
+      "segment_id": "5249de4d-a76b-4040-98f0-26f248155bf1",
+      "max_doc": 288,
+      "deletes": null
+    },
+    {
+      "segment_id": "18dcd68b-3739-40f6-8446-31d851e6139c",
+      "max_doc": 284,
+      "deletes": null
+    },
+    {
+      "segment_id": "9883d1a6-5e92-4749-83c3-022fb99ea0da",
+      "max_doc": 67,
+      "deletes": null
+    },
+    {
+      "segment_id": "3b59e3c0-f086-46ef-b6b5-6192a98ab85f",
+      "max_doc": 1,
+      "deletes": null
+    },
+    {
+      "segment_id": "88b4ad3f-5a1e-430f-9ea0-3e2ef43c39f7",
+      "max_doc": 1,
+      "deletes": null
+    },
+    {
+      "segment_id": "c7f9f53e-463f-4d92-97d2-57449d63b8d0",
+      "max_doc": 1,
+      "deletes": null
+    },
+    {
+      "segment_id": "d013a4c1-859e-4030-93ef-8e37d7e88f32",
+      "max_doc": 1,
+      "deletes": null
+    }
+  ],
+  "schema": [
+    {
+      "name": "body",
+      "type": "text",
+      "options": {
+        "indexing": {
+          "record": "position",
+          "tokenizer": "default"
+        },
+        "stored": false
+      }
+    },
+    {
+      "name": "topic",
+      "type": "text",
+      "options": {
+        "indexing": {
+          "record": "position",
+          "tokenizer": "default"
+        },
+        "stored": false
+      }
+    },
+    {
+      "name": "name",
+      "type": "text",
+      "options": {
+        "indexing": {
+          "record": "position",
+          "tokenizer": "default"
+        },
+        "stored": false
+      }
+    },
+    {
+      "name": "room_id",
+      "type": "text",
+      "options": {
+        "indexing": {
+          "record": "basic",
+          "tokenizer": "raw"
+        },
+        "stored": false
+      }
+    },
+    {
+      "name": "event_id",
+      "type": "text",
+      "options": {
+        "indexing": null,
+        "stored": true
+      }
+    }
+  ],
+  "opstamp": 1007
+}

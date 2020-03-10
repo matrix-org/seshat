@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod connection;
+mod recovery;
 mod searcher;
 mod static_methods;
 mod writer;
@@ -31,10 +32,11 @@ use std::thread::JoinHandle;
 
 use crate::config::{Config, SearchConfig};
 pub use crate::database::connection::{Connection, DatabaseStats};
+pub use crate::database::recovery::{RecoveryDatabase, RecoveryInfo};
 pub use crate::database::searcher::{SearchResult, Searcher};
 use crate::database::writer::Writer;
 use crate::error::{Error, Result};
-use crate::events::{CrawlerCheckpoint, Event, HistoricEventsT, Profile};
+use crate::events::{CrawlerCheckpoint, Event, EventId, HistoricEventsT, Profile};
 use crate::index::{Index, Writer as IndexWriter};
 
 #[cfg(test)]
@@ -47,14 +49,16 @@ use tempfile::tempdir;
 #[cfg(test)]
 use crate::events::CheckpointDirection;
 #[cfg(test)]
-use crate::EVENT;
+use crate::{EVENT, TOPIC_EVENT};
 
-const DATABASE_VERSION: i64 = 2;
+const DATABASE_VERSION: i64 = 3;
+const EVENTS_DB_NAME: &str = "events.db";
 
 pub(crate) enum ThreadMessage {
     Event((Event, Profile)),
     HistoricEvents(HistoricEventsT),
     Write(Sender<Result<()>>, bool),
+    Delete(Sender<Result<bool>>, EventId),
 }
 
 /// The Seshat database.
@@ -94,17 +98,17 @@ impl Database {
     where
         PathBuf: std::convert::From<P>,
     {
-        let db_path = path.as_ref().join("events.db");
+        let db_path = path.as_ref().join(EVENTS_DB_NAME);
         let manager = SqliteConnectionManager::file(&db_path);
         let pool = r2d2::Pool::new(manager)?;
 
-        let connection = Arc::new(pool.get()?);
+        let mut connection = pool.get()?;
         connection.pragma_update(None, "foreign_keys", &1 as &dyn ToSql)?;
 
         Database::unlock(&connection, config)?;
 
-        let version = match Database::get_version(&connection) {
-            Ok(v) => v,
+        let (version, reindex_needed) = match Database::get_version(&mut connection) {
+            Ok(ret) => ret,
             Err(e) => return Err(Error::DatabaseOpenError(e.to_string())),
         };
 
@@ -112,6 +116,10 @@ impl Database {
 
         if version != DATABASE_VERSION {
             return Err(Error::DatabaseVersionError);
+        }
+
+        if reindex_needed {
+            return Err(Error::ReindexError);
         }
 
         let index = Database::create_index(&path, &config)?;
@@ -129,7 +137,7 @@ impl Database {
 
         Ok(Database {
             path: path.into(),
-            connection,
+            connection: Arc::new(connection),
             pool,
             _write_thread: t_handle,
             tx,
@@ -222,21 +230,21 @@ impl Database {
 
         let t_handle = thread::spawn(move || {
             let mut writer = Writer::new(connection, index_writer);
-            let mut loaded_uncommitted = false;
+            let mut loaded_unprocessed = false;
 
             while let Ok(message) = rx.recv() {
                 match message {
                     ThreadMessage::Event((event, profile)) => writer.add_event(event, profile),
                     ThreadMessage::Write(sender, force_commit) => {
-                        // We may have events that aren't committed to the index
-                        // but are stored in the db, let us load them from the
-                        // db and commit them to the index now. They will later
-                        // be marked as committed in the database as part of a
-                        // normal write.
-                        if !loaded_uncommitted {
-                            let ret = writer.load_uncommitted_events();
+                        // We may have events that aren't deleted or committed
+                        // to the index but are stored in the db, let us load
+                        // them from the db and commit them to the index now.
+                        // They will later be marked as committed in the
+                        // database as part of a normal write.
+                        if !loaded_unprocessed {
+                            let ret = writer.load_unprocessed_events();
 
-                            loaded_uncommitted = true;
+                            loaded_unprocessed = true;
 
                             if ret.is_err() {
                                 sender.send(ret).unwrap_or(());
@@ -250,6 +258,10 @@ impl Database {
                     ThreadMessage::HistoricEvents(m) => {
                         let (check, old_check, events, sender) = m;
                         let ret = writer.write_historic_events(check, old_check, events, true);
+                        sender.send(ret).unwrap_or(());
+                    }
+                    ThreadMessage::Delete(sender, event_id) => {
+                        let ret = writer.delete_event(event_id);
                         sender.send(ret).unwrap_or(());
                     }
                 };
@@ -271,6 +283,22 @@ impl Database {
     pub fn add_event(&self, event: Event, profile: Profile) {
         let message = ThreadMessage::Event((event, profile));
         self.tx.send(message).unwrap();
+    }
+
+    /// Delete an event from the database.
+    ///
+    /// # Arguments
+    /// * `event_id` - The event id of the event that will be deleted.
+    ///
+    /// Note for the event to be completely removed a commit needs to be done.
+    ///
+    /// Returns a receiver that will receive an empty message once the event has
+    /// been deleted.
+    pub fn delete_event(&self, event_id: &str) -> Receiver<Result<bool>> {
+        let (sender, receiver): (_, Receiver<Result<bool>>) = channel();
+        let message = ThreadMessage::Delete(sender, event_id.to_owned());
+        self.tx.send(message).unwrap();
+        receiver
     }
 
     fn commit_helper(&mut self, force: bool) -> Receiver<Result<()>> {
@@ -869,11 +897,99 @@ fn database_upgrade_v1() {
     path.pop();
     path.pop();
     path.push("data/database/v1");
-    let db = Database::new(path).unwrap();
+    let db = Database::new(path);
 
-    let version = Database::get_version(&db.connection).unwrap();
+    // Sadly the v1 database has invalid json in the source field, reindexing it
+    // won't be possible. Let's check that it's marked for a reindex.
+    match db {
+        Ok(_) => panic!("Database doesn't need a reindex."),
+        Err(e) => match e {
+            Error::ReindexError => (),
+            e => panic!("Database doesn't need a reindex: {}", e),
+        },
+    }
+}
+
+#[cfg(test)]
+use crate::database::recovery::test::reindex_loop;
+
+#[test]
+fn database_upgrade_v1_2() {
+    let mut path = PathBuf::from(file!());
+    path.pop();
+    path.pop();
+    path.pop();
+    path.push("data/database/v1_2");
+    let db = Database::new(&path);
+    match db {
+        Ok(_) => panic!("Database doesn't need a reindex."),
+        Err(e) => match e {
+            Error::ReindexError => (),
+            e => panic!("Database doesn't need a reindex: {}", e),
+        },
+    }
+
+    let mut recovery_db = RecoveryDatabase::new(&path).expect("Can't open recovery db");
+
+    recovery_db.delete_the_index().unwrap();
+    recovery_db.open_index().unwrap();
+
+    let events = recovery_db.load_events_deserialized(100, None).unwrap();
+
+    recovery_db.index_events(&events).unwrap();
+    reindex_loop(&mut recovery_db, events).unwrap();
+    recovery_db.commit_and_close().unwrap();
+
+    let db = Database::new(&path).expect("Can't open the db event after a reindex");
+
+    let mut connection = db.get_connection().unwrap();
+    let (version, _) = Database::get_version(&mut connection).unwrap();
     assert_eq!(version, DATABASE_VERSION);
 
     let result = db.search("Hello", &SearchConfig::new()).unwrap();
     assert!(!result.is_empty())
+}
+
+#[test]
+fn delete_an_event() {
+    let tmpdir = tempdir().unwrap();
+    let mut db = Database::new(tmpdir.path()).unwrap();
+    let profile = Profile::new("Alice", "");
+
+    db.add_event(EVENT.clone(), profile.clone());
+    db.add_event(TOPIC_EVENT.clone(), profile);
+
+    db.force_commit().unwrap();
+
+    assert!(Database::load_pending_deletion_events(&db.connection)
+        .unwrap()
+        .is_empty());
+
+    let recv = db.delete_event(&EVENT.event_id);
+    recv.recv().unwrap().unwrap();
+
+    assert_eq!(
+        Database::load_pending_deletion_events(&db.connection)
+            .unwrap()
+            .len(),
+        1
+    );
+
+    drop(db);
+
+    let mut db = Database::new(tmpdir.path()).unwrap();
+    assert_eq!(
+        Database::load_pending_deletion_events(&db.connection)
+            .unwrap()
+            .len(),
+        1
+    );
+
+    db.force_commit().unwrap();
+    assert_eq!(
+        Database::load_pending_deletion_events(&db.connection)
+            .unwrap()
+            .len(),
+        0
+    );
 }

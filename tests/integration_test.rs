@@ -423,3 +423,29 @@ fn load_file_events_directions() {
     assert_eq!(result[0].0, IMAGE_EVENT.source);
     assert_eq!(result[1].0, VIDEO_EVENT.source);
 }
+
+#[test]
+fn delete_events() {
+    let tmpdir = tempdir().unwrap();
+    let mut db = Database::new(tmpdir.path()).unwrap();
+    let profile = Profile::new("Alice", "");
+
+    db.add_event(EVENT.clone(), profile.clone());
+    db.add_event(TOPIC_EVENT.clone(), profile);
+    db.force_commit().unwrap();
+    db.reload().unwrap();
+
+    let searcher = db.get_searcher();
+    let result = searcher.search("Test", &SearchConfig::new()).unwrap();
+    assert_eq!(result.len(), 2);
+
+    let receiver = db.delete_event(&EVENT.event_id);
+    let result = receiver.recv().unwrap();
+    result.unwrap();
+    db.force_commit().unwrap();
+    db.reload().unwrap();
+
+    let result = searcher.search("Test", &SearchConfig::new()).unwrap();
+    assert_eq!(result.len(), 1);
+    assert_eq!(result[0].event_source, TOPIC_EVENT.source);
+}

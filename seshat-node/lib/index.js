@@ -77,35 +77,87 @@ const seshat = require('../native');
  */
 
 /**
+ * @typedef recoveryInfo
+ * @type {Object}
+ * @property {number} totalEvents The total number of events that the database
+ * holds.
+ * @property {number} reindexedEvents The number of events that have been
+ * reindexed.
+ * @property {number} done The percentage showing the re-index progress.
+ */
+
+/**
+ * Seshat re-index error.<br>
+ *
+ * This error will be thrown if a Seshat database can't be opened because it
+ * needs to be re-indexed.
+ *
+ * The database can be opened as a recovery database with the SeshatRecovery
+ * class. This class provides method to re-index the database.
+ *
+ */
+class ReindexError extends Error {
+    /**
+     * Create a new ReindexError
+     */
+    constructor(...params) {
+        super(...params);
+
+        if (Error.captureStackTrace) {
+            Error.captureStackTrace(this, ReindexError);
+        }
+        this.name = 'ReindexError';
+        this.message = 'The Seshat database needs to be reindexed.';
+    }
+}
+
+/**
  * Seshat database.<br>
  *
  * A Seshat database can be used to store and index Matrix events. A full-text
  * search can be done on the database retrieving events that match a search
  * query.
- *
- * @param {string} path The path where the database should be stored. If a
- * database already exist in the given folder the database will be reused.
- * @param {object} config Additional configuration for the database.
- * database already exist in the given folder the database will be reused.
- * @param  {string} config.language The language that the database should use
- * for indexing. Picking the correct indexing language may improve the search.
- * @param  {string} config.passphrase The passphrase that should be used to
- * encrypt the database. The database is left unencrypted it no passphrase is
- * set.
- *
- * @constructor
- *
- * @example
- * // create a Seshat database in the given folder
- * let db = new Seshat("/home/example/database_dir");
- * // Add a Matrix event to the database.
- * db.addEvent(textEvent, profile);
- * // Commit events waiting in the queue to the database.
- * await db.commit();
- * // Search the database for messages containing the word 'Test'
- * let results = await db.search('Test');
  */
 class Seshat extends seshat.Seshat {
+    /**
+     * Open an existing or create a new Seshat database.
+     *
+     * @param {string} path The path where the database should be stored. If a
+     * database already exist in the given folder the database will be reused.
+     * @param {object} config Additional configuration for the database.
+     * database already exist in the given folder the database will be reused.
+     * @param  {string} config.language The language that the database should
+     * use for indexing. Picking the correct indexing language may improve the
+     * search.  @param  {string} config.passphrase The passphrase that should be
+     * used to encrypt the database. The database is left unencrypted it no
+     * passphrase is set.
+     *
+     * @constructor
+     *
+     * @example
+     * // create a Seshat database in the given folder
+     * let db = new Seshat("/home/example/database_dir");
+     * // Add a Matrix event to the database.
+     * db.addEvent(textEvent, profile);
+     * // Commit events waiting in the queue to the database.
+     * await db.commit();
+     * // Search the database for messages containing the word 'Test'
+     * let results = await db.search('Test');
+     */
+    constructor(path, config = undefined) {
+        config = config || {};
+        try {
+            super(path, config);
+        } catch (e) {
+            // The Rust side throws a RangeError, this is a bit silly so convert
+            // it to a custom error.
+            if (e.constructor.name === 'RangeError') {
+                throw new ReindexError();
+            } else {
+                throw e;
+            }
+        }
+    }
     /**
      * Add an event to the database.
      *
@@ -393,4 +445,64 @@ class Seshat extends seshat.Seshat {
     }
 }
 
-module.exports = Seshat;
+/**
+ * Seshat recovery database.<br>
+ *
+ * A Seshat recovery database can be used to re-index a Seshat database.
+ *
+ * This will be needed if schema changes to the index were required and the
+ * library has been upgraded.
+ *
+ * The recovery database uses the same parameters in the constructor like the
+ * normal Seshat database.
+ *
+ * @param {string} path The path where the database should be stored. If a
+ * database already exist in the given folder the database will be reused.
+ * @param {object} config Additional configuration for the database.
+ * database already exist in the given folder the database will be reused.
+ * @param  {string} config.language The language that the database should use
+ * for indexing. Picking the correct indexing language may improve the search.
+ * @param  {string} config.passphrase The passphrase that should be used to
+ * encrypt the database. The database is left unencrypted it no passphrase is
+ * set.
+ *
+ * @constructor
+ *
+ * @example
+ * // open a Seshat recovery database in the given folder
+ * let recovery = new SeshatRecovery("/home/example/database_dir");
+ * // reindex the database
+ * await recovery.reindex();
+ */
+class SeshatRecovery extends seshat.SeshatRecovery {
+    /**
+     * Get info about the re-index status.
+     *
+     * @return {RecoveryInfo} A object that holds the number of total events,
+     * re-indexed events and the done percentage.
+     */
+    info() {
+        return super.info();
+    }
+
+    /**
+     * Re-index the database.
+     *
+     * @return {Promise} A promise that will resolve once the database has
+     * been re-indexed.
+     */
+    async reindex() {
+        return new Promise((resolve, reject) => {
+            super.reindex((err, res) => {
+                if (err) reject(err);
+                else resolve(res);
+            });
+        });
+    }
+}
+
+module.exports = {
+    Seshat: Seshat,
+    SeshatRecovery: SeshatRecovery,
+    ReindexError: ReindexError,
+};

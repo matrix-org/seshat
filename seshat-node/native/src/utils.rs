@@ -17,9 +17,43 @@ use neon::prelude::*;
 use neon_serde;
 use serde_json;
 use seshat::{
-    CheckpointDirection, CrawlerCheckpoint, Event, EventType, Profile, Receiver, SearchConfig,
-    SearchResult,
+    CheckpointDirection, Config, CrawlerCheckpoint, Event, EventType, Language, Profile, Receiver,
+    SearchConfig, SearchResult,
 };
+
+pub(crate) fn parse_database_config(
+    cx: &mut CallContext<JsUndefined>,
+    argument: Option<Handle<JsValue>>,
+) -> Result<Config, neon::result::Throw> {
+    let mut config = Config::new();
+
+    if let Some(c) = argument {
+        let c = c.downcast::<JsObject>().or_throw(&mut *cx)?;
+
+        if let Ok(l) = c.get(&mut *cx, "language") {
+            if let Ok(l) = l.downcast::<JsString>() {
+                let language = Language::from(l.value().as_ref());
+                match language {
+                    Language::Unknown => {
+                        return cx.throw_type_error(format!("Unsuported language: {}", l.value()))
+                    }
+                    _ => {
+                        config = config.set_language(&language);
+                    }
+                }
+            }
+        }
+
+        if let Ok(p) = c.get(&mut *cx, "passphrase") {
+            if let Ok(p) = p.downcast::<JsString>() {
+                let passphrase: String = p.value();
+                config = config.set_passphrase(passphrase);
+            }
+        }
+    }
+
+    Ok(config)
+}
 
 pub(crate) fn parse_search_object(
     cx: &mut CallContext<Seshat>,

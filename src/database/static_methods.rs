@@ -62,6 +62,62 @@ impl Database {
         Ok((ret.iter().all(|&x| x), event_ids))
     }
 
+    pub(crate) fn delete_event_helper(
+        connection: &mut rusqlite::Connection,
+        index_writer: &mut IndexWriter,
+        event_id: EventId,
+        pending_deletion_events: &mut Vec<EventId>,
+    ) -> Result<bool> {
+        let transaction = connection.transaction()?;
+
+        transaction.execute("DELETE from events WHERE event_id == ?1", &[&event_id])?;
+        transaction.execute(
+            "INSERT OR IGNORE INTO pending_deletion_events (event_id) VALUES (?1)",
+            &[&event_id],
+        )?;
+        transaction.commit().unwrap();
+
+        index_writer.delete_event(&event_id);
+        pending_deletion_events.push(event_id);
+
+        let committed = index_writer.commit()?;
+
+        if committed {
+            Database::mark_events_as_deleted(connection, pending_deletion_events)?;
+        }
+
+        Ok(true)
+    }
+
+    pub(crate) fn mark_events_as_deleted(
+        connection: &mut rusqlite::Connection,
+        events: &mut Vec<EventId>,
+    ) -> Result<()> {
+        if events.is_empty() {
+            return Ok(());
+        }
+        let transaction = connection.transaction()?;
+
+        for chunk in events.chunks(50) {
+            let parameter_str = std::iter::repeat(", ?")
+                .take(chunk.len() - 1)
+                .collect::<String>();
+
+            let mut stmt = transaction.prepare(&format!(
+                "DELETE from pending_deletion_events
+                     WHERE event_id IN (?{})",
+                &parameter_str
+            ))?;
+
+            stmt.execute(chunk)?;
+        }
+
+        transaction.commit()?;
+        events.clear();
+
+        Ok(())
+    }
+
     /// Delete non committed events from the database that were committed
     pub(crate) fn mark_events_as_indexed(
         connection: &mut rusqlite::Connection,
@@ -102,7 +158,7 @@ impl Database {
         ),
         force_commit: bool,
         uncommitted_events: &mut Vec<i64>,
-    ) -> Result<bool> {
+    ) -> Result<(bool, bool)> {
         let (new_checkpoint, old_checkpoint, mut events) = message;
         let transaction = connection.transaction()?;
 
@@ -129,10 +185,10 @@ impl Database {
             Database::mark_events_as_indexed(connection, uncommitted_events)?;
         }
 
-        Ok(ret)
+        Ok((ret, committed))
     }
 
-    pub(crate) fn get_version(connection: &rusqlite::Connection) -> Result<i64> {
+    pub(crate) fn get_version(connection: &mut rusqlite::Connection) -> Result<(i64, bool)> {
         connection.execute(
             "CREATE TABLE IF NOT EXISTS version (
                 id INTEGER NOT NULL PRIMARY KEY CHECK (id = 1),
@@ -142,12 +198,31 @@ impl Database {
         )?;
 
         connection.execute(
+            "CREATE TABLE IF NOT EXISTS reindex_needed (
+                id INTEGER NOT NULL PRIMARY KEY CHECK (id = 1),
+                reindex_needed BOOL NOT NULL
+            )",
+            NO_PARAMS,
+        )?;
+
+        connection.execute(
+            "INSERT OR IGNORE INTO reindex_needed ( reindex_needed ) VALUES(?1)",
+            &[false],
+        )?;
+
+        connection.execute(
             "INSERT OR IGNORE INTO version ( version ) VALUES(?1)",
             &[DATABASE_VERSION],
         )?;
 
         let mut version: i64 =
             connection.query_row("SELECT version FROM version", NO_PARAMS, |row| row.get(0))?;
+
+        let mut reindex_needed: bool = connection.query_row(
+            "SELECT reindex_needed FROM reindex_needed",
+            NO_PARAMS,
+            |row| row.get(0),
+        )?;
 
         // Do database migrations here before bumping the database version.
 
@@ -169,7 +244,18 @@ impl Database {
             version = 2;
         }
 
-        Ok(version)
+        if version == 2 {
+            let transaction = connection.transaction()?;
+
+            transaction.execute("UPDATE reindex_needed SET reindex_needed = ?1", &[true])?;
+            transaction.execute("UPDATE version SET version = '3'", NO_PARAMS)?;
+            transaction.commit()?;
+
+            reindex_needed = true;
+            version = 3;
+        }
+
+        Ok((version, reindex_needed))
     }
 
     pub(crate) fn create_tables(conn: &rusqlite::Connection) -> Result<()> {
@@ -217,6 +303,15 @@ impl Database {
                 event_id INTEGER NOT NULL,
                 content_value TEXT NOT NULL,
                 FOREIGN KEY (event_id) REFERENCES events (id),
+                UNIQUE(event_id)
+            )",
+            NO_PARAMS,
+        )?;
+
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS pending_deletion_events (
+                id INTEGER NOT NULL PRIMARY KEY,
+                event_id TEXT NOT NULL,
                 UNIQUE(event_id)
             )",
             NO_PARAMS,
@@ -324,6 +419,15 @@ impl Database {
         Ok(room_id)
     }
 
+    pub(crate) fn load_pending_deletion_events(
+        connection: &rusqlite::Connection,
+    ) -> rusqlite::Result<Vec<EventId>> {
+        let mut stmt = connection.prepare("SELECT event_id from pending_deletion_events")?;
+        let events = stmt.query_map(NO_PARAMS, |row| Ok(row.get(0)?))?;
+
+        events.collect()
+    }
+
     pub(crate) fn load_uncommitted_events(
         connection: &rusqlite::Connection,
     ) -> rusqlite::Result<Vec<(i64, Event)>> {
@@ -424,6 +528,47 @@ impl Database {
         match ret {
             Ok(_event_id) => Ok(true),
             Err(_e) => Ok(false),
+        }
+    }
+
+    pub(crate) fn load_all_events(
+        connection: &rusqlite::Connection,
+        limit: usize,
+        from_event: Option<&Event>,
+    ) -> rusqlite::Result<Vec<SerializedEvent>> {
+        match from_event {
+            Some(event) => {
+                let mut stmt = connection.prepare(
+                    "SELECT source FROM events
+                     WHERE (
+                         (type == 'm.room.message') &
+                         (event_id != ?1) &
+                         (server_ts <= ?2)
+                     ) ORDER BY server_ts DESC LIMIT ?3
+                     ",
+                )?;
+
+                let events = stmt.query_map(
+                    &vec![
+                        &event.event_id as &dyn ToSql,
+                        &event.server_ts as &dyn ToSql,
+                        &(limit as i64),
+                    ],
+                    |row| Ok(row.get(0)?),
+                )?;
+                events.collect()
+            }
+            None => {
+                let mut stmt = connection.prepare(
+                    "SELECT source FROM events
+                     WHERE type == 'm.room.message' 
+                     ORDER BY server_ts DESC LIMIT ?1
+                     ",
+                )?;
+
+                let events = stmt.query_map(&vec![&(limit as i64)], |row| Ok(row.get(0)?))?;
+                events.collect()
+            }
         }
     }
 

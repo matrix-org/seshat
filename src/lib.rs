@@ -48,7 +48,7 @@
 //! let result = database.search("test", &SearchConfig::new()).unwrap();
 //! ```
 
-#![warn(missing_docs)]
+#![deny(missing_docs)]
 
 #[cfg(test)]
 #[macro_use]
@@ -60,7 +60,9 @@ mod error;
 mod events;
 mod index;
 
-pub use database::{Connection, Database, DatabaseStats, SearchResult, Searcher};
+pub use database::{
+    Connection, Database, DatabaseStats, RecoveryDatabase, RecoveryInfo, SearchResult, Searcher,
+};
 
 pub use error::{Error, Result};
 

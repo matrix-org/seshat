@@ -18,9 +18,12 @@ mod encrypted_dir;
 mod encrypted_stream;
 mod japanese_tokenizer;
 
+use std::convert::TryInto;
 use std::path::Path;
 use std::time::Duration;
 use tantivy as tv;
+use tantivy::chrono::{NaiveDateTime, Utc};
+use tantivy::Term;
 
 use crate::config::{Config, Language, SearchConfig};
 use crate::events::{Event, EventId, EventType};
@@ -66,7 +69,7 @@ const COMMIT_TIME: Duration = Duration::from_secs(5);
 use tempfile::TempDir;
 
 #[cfg(test)]
-use crate::events::{EVENT, JAPANESE_EVENTS};
+use crate::events::{EVENT, JAPANESE_EVENTS, TOPIC_EVENT};
 
 pub(crate) struct Index {
     index: tv::Index,
@@ -75,6 +78,8 @@ pub(crate) struct Index {
     topic_field: tv::schema::Field,
     name_field: tv::schema::Field,
     event_id_field: tv::schema::Field,
+    sender_field: tv::schema::Field,
+    date_field: tv::schema::Field,
     room_id_field: tv::schema::Field,
 }
 
@@ -84,6 +89,8 @@ pub(crate) struct Writer {
     pub(crate) topic_field: tv::schema::Field,
     pub(crate) name_field: tv::schema::Field,
     pub(crate) event_id_field: tv::schema::Field,
+    pub(crate) sender_field: tv::schema::Field,
+    pub(crate) date_field: tv::schema::Field,
     pub(crate) added_events: usize,
     pub(crate) commit_timestamp: std::time::Instant,
     room_id_field: tv::schema::Field,
@@ -125,9 +132,28 @@ impl Writer {
 
         doc.add_text(self.event_id_field, &event.event_id);
         doc.add_text(self.room_id_field, &event.room_id);
+        doc.add_text(self.sender_field, &event.sender);
+
+        let seconds: i64 = event.server_ts / 1000;
+        let nano_seconds: u32 = ((event.server_ts % 1000) * 1000)
+            .try_into()
+            .unwrap_or_default();
+        let naive_date = NaiveDateTime::from_timestamp_opt(seconds, nano_seconds);
+
+        if let Some(d) = naive_date {
+            let date = tv::DateTime::from_utc(d, Utc);
+            doc.add_date(self.date_field, &date);
+        }
 
         self.inner.add_document(doc);
         self.added_events += 1;
+    }
+
+    /// Delete the event with the given event id from the index.
+    pub fn delete_event(&mut self, event_id: &str) {
+        let term = Term::from_field_text(self.event_id_field, &event_id);
+        self.inner.delete_term(term);
+        self.inner.commit().unwrap();
     }
 }
 
@@ -139,6 +165,10 @@ pub(crate) struct IndexSearcher {
     pub(crate) topic_field: tv::schema::Field,
     pub(crate) name_field: tv::schema::Field,
     pub(crate) room_id_field: tv::schema::Field,
+    #[used]
+    pub(crate) sender_field: tv::schema::Field,
+    #[used]
+    pub(crate) date_field: tv::schema::Field,
     pub(crate) event_id_field: tv::schema::Field,
 }
 
@@ -213,9 +243,15 @@ impl Index {
         let body_field = schemabuilder.add_text_field("body", text_field_options.clone());
         let topic_field = schemabuilder.add_text_field("topic", text_field_options.clone());
         let name_field = schemabuilder.add_text_field("name", text_field_options);
-        let room_id_field = schemabuilder.add_text_field("room_id", tv::schema::STRING);
 
-        let event_id_field = schemabuilder.add_text_field("event_id", tv::schema::STORED);
+        let date_field = schemabuilder.add_date_field("date", tv::schema::INDEXED);
+
+        let sender_field = schemabuilder.add_text_field("sender", tv::schema::STRING);
+        let room_id_field =
+            schemabuilder.add_text_field("room_id", tv::schema::STORED | tv::schema::STRING);
+
+        let event_id_field =
+            schemabuilder.add_text_field("event_id", tv::schema::STORED | tv::schema::STRING);
 
         let schema = schemabuilder.build();
 
@@ -245,6 +281,8 @@ impl Index {
             topic_field,
             name_field,
             event_id_field,
+            sender_field,
+            date_field,
             room_id_field,
         })
     }
@@ -312,6 +350,8 @@ impl Index {
             topic_field: self.topic_field,
             name_field: self.name_field,
             room_id_field: self.room_id_field,
+            sender_field: self.sender_field,
+            date_field: self.date_field,
             event_id_field: self.event_id_field,
         }
     }
@@ -330,6 +370,8 @@ impl Index {
             name_field: self.name_field,
             event_id_field: self.event_id_field,
             room_id_field: self.room_id_field,
+            sender_field: self.sender_field,
+            date_field: self.date_field,
             added_events: 0,
             commit_timestamp: std::time::Instant::now(),
         })
@@ -453,4 +495,35 @@ fn event_count() {
 
     writer.force_commit().unwrap();
     assert_eq!(writer.added_events, 0);
+}
+
+#[test]
+fn delete_an_event() {
+    let tmpdir = TempDir::new().unwrap();
+    let config = Config::new().set_language(&Language::English);
+    let index = Index::new(&tmpdir, &config).unwrap();
+
+    let mut writer = index.get_writer().unwrap();
+
+    writer.add_event(&EVENT);
+    writer.add_event(&TOPIC_EVENT);
+    writer.force_commit().unwrap();
+    index.reload().unwrap();
+
+    let searcher = index.get_searcher();
+    let result = searcher.search("Test", &Default::default()).unwrap();
+
+    let event_id = &EVENT.event_id;
+
+    assert_eq!(result.len(), 2);
+    assert_eq!(&result[0].1, event_id);
+
+    writer.delete_event(event_id);
+    writer.force_commit().unwrap();
+    index.reload().unwrap();
+
+    let searcher = index.get_searcher();
+    let result = searcher.search("Test", &Default::default()).unwrap();
+    assert_eq!(result.len(), 1);
+    assert_eq!(&result[0].1, &TOPIC_EVENT.event_id);
 }

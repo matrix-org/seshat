@@ -155,6 +155,7 @@ impl Event {
     /// * `room_id` - The unique identifier of the room that the event belongs
     /// to.
     /// * `source` - The serialized version of the event.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         event_type: EventType,
         content_value: &str,
@@ -208,32 +209,32 @@ impl Profile {
 }
 
 #[cfg(test)]
-pub static EVENT_SOURCE: &str = "{
-    content: {
-        body: Test message, msgtype: m.text
+pub static EVENT_SOURCE: &str = r#"{
+    "content": {
+        "body": "Test message, msgtype: m.text"
     },
-    event_id: $15163622445EBvZJ:localhost,
-    origin_server_ts: 1516362244026,
-    sender: @example2:localhost,
-    type: m.room.message,
-    unsigned: {age: 43289803095},
-    user_id: @example2:localhost,
-    age: 43289803095
-}";
+    "event_id": "$15163622445EBvZJ:localhost",
+    "origin_server_ts": 1516362244026,
+    "sender": "@example2:localhost",
+    "type": "m.room.message",
+    "unsigned": {"age": 43289803095},
+    "user_id": "@example2:localhost",
+    "age": 43289803095
+}"#;
 
 #[cfg(test)]
-pub static TOPIC_EVENT_SOURCE: &str = "{
-    content: {
-        topic: Test topic
+pub static TOPIC_EVENT_SOURCE: &str = r#"{
+    "content": {
+        "topic": "Test topic"
     },
-    event_id: $15163622448EBvZJ:localhost,
-    origin_server_ts: 1516362244050,
-    sender: @example2:localhost,
-    type: m.room.topic,
-    unsigned: {age: 43289803098},
-    user_id: @example2:localhost,
-    age: 43289803098
-}";
+    "event_id": "$15163622448EBvZJ:localhost",
+    "origin_server_ts": 1516362244050,
+    "sender": "@example2:localhost",
+    "type": "m.room.topic",
+    "unsigned": {"age": 43289803098},
+    "user_id": "@example2:localhost",
+    "age": 43289803098
+}"#;
 
 #[cfg(test)]
 lazy_static! {
