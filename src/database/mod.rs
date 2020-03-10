@@ -961,7 +961,7 @@ fn delete_an_event() {
 
     db.force_commit().unwrap();
 
-    assert!(Database::load_undeleted_events(&db.connection)
+    assert!(Database::load_pending_deletion_events(&db.connection)
         .unwrap()
         .is_empty());
 
@@ -969,7 +969,7 @@ fn delete_an_event() {
     recv.recv().unwrap().unwrap();
 
     assert_eq!(
-        Database::load_undeleted_events(&db.connection)
+        Database::load_pending_deletion_events(&db.connection)
             .unwrap()
             .len(),
         1
@@ -979,7 +979,7 @@ fn delete_an_event() {
 
     let mut db = Database::new(tmpdir.path()).unwrap();
     assert_eq!(
-        Database::load_undeleted_events(&db.connection)
+        Database::load_pending_deletion_events(&db.connection)
             .unwrap()
             .len(),
         1
@@ -987,7 +987,7 @@ fn delete_an_event() {
 
     db.force_commit().unwrap();
     assert_eq!(
-        Database::load_undeleted_events(&db.connection)
+        Database::load_pending_deletion_events(&db.connection)
             .unwrap()
             .len(),
         0

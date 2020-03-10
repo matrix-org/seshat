@@ -24,7 +24,7 @@ pub(crate) struct Writer {
     connection: r2d2::PooledConnection<SqliteConnectionManager>,
     events: Vec<(Event, Profile)>,
     uncommitted_events: Vec<i64>,
-    undeleted_events: Vec<EventId>,
+    pending_deletion_events: Vec<EventId>,
 }
 
 impl Writer {
@@ -37,7 +37,7 @@ impl Writer {
             connection,
             events: Vec::new(),
             uncommitted_events: Vec::new(),
-            undeleted_events: Vec::new(),
+            pending_deletion_events: Vec::new(),
         }
     }
 
@@ -50,15 +50,15 @@ impl Writer {
             &mut self.connection,
             &mut self.inner,
             event_id,
-            &mut self.undeleted_events,
+            &mut self.pending_deletion_events,
         )
     }
 
     fn mark_events_as_deleted(&mut self) -> Result<()> {
-        if self.undeleted_events.is_empty() {
+        if self.pending_deletion_events.is_empty() {
             return Ok(());
         }
-        Database::mark_events_as_deleted(&mut self.connection, &mut self.undeleted_events)
+        Database::mark_events_as_deleted(&mut self.connection, &mut self.pending_deletion_events)
     }
 
     pub fn write_queued_events(&mut self, force_commit: bool) -> Result<()> {
@@ -107,13 +107,13 @@ impl Writer {
             self.inner.add_event(&event);
         }
 
-        let ret = Database::load_undeleted_events(&self.connection)?;
+        let ret = Database::load_pending_deletion_events(&self.connection)?;
 
         for event_id in &ret {
             self.inner.delete_event(&event_id);
         }
 
-        self.undeleted_events.extend(ret);
+        self.pending_deletion_events.extend(ret);
 
         Ok(())
     }

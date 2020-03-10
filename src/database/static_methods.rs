@@ -66,24 +66,24 @@ impl Database {
         connection: &mut rusqlite::Connection,
         index_writer: &mut IndexWriter,
         event_id: EventId,
-        undeleted_events: &mut Vec<EventId>,
+        pending_deletion_events: &mut Vec<EventId>,
     ) -> Result<bool> {
         let transaction = connection.transaction()?;
 
         transaction.execute("DELETE from events WHERE event_id == ?1", &[&event_id])?;
         transaction.execute(
-            "INSERT OR IGNORE INTO undeleted_events (event_id) VALUES (?1)",
+            "INSERT OR IGNORE INTO pending_deletion_events (event_id) VALUES (?1)",
             &[&event_id],
         )?;
         transaction.commit().unwrap();
 
         index_writer.delete_event(&event_id);
-        undeleted_events.push(event_id);
+        pending_deletion_events.push(event_id);
 
         let committed = index_writer.commit()?;
 
         if committed {
-            Database::mark_events_as_deleted(connection, undeleted_events)?;
+            Database::mark_events_as_deleted(connection, pending_deletion_events)?;
         }
 
         Ok(true)
@@ -104,7 +104,7 @@ impl Database {
                 .collect::<String>();
 
             let mut stmt = transaction.prepare(&format!(
-                "DELETE from undeleted_events
+                "DELETE from pending_deletion_events
                      WHERE event_id IN (?{})",
                 &parameter_str
             ))?;
@@ -309,7 +309,7 @@ impl Database {
         )?;
 
         conn.execute(
-            "CREATE TABLE IF NOT EXISTS undeleted_events (
+            "CREATE TABLE IF NOT EXISTS pending_deletion_events (
                 id INTEGER NOT NULL PRIMARY KEY,
                 event_id TEXT NOT NULL,
                 UNIQUE(event_id)
@@ -419,10 +419,10 @@ impl Database {
         Ok(room_id)
     }
 
-    pub(crate) fn load_undeleted_events(
+    pub(crate) fn load_pending_deletion_events(
         connection: &rusqlite::Connection,
     ) -> rusqlite::Result<Vec<EventId>> {
-        let mut stmt = connection.prepare("SELECT event_id from undeleted_events")?;
+        let mut stmt = connection.prepare("SELECT event_id from pending_deletion_events")?;
         let events = stmt.query_map(NO_PARAMS, |row| Ok(row.get(0)?))?;
 
         events.collect()
