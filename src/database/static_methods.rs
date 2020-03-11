@@ -86,7 +86,7 @@ impl Database {
             Database::mark_events_as_deleted(connection, pending_deletion_events)?;
         }
 
-        Ok(true)
+        Ok(committed)
     }
 
     pub(crate) fn mark_events_as_deleted(

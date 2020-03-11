@@ -292,8 +292,9 @@ impl Database {
     ///
     /// Note for the event to be completely removed a commit needs to be done.
     ///
-    /// Returns a receiver that will receive an empty message once the event has
-    /// been deleted.
+    /// Returns a receiver that will receive an boolean once the event has
+    /// been deleted. The boolean indicates if the event was deleted or if a
+    /// commit will be needed.
     pub fn delete_event(&self, event_id: &str) -> Receiver<Result<bool>> {
         let (sender, receiver): (_, Receiver<Result<bool>>) = channel();
         let message = ThreadMessage::Delete(sender, event_id.to_owned());
