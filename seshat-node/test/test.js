@@ -468,17 +468,35 @@ describe('Database', function() {
         db.reload();
 
         let results = await db.search({search_term: 'Test'});
-        expect(results.count).not.toBe(0);
+        expect(results.count).toBe(1);
         expect(results.results[0].result).toEqual(matrixEvent);
 
-        const deleted = await db.deleteEvent(matrixEvent.event_id);
+        let deleted = await db.deleteEvent(matrixEvent.event_id);
         expect(deleted).toBeFalsy();
-
         await db.commit(true);
         db.reload();
 
         results = await db.search({search_term: 'Test'});
         expect(results.count).toBe(0);
+
+
+        db.addEvent(matrixEvent, matrixProfileOnlyDisplayName);
+        db.addEvent(fileEvent, matrixProfileOnlyDisplayName);
+
+        await db.commit(true);
+        db.reload();
+
+        results = await db.search({search_term: 'Test'});
+        expect(results.count).toBe(2);
+
+        deleted = await db.deleteEvent(matrixEvent.event_id);
+        expect(deleted).toBeFalsy();
+        await db.commit(true);
+        db.reload();
+
+        results = await db.search({search_term: 'Test'});
+        expect(results.count).toBe(1);
+        expect(results.results[0].result).toEqual(fileEvent);
     });
 
     it('should throw an error when adding events with missing fields.', function() {
