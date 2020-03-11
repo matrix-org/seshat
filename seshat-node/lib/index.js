@@ -177,6 +177,27 @@ class Seshat extends seshat.Seshat {
     };
 
     /**
+     * Delete an event from the database.
+     *
+     * This method adds an event only to a queue. To write the events to the
+     * database the <code>commit()</code> methods needs to be called.
+     *
+     * @param  {string} eventId The unique id of the event that should be
+     * deleted from the database.
+     *
+     * @return {Promise<boolean>} A boolean indicating if the event was removed
+     * from the index or if a commit later on will be needed.
+     */
+    async deleteEvent(eventId) {
+        return new Promise((resolve, reject) => {
+            super.deleteEvent(eventId, (err, res) => {
+                if (err) reject(err);
+                else resolve(res);
+            });
+        });
+    };
+
+    /**
      * Commit the queued up events to the database.
      *
      * This is the asynchronous equivalent of the <code>commitSync()</code>

@@ -189,6 +189,30 @@ declare_types! {
             }
         }
 
+        method deleteEvent(mut cx) {
+            let event_id = cx.argument::<JsString>(0)?.value();
+            let f = cx.argument::<JsFunction>(1)?;
+            let mut this = cx.this();
+
+            let receiver = {
+                let guard = cx.lock();
+                let db = &mut this.borrow_mut(&guard).0;
+                db.as_mut().map_or_else(|| Err("Database has been deleted"), |db| {
+                    Ok(db.delete_event(&event_id))
+                })
+            };
+
+            let receiver = match receiver {
+                Ok(r) => r,
+                Err(e) => return cx.throw_type_error(e),
+            };
+
+            let task = DeleteEventTask { receiver };
+            task.schedule(f);
+
+            Ok(cx.undefined().upcast())
+        }
+
         method commit(mut cx) {
             let force: bool = match cx.argument_opt(0) {
                 Some(w) => w.downcast::<JsBoolean>().or_throw(&mut cx)?.value(),

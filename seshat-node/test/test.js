@@ -460,6 +460,27 @@ describe('Database', function() {
         expect(stats.size).toBeGreaterThan(0);
     });
 
+    it('should allow us to delete events from the database/index', async function() {
+        const db = createDb();
+        db.addEvent(matrixEvent, matrixProfileOnlyDisplayName);
+
+        await db.commit(true);
+        db.reload();
+
+        let results = await db.search({search_term: 'Test'});
+        expect(results.count).not.toBe(0);
+        expect(results.results[0].result).toEqual(matrixEvent);
+
+        const deleted = await db.deleteEvent(matrixEvent.event_id);
+        expect(deleted).toBeFalsy();
+
+        await db.commit(true);
+        db.reload();
+
+        results = await db.search({search_term: 'Test'});
+        expect(results.count).toBe(0);
+    });
+
     it('should throw an error when adding events with missing fields.', function() {
         delete matrixEvent.content;
         expect(() => db.addEvent(matrixEvent, matrixProfile)).toThrow('Event doesn\'t contain any content');

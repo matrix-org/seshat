@@ -360,3 +360,28 @@ impl Task for ReindexTask {
         }
     }
 }
+
+pub(crate) struct DeleteEventTask {
+    pub(crate) receiver: Receiver<seshat::Result<bool>>,
+}
+
+impl Task for DeleteEventTask {
+    type Output = bool;
+    type Error = seshat::Error;
+    type JsEvent = JsBoolean;
+
+    fn perform(&self) -> Result<Self::Output, Self::Error> {
+        self.receiver.recv().unwrap()
+    }
+
+    fn complete(
+        self,
+        mut cx: TaskContext,
+        result: Result<Self::Output, Self::Error>,
+    ) -> JsResult<Self::JsEvent> {
+        match result {
+            Ok(b) => Ok(cx.boolean(b)),
+            Err(e) => cx.throw_error(format!("Error deleting an event: {}", e.to_string())),
+        }
+    }
+}
