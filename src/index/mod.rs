@@ -155,6 +155,10 @@ impl Writer {
         self.inner.delete_term(term);
         self.inner.commit().unwrap();
     }
+
+    pub fn wait_merging_threads(self) -> Result<(), tv::TantivyError> {
+        self.inner.wait_merging_threads()
+    }
 }
 
 pub(crate) struct IndexSearcher {

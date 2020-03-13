@@ -117,4 +117,9 @@ impl Writer {
 
         Ok(())
     }
+
+    pub fn shutdown(self) -> Result<()> {
+        self.inner.wait_merging_threads()?;
+        Ok(())
+    }
 }

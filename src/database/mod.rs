@@ -59,6 +59,7 @@ pub(crate) enum ThreadMessage {
     HistoricEvents(HistoricEventsT),
     Write(Sender<Result<()>>, bool),
     Delete(Sender<Result<bool>>, EventId),
+    ShutDown(Sender<Result<()>>),
 }
 
 /// The Seshat database.
@@ -264,6 +265,11 @@ impl Database {
                         let ret = writer.delete_event(event_id);
                         sender.send(ret).unwrap_or(());
                     }
+                    ThreadMessage::ShutDown(sender) => {
+                        let ret = writer.shutdown();
+                        sender.send(ret).unwrap_or(());
+                        return;
+                    }
                 };
             }
         });
@@ -415,10 +421,21 @@ impl Database {
         })
     }
 
+    /// Shut the database down.
+    ///
+    /// This will terminate the writer thread making sure that no writes will
+    /// happen after this operation.
+    pub fn shutdown(self) -> Receiver<Result<()>> {
+        let (sender, receiver): (_, Receiver<Result<()>>) = channel();
+        let message = ThreadMessage::ShutDown(sender);
+        self.tx.send(message).unwrap();
+        receiver
+    }
+
     /// Delete the database.
     /// Warning: This will delete the whole path that was provided at the
     /// database creation time.
-    pub fn delete(self) -> std::io::Result<()> {
+    pub fn delete(self) -> Result<()> {
         fs::remove_dir_all(self.path)?;
         Ok(())
     }
