@@ -16,6 +16,21 @@ const matrixEvent = {
     origin_server_ts: 1516362244026,
 };
 
+const nulByteEvent = {
+  "type": "m.room.message",
+  "sender": "@alice:example.org",
+  "content": {
+    "body": "\u00000",
+    "msgtype": "m.text"
+  },
+  "event_id": "$150966230487Ugkmt:example.org",
+  "origin_server_ts": 1509662304373,
+  "unsigned": {
+    "age": 74377655314
+  },
+  "room_id": "!test:example.org"
+}
+
 const fileEvent = {
     type: 'm.room.message',
     event_id: '$15163622476EBvZB:localhost',
@@ -307,6 +322,14 @@ describe('Database', function() {
         db.addEvent(topicEvent, matrixProfileOnlyDisplayName);
         db.addEvent(nameEvent, matrixProfileOnlyDisplayName);
 
+        await db.commit(true);
+        db.reload();
+    });
+
+    it('should not barf on nul bytes in the event', async function() {
+        const db = createDb();
+        const events = [{event: nulByteEvent, profile: matrixProfileOnlyDisplayName}];
+        db.addHistoricEvents(events);
         await db.commit(true);
         db.reload();
     });

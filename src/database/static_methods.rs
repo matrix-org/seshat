@@ -44,8 +44,8 @@ impl Database {
         let mut ret = Vec::new();
         let mut event_ids = Vec::new();
 
-        for (e, p) in events.drain(..) {
-            let event_id = Database::save_event(&connection, &e, &p)?;
+        for (mut e, mut p) in events.drain(..) {
+            let event_id = Database::save_event(&connection, &mut e, &mut p)?;
             match event_id {
                 Some(id) => {
                     index_writer.add_event(&e);
@@ -70,7 +70,7 @@ impl Database {
     ) -> Result<bool> {
         let transaction = connection.transaction()?;
 
-        transaction.execute("DELETE from events WHERE event_id == ?1", &[&event_id])?;
+        Database::delete_event_by_id(&transaction, &event_id)?;
         transaction.execute(
             "INSERT OR IGNORE INTO pending_deletion_events (event_id) VALUES (?1)",
             &[&event_id],
@@ -356,7 +356,7 @@ impl Database {
         connection: &rusqlite::Connection,
         user_id: &str,
         profile: &Profile,
-    ) -> Result<i64> {
+    ) -> rusqlite::Result<i64> {
         let displayname = profile.displayname.as_ref();
         let avatar_url = profile.avatar_url.as_ref();
 
@@ -460,7 +460,7 @@ impl Database {
 
     pub(crate) fn save_event_helper(
         connection: &rusqlite::Connection,
-        event: &Event,
+        event: &mut Event,
         profile_id: i64,
     ) -> rusqlite::Result<i64> {
         let room_id = Database::get_room_id(connection, &event.room_id)?;
@@ -498,17 +498,56 @@ impl Database {
 
     pub(crate) fn save_event(
         connection: &rusqlite::Connection,
-        event: &Event,
-        profile: &Profile,
+        event: &mut Event,
+        profile: &mut Profile,
     ) -> Result<Option<i64>> {
         if Database::event_in_store(connection, event)? {
             return Ok(None);
         }
 
-        let profile_id = Database::save_profile(connection, &event.sender, profile)?;
-        let event_id = Database::save_event_helper(connection, event, profile_id)?;
+        let ret = Database::save_profile(connection, &event.sender, profile);
+        let profile_id = match ret {
+            Ok(p) => p,
+            Err(e) => match e {
+                rusqlite::Error::NulError(..) => {
+                    // A nul error is thrown because the string contains nul
+                    // bytes and converting it to a C string isn't possible this
+                    // way. This is likely some string containing malicious nul
+                    // bytes so we filter them out.
+                    profile.displayname = profile.displayname.as_mut().map(|d| d.replace("\0", ""));
+                    profile.avatar_url = profile.avatar_url.as_mut().map(|u| u.replace("\0", ""));
+                    Database::save_profile(connection, &event.sender, profile)?
+                }
+                _ => return Err(e.into()),
+            },
+        };
+        let ret = Database::save_event_helper(connection, event, profile_id);
+
+        let event_id = match ret {
+            Ok(e) => e,
+            Err(e) => match e {
+                rusqlite::Error::NulError(..) => {
+                    // Same deal for the event, but we need to delete the event
+                    // in case a transaction was used. Sqlite will otherwise
+                    // complain about the unique constraint that we have for
+                    // the event id.
+                    Database::delete_event_by_id(connection, &event.event_id)?;
+                    event.content_value = event.content_value.replace("\0", "");
+                    event.msgtype = event.msgtype.as_mut().map(|m| m.replace("\0", ""));
+                    Database::save_event_helper(connection, event, profile_id)?
+                }
+                _ => return Err(e.into()),
+            },
+        };
 
         Ok(Some(event_id))
+    }
+
+    pub(crate) fn delete_event_by_id(
+        connection: &rusqlite::Connection,
+        event_id: &str,
+    ) -> rusqlite::Result<usize> {
+        connection.execute("DELETE from events WHERE event_id == ?1", &[event_id])
     }
 
     pub(crate) fn event_in_store(
