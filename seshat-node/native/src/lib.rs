@@ -466,9 +466,13 @@ declare_types! {
                 None => return cx.throw_type_error("Database has been deleted")
             };
 
-            let path = db.get_path();
+            let db_path = db.get_path().to_path_buf();
+            let receiver = db.shutdown();
 
-            let task = DeleteTask { db_path: path.to_path_buf() };
+            let task = DeleteTask {
+                db_path,
+                shutdown_receiver: receiver,
+            };
             task.schedule(f);
 
             Ok(cx.undefined().upcast())

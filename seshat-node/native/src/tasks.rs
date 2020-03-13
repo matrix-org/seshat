@@ -252,15 +252,18 @@ impl Task for GetSizeTask {
 
 pub(crate) struct DeleteTask {
     pub(crate) db_path: PathBuf,
+    pub(crate) shutdown_receiver: Receiver<seshat::Result<()>>,
 }
 
 impl Task for DeleteTask {
     type Output = ();
-    type Error = std::io::Error;
+    type Error = seshat::Error;
     type JsEvent = JsUndefined;
 
     fn perform(&self) -> Result<Self::Output, Self::Error> {
-        std::fs::remove_dir_all(self.db_path.clone())
+        self.shutdown_receiver.recv().unwrap()?;
+        std::fs::remove_dir_all(self.db_path.clone())?;
+        Ok(())
     }
 
     fn complete(
