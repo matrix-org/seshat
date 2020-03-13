@@ -39,8 +39,6 @@ jobs:
           # least run tests not requiring it.
           - cargo test --no-default-features
 
-cache: cargo
-
 install:
   - node -v
   - npm -v
