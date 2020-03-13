@@ -367,7 +367,9 @@ describe('Database', function() {
 
         await db.delete()
 
-        expect(() => db.addEvent(matrixEvent, matrixProfileOnlyDisplayName)).toThrow('Database has been deleted');
+        expect(() => db
+            .addEvent(matrixEvent, matrixProfileOnlyDisplayName))
+            .toThrow('Database has been closed or deleted');
     });
 
     it('should allow us to check if the db is empty', async function() {
