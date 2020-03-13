@@ -147,13 +147,17 @@ declare_types! {
                 let guard = cx.lock();
                 let db = &mut this.borrow_mut(&guard).0;
 
-                db.as_mut().map_or_else(|| Err("Database has been deleted"), |db| Ok(db.get_connection()))
+                db.as_mut().map_or_else(|| Err("Database has been closed or deleted"),
+                                        |db| Ok(db.get_connection()))
             };
 
             let connection = match connection {
                 Ok(c) => match c {
                     Ok(c) => c,
-                    Err(e) => return cx.throw_type_error(format!("Unable to get a database connection {}", e.to_string())),
+                    Err(e) => return cx.throw_type_error(format!(
+                        "Unable to get a database connection {}",
+                        e.to_string()
+                    )),
                 },
                 Err(e) => return cx.throw_type_error(e),
             };
@@ -180,7 +184,8 @@ declare_types! {
                 let this = cx.this();
                 let guard = cx.lock();
                 let db = &this.borrow(&guard).0;
-                db.as_ref().map_or_else(|| Err("Database has been deleted"), |db| { db.add_event(event, profile); Ok(()) } )
+                db.as_ref().map_or_else(|| Err("Database has been closed or deleted"),
+                                        |db| { db.add_event(event, profile); Ok(()) } )
             };
 
             match ret {
@@ -197,7 +202,7 @@ declare_types! {
             let receiver = {
                 let guard = cx.lock();
                 let db = &mut this.borrow_mut(&guard).0;
-                db.as_mut().map_or_else(|| Err("Database has been deleted"), |db| {
+                db.as_mut().map_or_else(|| Err("Database has been closed or deleted"), |db| {
                     Ok(db.delete_event(&event_id))
                 })
             };
@@ -225,7 +230,7 @@ declare_types! {
             let receiver = {
                 let guard = cx.lock();
                 let db = &mut this.borrow_mut(&guard).0;
-                db.as_mut().map_or_else(|| Err("Database has been deleted"), |db| {
+                db.as_mut().map_or_else(|| Err("Database has been closed or deleted"), |db| {
                     if force {
                         Ok(db.force_commit_no_wait())
                     } else {
@@ -251,7 +256,8 @@ declare_types! {
             let ret = {
                 let guard = cx.lock();
                 let db = &mut this.borrow_mut(&guard).0;
-                db.as_mut().map_or_else(|| Err("Database has been deleted"), |db| Ok(db.reload()))
+                db.as_mut().map_or_else(|| Err("Database has been closed or deleted"),
+                                        |db| Ok(db.reload()))
             };
 
             match ret {
@@ -275,13 +281,17 @@ declare_types! {
                 let guard = cx.lock();
                 let db = &mut this.borrow_mut(&guard).0;
 
-                db.as_mut().map_or_else(|| Err("Database has been deleted"), |db| Ok(db.get_connection()))
+                db.as_mut().map_or_else(|| Err("Database has been closed or deleted"),
+                                        |db| Ok(db.get_connection()))
             };
 
             let connection = match connection {
                 Ok(c) => match c {
                     Ok(c) => c,
-                    Err(e) => return cx.throw_type_error(format!("Unable to get a database connection {}", e.to_string())),
+                    Err(e) => return cx.throw_type_error(format!(
+                        "Unable to get a database connection {}",
+                        e.to_string()
+                    )),
                 },
                 Err(e) => return cx.throw_type_error(e),
             };
@@ -300,7 +310,8 @@ declare_types! {
             let path = {
                 let guard = cx.lock();
                 let db = &mut this.borrow_mut(&guard).0;
-                db.as_ref().map_or_else(|| Err("Database has been deleted"), |db| Ok(db.get_path().to_path_buf()))
+                db.as_ref().map_or_else(|| Err("Database has been closed or deleted"),
+                                        |db| Ok(db.get_path().to_path_buf()))
             };
 
             let path = match path {
@@ -322,13 +333,17 @@ declare_types! {
                 let guard = cx.lock();
                 let db = &mut this.borrow_mut(&guard).0;
 
-                db.as_mut().map_or_else(|| Err("Database has been deleted"), |db| Ok(db.get_connection()))
+                db.as_mut().map_or_else(|| Err("Database has been closed or deleted"),
+                                        |db| Ok(db.get_connection()))
             };
 
             let connection = match connection {
                 Ok(c) => match c {
                     Ok(c) => c,
-                    Err(e) => return cx.throw_type_error(format!("Unable to get a database connection {}", e.to_string())),
+                    Err(e) => return cx.throw_type_error(format!(
+                        "Unable to get a database connection {}",
+                        e.to_string()
+                    )),
                 },
                 Err(e) => return cx.throw_type_error(e),
             };
@@ -357,7 +372,7 @@ declare_types! {
                 let db = &mut this.borrow_mut(&guard).0;
 
                 if wait {
-                    db.as_mut().map_or_else(|| Err("Database has been deleted"), |db| {
+                    db.as_mut().map_or_else(|| Err("Database has been closed or deleted"), |db| {
                         if force {
                             Ok(Some(db.force_commit()))
                         } else {
@@ -366,7 +381,8 @@ declare_types! {
                     }
                    )
                 } else {
-                    db.as_mut().map_or_else(|| Err("Database has been deleted"), |db| { db.commit_no_wait(); Ok(None) } )
+                    db.as_mut().map_or_else(|| Err("Database has been closed or deleted"),
+                                            |db| { db.commit_no_wait(); Ok(None) } )
                 }
             };
 
@@ -389,7 +405,8 @@ declare_types! {
             let ret = {
                 let guard = cx.lock();
                 let db = &mut this.borrow_mut(&guard).0;
-                db.as_ref().map_or_else(|| Err("Database has been deleted"), |db| Ok(db.search(&term, &config)))
+                db.as_ref().map_or_else(|| Err("Database has been closed or deleted"),
+                                        |db| Ok(db.search(&term, &config)))
             };
 
             let ret = match ret {
@@ -432,7 +449,8 @@ declare_types! {
             let searcher = {
                 let guard = cx.lock();
                 let db = &mut this.borrow_mut(&guard).0;
-                db.as_ref().map_or_else(|| Err("Database has been deleted"), |db| Ok(db.get_searcher()))
+                db.as_ref().map_or_else(|| Err("Database has been closed or deleted"),
+                                        |db| Ok(db.get_searcher()))
             };
 
             let searcher = match searcher {
@@ -463,7 +481,7 @@ declare_types! {
 
             let db = match db {
                 Some(db) => db,
-                None => return cx.throw_type_error("Database has been deleted")
+                None => return cx.throw_type_error("Database has been closed or deleted")
             };
 
             let db_path = db.get_path().to_path_buf();
@@ -471,6 +489,32 @@ declare_types! {
 
             let task = DeleteTask {
                 db_path,
+                shutdown_receiver: receiver,
+            };
+            task.schedule(f);
+
+            Ok(cx.undefined().upcast())
+        }
+
+        method shutdown(mut cx) {
+            let f = cx.argument::<JsFunction>(0)?;
+
+            let mut this = cx.this();
+
+            let db = {
+                let guard = cx.lock();
+                let db = &mut this.borrow_mut(&guard).0;
+                db.take()
+            };
+
+            let db = match db {
+                Some(db) => db,
+                None => return cx.throw_type_error("Database has been closed or deleted")
+            };
+
+            let receiver = db.shutdown();
+
+            let task = ShutDownTask {
                 shutdown_receiver: receiver,
             };
             task.schedule(f);
@@ -524,7 +568,8 @@ declare_types! {
                 let db = &mut this.borrow_mut(&guard).0;
                 db
                     .as_ref()
-                    .map_or_else(|| Err("Database has been deleted"), |db| Ok(db.get_connection()))
+                    .map_or_else(|| Err("Database has been closed or deleted"),
+                                 |db| Ok(db.get_connection()))
             };
 
             let connection = match connection {

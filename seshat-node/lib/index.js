@@ -424,6 +424,21 @@ class Seshat extends seshat.Seshat {
     }
 
     /**
+     * Shutdown and close the Seshat database.
+     *
+     * @return {Promise} A promise that will resolve when the database has
+     * been closed.
+     */
+    async shutdown() {
+        return new Promise((resolve, reject) => {
+            super.shutdown((err, res) => {
+                if (err) reject(err);
+                else resolve(res);
+            });
+        });
+    }
+
+    /**
      * Check if the database is completely empty.
      *
      * @return {Promise<boolean>} A promise that will resolve to true if the

@@ -255,6 +255,32 @@ pub(crate) struct DeleteTask {
     pub(crate) shutdown_receiver: Receiver<seshat::Result<()>>,
 }
 
+pub(crate) struct ShutDownTask {
+    pub(crate) shutdown_receiver: Receiver<seshat::Result<()>>,
+}
+
+impl Task for ShutDownTask {
+    type Output = ();
+    type Error = seshat::Error;
+    type JsEvent = JsUndefined;
+
+    fn perform(&self) -> Result<Self::Output, Self::Error> {
+        self.shutdown_receiver.recv().unwrap()?;
+        Ok(())
+    }
+
+    fn complete(
+        self,
+        mut cx: TaskContext,
+        result: Result<Self::Output, Self::Error>,
+    ) -> JsResult<Self::JsEvent> {
+        match result {
+            Ok(_) => Ok(cx.undefined()),
+            Err(e) => cx.throw_type_error(e.to_string()),
+        }
+    }
+}
+
 impl Task for DeleteTask {
     type Output = ();
     type Error = seshat::Error;
