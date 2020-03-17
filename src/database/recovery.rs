@@ -163,7 +163,7 @@ impl RecoveryDatabase {
         Ok(())
     }
 
-    fn event_from_json(event_source: &str) -> std::io::Result<Event> {
+    pub(crate) fn event_from_json(event_source: &str) -> std::io::Result<Event> {
         let object: Value = serde_json::from_str(event_source)?;
         let content = &object["content"];
         let event_type = &object["type"];

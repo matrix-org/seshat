@@ -486,7 +486,8 @@ fn store_event() {
     let profile = Profile::new("Alice", "");
     let id = Database::save_profile(&db.connection, "@alice.example.org", &profile).unwrap();
 
-    let id = Database::save_event_helper(&db.connection, &EVENT, id).unwrap();
+    let mut event = EVENT.clone();
+    let id = Database::save_event_helper(&db.connection, &mut event, id).unwrap();
     assert_eq!(id, 1);
 }
 
@@ -494,17 +495,19 @@ fn store_event() {
 fn store_event_and_profile() {
     let tmpdir = tempdir().unwrap();
     let db = Database::new(tmpdir.path()).unwrap();
-    let profile = Profile::new("Alice", "");
-    Database::save_event(&db.connection, &EVENT, &profile).unwrap();
+    let mut profile = Profile::new("Alice", "");
+    let mut event = EVENT.clone();
+    Database::save_event(&db.connection, &mut event, &mut profile).unwrap();
 }
 
 #[test]
 fn load_event() {
     let tmpdir = tempdir().unwrap();
     let db = Database::new(tmpdir.path()).unwrap();
-    let profile = Profile::new("Alice", "");
+    let mut profile = Profile::new("Alice", "");
 
-    Database::save_event(&db.connection, &EVENT, &profile).unwrap();
+    let mut event = EVENT.clone();
+    Database::save_event(&db.connection, &mut event, &mut profile).unwrap();
     let events = Database::load_events(
         &db.connection,
         &[
@@ -1010,4 +1013,34 @@ fn delete_an_event() {
             .len(),
         0
     );
+}
+
+#[test]
+fn add_events_with_null_byte() {
+    let event_source: &str = r#"{
+        "content": {
+            "body": "\u00000",
+            "msgtype": "m.text"
+        },
+        "event_id": "$15163622448EBvZJ:localhost",
+        "origin_server_ts": 1516362244050,
+        "sender": "@example2:localhost",
+        "type": "m.room.message",
+        "unsigned": {"age": 43289803098},
+        "user_id": "@example2:localhost",
+        "age": 43289803098,
+        "room_id": "!test:example.org"
+    }"#;
+
+    let event = RecoveryDatabase::event_from_json(event_source).unwrap();
+
+    let tmpdir = tempdir().unwrap();
+    let db = Database::new(tmpdir.path()).unwrap();
+    let profile = Profile::new("Alice", &event.content_value);
+
+    let events = vec![(event, profile)];
+    db.add_historic_events(events, None, None)
+        .recv()
+        .unwrap()
+        .expect("Event should be added");
 }
