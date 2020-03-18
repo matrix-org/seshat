@@ -87,7 +87,7 @@ pub struct Event {
     /// The textual representation of a message, this part of the event will be
     /// indexed.
     pub content_value: String,
-    /// The type of the message if the event is of a m.room.text type.
+    /// The type of the message if the event is of a m.room.message type.
     pub msgtype: Option<String>,
     /// The unique identifier of this event.
     pub event_id: String,
@@ -186,7 +186,7 @@ impl Event {
 }
 
 /// A users profile information at the time an event was posted.
-#[derive(Debug, PartialEq, Default, Clone)]
+#[derive(Debug, PartialEq, Default, Clone, Serialize, Deserialize)]
 pub struct Profile {
     /// The users display name if one is set.
     pub displayname: Option<String>,
@@ -290,7 +290,7 @@ lazy_static! {
     ];
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 /// A checkpoint that remembers the current point in a room timeline when
 /// fetching the history of the room.
 pub struct CrawlerCheckpoint {
@@ -305,7 +305,7 @@ pub struct CrawlerCheckpoint {
     pub direction: CheckpointDirection,
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 #[allow(missing_docs)]
 pub enum CheckpointDirection {
     Forwards,
