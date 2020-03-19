@@ -104,9 +104,9 @@ impl Database {
         let pool = r2d2::Pool::new(manager)?;
 
         let mut connection = pool.get()?;
-        connection.pragma_update(None, "foreign_keys", &1 as &dyn ToSql)?;
 
         Database::unlock(&connection, config)?;
+        Database::set_pragmas(&connection)?;
 
         let (version, reindex_needed) = match Database::get_version(&mut connection) {
             Ok(ret) => ret,
@@ -131,8 +131,8 @@ impl Database {
         // a new database and we'll end up with two connections using differing
         // keys and writes/reads to one of the connections might fail.
         let writer_connection = pool.get()?;
-        writer_connection.pragma_update(None, "foreign_keys", &1 as &dyn ToSql)?;
         Database::unlock(&writer_connection, config)?;
+        Database::set_pragmas(&writer_connection)?;
 
         let (t_handle, tx) = Database::spawn_writer(writer_connection, writer)?;
 
@@ -145,6 +145,14 @@ impl Database {
             index,
             config: config.clone(),
         })
+    }
+
+    fn set_pragmas(connection: &rusqlite::Connection) -> Result<()> {
+        connection.pragma_update(None, "foreign_keys", &1 as &dyn ToSql)?;
+        connection.pragma_update(None, "journal_mode", &"WAL")?;
+        connection.pragma_update(None, "synchronous", &"NORMAL")?;
+        connection.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);")?;
+        Ok(())
     }
 
     /// Change the passphrase of the Seshat database.
@@ -411,9 +419,8 @@ impl Database {
     /// Note that this connection should only be used for reading.
     pub fn get_connection(&self) -> Result<Connection> {
         let connection = self.pool.get()?;
-        connection.pragma_update(None, "foreign_keys", &1 as &dyn ToSql)?;
-
         Database::unlock(&connection, &self.config)?;
+        Database::set_pragmas(&connection)?;
 
         Ok(Connection {
             inner: connection,

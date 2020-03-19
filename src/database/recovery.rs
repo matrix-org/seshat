@@ -152,7 +152,7 @@ impl RecoveryDatabase {
             if let Some(file_name) = path.file_name() {
                 // Skip removing the events database, those will be needed for
                 // reindexing.
-                if file_name == EVENTS_DB_NAME {
+                if file_name.to_string_lossy().starts_with(EVENTS_DB_NAME) {
                     continue;
                 }
 
