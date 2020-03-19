@@ -29,6 +29,7 @@ use crate::events::{CrawlerCheckpoint, Profile, SerializedEvent};
 use crate::Database;
 
 /// Statistical information about the database.
+#[derive(Serialize, Deserialize)]
 pub struct DatabaseStats {
     /// The number number of bytes the database is using on disk.
     pub size: u64,

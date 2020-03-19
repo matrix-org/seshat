@@ -24,7 +24,7 @@ use crate::events::{MxId, Profile, SerializedEvent};
 use crate::index::IndexSearcher;
 use crate::Database;
 
-#[derive(Debug, PartialEq, Default, Clone)]
+#[derive(Debug, PartialEq, Default, Clone, Serialize, Deserialize)]
 /// A search result
 pub struct SearchResult {
     /// The score that the full text search assigned to this event.
