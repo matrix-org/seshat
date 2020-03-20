@@ -53,21 +53,25 @@ impl Searcher {
     /// * `config` - A SearchConfig that will modify what the search result
     /// should contain.
     ///
-    /// Returns a list of `SearchResult`.
-    pub fn search(&self, term: &str, config: &SearchConfig) -> Result<Vec<SearchResult>> {
-        let search_result = self.inner.search(term, config)?;
+    /// Returns a tuple of the count of matching documents and a list of
+    /// `SearchResult`.
+    pub fn search(&self, term: &str, config: &SearchConfig) -> Result<(usize, Vec<SearchResult>)> {
+        let (count, search_result) = self.inner.search(term, config)?;
 
         if search_result.is_empty() {
-            return Ok(vec![]);
+            return Ok((0, vec![]));
         }
 
-        Ok(Database::load_events(
-            &self.database,
-            &search_result,
-            config.before_limit,
-            config.after_limit,
-            config.order_by_recency,
-        )?)
+        Ok((
+            count,
+            Database::load_events(
+                &self.database,
+                &search_result,
+                config.before_limit,
+                config.after_limit,
+                config.order_by_recency,
+            )?,
+        ))
     }
 }
 
