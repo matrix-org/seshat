@@ -220,8 +220,8 @@ describe('Database', function() {
 
         const results = await db.search({search_term: 'Test'});
         // console.log(results)
-        // console.log(results[0].context.profile_info)
-        // console.log(results[0].result.content)
+        // console.log(results.results[0].context.profile_info)
+        // console.log(results.results[0].result.content)
         expect(results.count).not.toBe(0);
         expect(results.results[0].result).toEqual(matrixEvent);
     });

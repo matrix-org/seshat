@@ -23,6 +23,7 @@ use std::path::Path;
 use std::time::Duration;
 use tantivy as tv;
 use tantivy::chrono::{NaiveDateTime, Utc};
+use tantivy::collector::{Count, MultiCollector, TopDocs};
 use tantivy::Term;
 
 use crate::config::{Config, Language, SearchConfig};
@@ -181,7 +182,7 @@ impl IndexSearcher {
         &self,
         term: &str,
         config: &SearchConfig,
-    ) -> Result<Vec<(f32, EventId)>, tv::TantivyError> {
+    ) -> Result<(usize, Vec<(f32, EventId)>), tv::TantivyError> {
         let mut keys = Vec::new();
 
         let term = if let Some(room) = &config.room_id {
@@ -214,13 +215,18 @@ impl IndexSearcher {
 
         let query = query_parser.parse_query(&term)?;
 
-        let result = self
-            .inner
-            .search(&query, &tv::collector::TopDocs::with_limit(config.limit))?;
+        let mut multicollector = MultiCollector::new();
+        let count_handle = multicollector.add_collector(Count);
+        let top_docs_handle = multicollector.add_collector(TopDocs::with_limit(config.limit));
+
+        let mut result = self.inner.search(&query, &multicollector)?;
 
         let mut docs = Vec::new();
 
-        for (score, docaddress) in result {
+        let top_docs = top_docs_handle.extract(&mut result);
+        let count = count_handle.extract(&mut result);
+
+        for (score, docaddress) in top_docs {
             let doc = match self.inner.doc(docaddress) {
                 Ok(d) => d,
                 Err(_e) => continue,
@@ -233,7 +239,7 @@ impl IndexSearcher {
 
             docs.push((score, event_id));
         }
-        Ok(docs)
+        Ok((count, docs))
     }
 }
 
@@ -395,7 +401,7 @@ fn add_an_event() {
     index.reload().unwrap();
 
     let searcher = index.get_searcher();
-    let result = searcher.search("Test", &Default::default()).unwrap();
+    let result = searcher.search("Test", &Default::default()).unwrap().1;
 
     let event_id = EVENT.event_id.to_string();
 
@@ -424,12 +430,13 @@ fn add_events_to_differing_rooms() {
     let searcher = index.get_searcher();
     let result = searcher
         .search("Test", &SearchConfig::new().for_room(&EVENT.room_id))
-        .unwrap();
+        .unwrap()
+        .1;
 
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].1, event_id);
 
-    let result = searcher.search("Test", &Default::default()).unwrap();
+    let result = searcher.search("Test", &Default::default()).unwrap().1;
     assert_eq!(result.len(), 2);
 }
 
@@ -446,7 +453,7 @@ fn switch_languages() {
     index.reload().unwrap();
 
     let searcher = index.get_searcher();
-    let result = searcher.search("Test", &Default::default()).unwrap();
+    let result = searcher.search("Test", &Default::default()).unwrap().1;
 
     let event_id = EVENT.event_id.to_string();
 
@@ -477,7 +484,7 @@ fn japanese_tokenizer() {
     index.reload().unwrap();
 
     let searcher = index.get_searcher();
-    let result = searcher.search("伝説", &Default::default()).unwrap();
+    let result = searcher.search("伝説", &Default::default()).unwrap().1;
 
     let event_id = JAPANESE_EVENTS[1].event_id.to_string();
 
@@ -515,7 +522,7 @@ fn delete_an_event() {
     index.reload().unwrap();
 
     let searcher = index.get_searcher();
-    let result = searcher.search("Test", &Default::default()).unwrap();
+    let result = searcher.search("Test", &Default::default()).unwrap().1;
 
     let event_id = &EVENT.event_id;
 
@@ -527,7 +534,7 @@ fn delete_an_event() {
     index.reload().unwrap();
 
     let searcher = index.get_searcher();
-    let result = searcher.search("Test", &Default::default()).unwrap();
+    let result = searcher.search("Test", &Default::default()).unwrap().1;
     assert_eq!(result.len(), 1);
     assert_eq!(&result[0].1, &TOPIC_EVENT.event_id);
 }

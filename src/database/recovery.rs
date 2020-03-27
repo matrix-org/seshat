@@ -431,7 +431,7 @@ pub(crate) mod test {
         assert_eq!(version, DATABASE_VERSION);
         assert_eq!(reindex_needed, false);
 
-        let result = db.search("Hello", &SearchConfig::new()).unwrap();
+        let result = db.search("Hello", &SearchConfig::new()).unwrap().1;
         assert!(!result.is_empty())
     }
 }

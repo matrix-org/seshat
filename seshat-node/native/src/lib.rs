@@ -419,11 +419,11 @@ declare_types! {
                 Err(e) => return cx.throw_type_error(e.to_string()),
             };
 
-            let count = ret.len();
+            let count = ret.0;
             let results = JsArray::new(&mut cx, count as u32);
             let count = JsNumber::new(&mut cx, count as f64);
 
-            for (i, element) in ret.drain(..).enumerate() {
+            for (i, element) in ret.1.drain(..).enumerate() {
                 let object = search_result_to_js(&mut cx, element)?;
                 results.set(&mut cx, i as u32, object)?;
             }

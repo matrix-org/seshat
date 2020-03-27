@@ -55,7 +55,7 @@ pub(crate) struct SearchTask {
 }
 
 impl Task for SearchTask {
-    type Output = Vec<SearchResult>;
+    type Output = (usize, Vec<SearchResult>);
     type Error = seshat::Error;
     type JsEvent = JsObject;
 
@@ -73,11 +73,10 @@ impl Task for SearchTask {
             Err(e) => return cx.throw_type_error(e.to_string()),
         };
 
-        let count = ret.len();
-        let results = JsArray::new(&mut cx, count as u32);
-        let count = JsNumber::new(&mut cx, count as f64);
+        let results = JsArray::new(&mut cx, ret.1.len() as u32);
+        let count = JsNumber::new(&mut cx, ret.0 as f64);
 
-        for (i, element) in ret.drain(..).enumerate() {
+        for (i, element) in ret.1.drain(..).enumerate() {
             let object = search_result_to_js(&mut cx, element)?;
             results.set(&mut cx, i as u32, object)?;
         }
