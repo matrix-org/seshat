@@ -84,6 +84,7 @@ impl Writer {
         mut events: Vec<(Event, Profile)>,
         force_commit: bool,
     ) -> Result<bool> {
+        let empty_events = events.is_empty();
         let (ret, committed) = Database::write_events(
             &mut self.connection,
             &mut self.inner,
@@ -96,7 +97,11 @@ impl Writer {
             self.mark_events_as_deleted()?;
         }
 
-        Ok(ret)
+        if empty_events {
+            Ok(false)
+        } else {
+            Ok(ret)
+        }
     }
 
     pub fn load_unprocessed_events(&mut self) -> Result<()> {
