@@ -600,7 +600,7 @@ impl Database {
             None => {
                 let mut stmt = connection.prepare(
                     "SELECT source FROM events
-                     WHERE type == 'm.room.message' 
+                     WHERE type == 'm.room.message'
                      ORDER BY server_ts DESC LIMIT ?1
                      ",
                 )?;
