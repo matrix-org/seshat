@@ -387,12 +387,12 @@ pub(crate) fn parse_event(
     Ok(Event {
         event_type,
         content_value,
+        msgtype,
         event_id,
         sender,
         server_ts: server_timestamp,
         room_id,
         source: event_source,
-        msgtype,
     })
 }
 

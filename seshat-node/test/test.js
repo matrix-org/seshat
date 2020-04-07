@@ -239,6 +239,40 @@ describe('Database', function() {
         expect(ret2).toBeTruthy();
     });
 
+    it('shouldn\'t tell us that all events are added if none were given', async function() {
+        const db = createDb();
+        let ret = db.addHistoricEventsSync([], checkPoint);
+        expect(ret).toBeFalsy();
+    });
+
+    it('should add messages to an encrypted db and correctly report if they are already added', async function() {
+        const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'seshat-'));
+        const db = new Seshat(tempDir, {passphrase: "wordpass"});
+        expect(await db.isEmpty()).toBeTruthy();
+
+        const messageEvent = {
+            type: 'm.room.message',
+            event_id: '$1578495730213684WVvXE:matrix.org',
+            room_id: '!BJWoSxvSUNxDYIozgz:matrix.org',
+            sender: '@test:matrix.org',
+            content: {
+                body: 'Test message',
+                msgtype: 'm.text',
+            },
+            origin_server_ts: 1578495730471,
+        };
+
+        const events = [
+          {event: messageEvent, profile: matrixProfileOnlyDisplayName}
+        ]
+
+        let ret = db.addHistoricEventsSync(events, checkPoint);
+        expect(ret).toBeFalsy();
+
+        let ret = db.addHistoricEventsSync(events, checkPoint);
+        expect(ret).toBeTruthy();
+    });
+
     it('should allow messages from the backlog to be added using a promise', async function() {
         const db = createDb();
         let ret = await db.addHistoricEvents(exampleEvents, checkPoint)
