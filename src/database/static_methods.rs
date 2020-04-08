@@ -555,18 +555,21 @@ impl Database {
         event: &Event,
     ) -> rusqlite::Result<bool> {
         let room_id = Database::get_room_id(connection, &event.room_id)?;
-        let ret: std::result::Result<i64, rusqlite::Error> = connection.query_row(
+        let count: i64 = connection.query_row(
             "
-            SELECT id FROM events WHERE (
+            SELECT COUNT(*) FROM events WHERE (
                 event_id=?1
                 and room_id=?2)",
             &[&event.event_id, &room_id as &dyn ToSql],
             |row| row.get(0),
-        );
+        )?;
 
-        match ret {
-            Ok(_event_id) => Ok(true),
-            Err(_e) => Ok(false),
+        match count {
+            0 => Ok(false),
+            1 => Ok(true),
+            // This is fine becauese event_id and room_id are a unique pair in
+            // our events table.
+            _ => unreachable!(),
         }
     }
 
