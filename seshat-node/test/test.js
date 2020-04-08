@@ -269,7 +269,7 @@ describe('Database', function() {
         let ret = db.addHistoricEventsSync(events, checkPoint);
         expect(ret).toBeFalsy();
 
-        let ret = db.addHistoricEventsSync(events, checkPoint);
+        ret = db.addHistoricEventsSync(events, checkPoint);
         expect(ret).toBeTruthy();
     });
 
