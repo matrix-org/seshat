@@ -6,6 +6,7 @@ edition = "2018"
 license = "Apache-2.0"
 description = "A matrix message logger with full text search support"
 readme="README.md"
+repository="https://github.com/matrix-org/seshat/"
 
 [features]
 default = ["encryption"]
