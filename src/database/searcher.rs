@@ -14,8 +14,8 @@
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 use std::thread::sleep;
+use std::time::Duration;
 
 use r2d2::PooledConnection;
 use r2d2_sqlite::SqliteConnectionManager;
@@ -25,6 +25,9 @@ use crate::error::Result;
 use crate::events::{MxId, Profile, SerializedEvent};
 use crate::index::IndexSearcher;
 use crate::Database;
+
+static BUSY_RETRY: usize = 10;
+static BUSY_SLEEP: Duration = Duration::from_millis(10);
 
 #[derive(Debug, PartialEq, Default, Clone, Serialize, Deserialize)]
 /// A search result
@@ -76,17 +79,22 @@ impl Searcher {
             ) {
                 Ok(e) => break e,
                 Err(e) => match e {
+                    // Usually the busy timeout on a sqlite connection should
+                    // handle this, but setting it on the connection didn't
+                    // seem to get rid of database busy errors like expected.
                     rusqlite::Error::SqliteFailure(sql_error, _) => {
-                        if sql_error.code == rusqlite::ffi::ErrorCode::DatabaseBusy && retry < 10 {
+                        if sql_error.code == rusqlite::ffi::ErrorCode::DatabaseBusy
+                            && retry < BUSY_RETRY
+                        {
                             retry += 1;
-                            sleep(Duration::from_millis(10));
-                            continue
+                            sleep(BUSY_SLEEP);
+                            continue;
                         } else {
                             return Err(e.into());
                         }
-                    },
+                    }
                     e => return Err(e.into()),
-                }
+                },
             }
         };
 
