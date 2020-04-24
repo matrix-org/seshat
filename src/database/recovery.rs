@@ -49,9 +49,6 @@ pub struct RecoveryInfo {
     reindexed_events: Arc<AtomicU64>,
 }
 
-unsafe impl Send for RecoveryInfo {}
-unsafe impl Sync for RecoveryInfo {}
-
 impl RecoveryInfo {
     /// The total number of events that the database holds.
     pub fn total_events(&self) -> u64 {

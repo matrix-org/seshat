@@ -26,7 +26,7 @@ use rusqlite::{ToSql, NO_PARAMS};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{channel, Receiver, Sender};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::thread::JoinHandle;
 
@@ -65,7 +65,7 @@ pub(crate) enum ThreadMessage {
 /// The Seshat database.
 pub struct Database {
     path: PathBuf,
-    connection: Arc<PooledConnection<SqliteConnectionManager>>,
+    connection: Arc<Mutex<PooledConnection<SqliteConnectionManager>>>,
     pool: r2d2::Pool<SqliteConnectionManager>,
     _write_thread: JoinHandle<()>,
     tx: Sender<ThreadMessage>,
@@ -138,7 +138,7 @@ impl Database {
 
         Ok(Database {
             path: path.into(),
-            connection: Arc::new(connection),
+            connection: Arc::new(Mutex::new(connection)),
             pool,
             _write_thread: t_handle,
             tx,
@@ -172,8 +172,11 @@ impl Database {
         match self.config.passphrase {
             Some(p) => {
                 Index::change_passphrase(&self.path, &p, new_passphrase)?;
-                self.connection
-                    .pragma_update(None, "rekey", &new_passphrase as &dyn ToSql)?;
+                self.connection.lock().unwrap().pragma_update(
+                    None,
+                    "rekey",
+                    &new_passphrase as &dyn ToSql,
+                )?;
             }
             None => panic!("Database isn't encrypted"),
         }
@@ -461,15 +464,27 @@ fn store_profile() {
 
     let profile = Profile::new("Alice", "");
 
-    let id = Database::save_profile(&db.connection, "@alice.example.org", &profile);
+    let id = Database::save_profile(
+        &db.connection.lock().unwrap(),
+        "@alice.example.org",
+        &profile,
+    );
     assert_eq!(id.unwrap(), 1);
 
-    let id = Database::save_profile(&db.connection, "@alice.example.org", &profile);
+    let id = Database::save_profile(
+        &db.connection.lock().unwrap(),
+        "@alice.example.org",
+        &profile,
+    );
     assert_eq!(id.unwrap(), 1);
 
     let profile_new = Profile::new("Alice", "mxc://some_url");
 
-    let id = Database::save_profile(&db.connection, "@alice.example.org", &profile_new);
+    let id = Database::save_profile(
+        &db.connection.lock().unwrap(),
+        "@alice.example.org",
+        &profile_new,
+    );
     assert_eq!(id.unwrap(), 2);
 }
 
@@ -482,7 +497,11 @@ fn store_empty_profile() {
         displayname: None,
         avatar_url: None,
     };
-    let id = Database::save_profile(&db.connection, "@alice.example.org", &profile);
+    let id = Database::save_profile(
+        &db.connection.lock().unwrap(),
+        "@alice.example.org",
+        &profile,
+    );
     assert_eq!(id.unwrap(), 1);
 }
 
@@ -491,10 +510,15 @@ fn store_event() {
     let tmpdir = tempdir().unwrap();
     let db = Database::new(tmpdir.path()).unwrap();
     let profile = Profile::new("Alice", "");
-    let id = Database::save_profile(&db.connection, "@alice.example.org", &profile).unwrap();
+    let id = Database::save_profile(
+        &db.connection.lock().unwrap(),
+        "@alice.example.org",
+        &profile,
+    )
+    .unwrap();
 
     let mut event = EVENT.clone();
-    let id = Database::save_event_helper(&db.connection, &mut event, id).unwrap();
+    let id = Database::save_event_helper(&db.connection.lock().unwrap(), &mut event, id).unwrap();
     assert_eq!(id, 1);
 }
 
@@ -504,7 +528,7 @@ fn store_event_and_profile() {
     let db = Database::new(tmpdir.path()).unwrap();
     let mut profile = Profile::new("Alice", "");
     let mut event = EVENT.clone();
-    Database::save_event(&db.connection, &mut event, &mut profile).unwrap();
+    Database::save_event(&db.connection.lock().unwrap(), &mut event, &mut profile).unwrap();
 }
 
 #[test]
@@ -514,9 +538,9 @@ fn load_event() {
     let mut profile = Profile::new("Alice", "");
 
     let mut event = EVENT.clone();
-    Database::save_event(&db.connection, &mut event, &mut profile).unwrap();
+    Database::save_event(&db.connection.lock().unwrap(), &mut event, &mut profile).unwrap();
     let events = Database::load_events(
-        &db.connection,
+        &db.connection.lock().unwrap(),
         &[
             (1.0, "$15163622445EBvZJ:localhost".to_string()),
             (0.3, "$FAKE".to_string()),
@@ -548,7 +572,7 @@ fn save_the_event_multithreaded() {
     db.reload().unwrap();
 
     let events = Database::load_events(
-        &db.connection,
+        &db.connection.lock().unwrap(),
         &[
             (1.0, "$15163622445EBvZJ:localhost".to_string()),
             (0.3, "$FAKE".to_string()),
@@ -569,9 +593,11 @@ fn load_a_profile() {
 
     let profile = Profile::new("Alice", "");
     let user_id = "@alice.example.org";
-    let profile_id = Database::save_profile(&db.connection, user_id, &profile).unwrap();
+    let profile_id =
+        Database::save_profile(&db.connection.lock().unwrap(), user_id, &profile).unwrap();
 
-    let loaded_profile = Database::load_profile(&db.connection, profile_id).unwrap();
+    let loaded_profile =
+        Database::load_profile(&db.connection.lock().unwrap(), profile_id).unwrap();
 
     assert_eq!(profile, loaded_profile);
 }
@@ -616,7 +642,7 @@ fn load_event_context() {
 
     for i in 1..5 {
         let (before, after, _) =
-            Database::load_event_context(&db.connection, &EVENT, 1, 1).unwrap();
+            Database::load_event_context(&db.connection.lock().unwrap(), &EVENT, 1, 1).unwrap();
 
         if (before.len() != 1
             || after.len() != 1
@@ -687,13 +713,16 @@ fn duplicate_empty_profiles() {
     };
     let user_id = "@alice.example.org";
 
-    let first_id = Database::save_profile(&db.connection, user_id, &profile).unwrap();
-    let second_id = Database::save_profile(&db.connection, user_id, &profile).unwrap();
+    let first_id =
+        Database::save_profile(&db.connection.lock().unwrap(), user_id, &profile).unwrap();
+    let second_id =
+        Database::save_profile(&db.connection.lock().unwrap(), user_id, &profile).unwrap();
 
     assert_eq!(first_id, second_id);
 
-    let mut stmt = db
-        .connection
+    let connection = db.connection.lock().unwrap();
+
+    let mut stmt = connection
         .prepare("SELECT id FROM profile WHERE user_id=?1")
         .unwrap();
 
@@ -815,18 +844,22 @@ fn resume_committing() {
     let profile = Profile::new("Alice", "");
 
     // Check that we don't have any uncommitted events.
-    assert!(Database::load_uncommitted_events(&db.connection)
-        .unwrap()
-        .is_empty());
+    assert!(
+        Database::load_uncommitted_events(&db.connection.lock().unwrap())
+            .unwrap()
+            .is_empty()
+    );
 
     db.add_event(EVENT.clone(), profile);
     db.commit().unwrap();
     db.reload().unwrap();
 
     // Now we do have uncommitted events.
-    assert!(!Database::load_uncommitted_events(&db.connection)
-        .unwrap()
-        .is_empty());
+    assert!(
+        !Database::load_uncommitted_events(&db.connection.lock().unwrap())
+            .unwrap()
+            .is_empty()
+    );
 
     // Since the event wasn't committed to the index the search should fail.
     assert!(db
@@ -857,7 +890,7 @@ fn resume_committing() {
 
     // We still have uncommitted events.
     assert_eq!(
-        Database::load_uncommitted_events(&db.connection).unwrap()[0].1,
+        Database::load_uncommitted_events(&db.connection.lock().unwrap()).unwrap()[0].1,
         *EVENT
     );
 
@@ -865,9 +898,11 @@ fn resume_committing() {
     db.reload().unwrap();
 
     // A forced commit gets rid of our uncommitted events.
-    assert!(Database::load_uncommitted_events(&db.connection)
-        .unwrap()
-        .is_empty());
+    assert!(
+        Database::load_uncommitted_events(&db.connection.lock().unwrap())
+            .unwrap()
+            .is_empty()
+    );
 
     let result = db.search("test", &SearchConfig::new()).unwrap().1;
 
@@ -894,9 +929,11 @@ fn delete_uncommitted() {
     }
 
     db.force_commit().unwrap();
-    assert!(Database::load_uncommitted_events(&db.connection)
-        .unwrap()
-        .is_empty());
+    assert!(
+        Database::load_uncommitted_events(&db.connection.lock().unwrap())
+            .unwrap()
+            .is_empty()
+    );
 }
 
 #[test]
@@ -993,15 +1030,17 @@ fn delete_an_event() {
 
     db.force_commit().unwrap();
 
-    assert!(Database::load_pending_deletion_events(&db.connection)
-        .unwrap()
-        .is_empty());
+    assert!(
+        Database::load_pending_deletion_events(&db.connection.lock().unwrap())
+            .unwrap()
+            .is_empty()
+    );
 
     let recv = db.delete_event(&EVENT.event_id);
     recv.recv().unwrap().unwrap();
 
     assert_eq!(
-        Database::load_pending_deletion_events(&db.connection)
+        Database::load_pending_deletion_events(&db.connection.lock().unwrap())
             .unwrap()
             .len(),
         1
@@ -1011,7 +1050,7 @@ fn delete_an_event() {
 
     let mut db = Database::new(tmpdir.path()).unwrap();
     assert_eq!(
-        Database::load_pending_deletion_events(&db.connection)
+        Database::load_pending_deletion_events(&db.connection.lock().unwrap())
             .unwrap()
             .len(),
         1
@@ -1019,7 +1058,7 @@ fn delete_an_event() {
 
     db.force_commit().unwrap();
     assert_eq!(
-        Database::load_pending_deletion_events(&db.connection)
+        Database::load_pending_deletion_events(&db.connection.lock().unwrap())
             .unwrap()
             .len(),
         0

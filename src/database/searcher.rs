@@ -13,7 +13,9 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
+use std::thread::sleep;
 
 use r2d2::PooledConnection;
 use r2d2_sqlite::SqliteConnectionManager;
@@ -42,7 +44,7 @@ pub struct SearchResult {
 /// The main entry point to the index and database.
 pub struct Searcher {
     pub(crate) inner: IndexSearcher,
-    pub(crate) database: Arc<PooledConnection<SqliteConnectionManager>>,
+    pub(crate) database: Arc<Mutex<PooledConnection<SqliteConnectionManager>>>,
 }
 
 impl Searcher {
@@ -62,17 +64,32 @@ impl Searcher {
             return Ok((0, vec![]));
         }
 
-        Ok((
-            count,
-            Database::load_events(
-                &self.database,
+        let mut retry = 0;
+
+        let events = loop {
+            match Database::load_events(
+                &*self.database.lock().unwrap(),
                 &search_result,
                 config.before_limit,
                 config.after_limit,
                 config.order_by_recency,
-            )?,
-        ))
+            ) {
+                Ok(e) => break e,
+                Err(e) => match e {
+                    rusqlite::Error::SqliteFailure(sql_error, _) => {
+                        if sql_error.code == rusqlite::ffi::ErrorCode::DatabaseBusy && retry < 10 {
+                            retry += 1;
+                            sleep(Duration::from_millis(10));
+                            continue
+                        } else {
+                            return Err(e.into());
+                        }
+                    },
+                    e => return Err(e.into()),
+                }
+            }
+        };
+
+        Ok((count, events))
     }
 }
-
-unsafe impl Send for Searcher {}
