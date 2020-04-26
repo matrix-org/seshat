@@ -12,79 +12,50 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use fs_extra;
-use r2d2;
-use rusqlite;
-use tantivy;
-
-use failure::Fail;
+use thiserror::Error;
 
 /// Result type for seshat operations.
 pub type Result<T> = std::result::Result<T, Error>;
 
-#[derive(Fail, Debug)]
+#[derive(Error, Debug)]
 /// Seshat error types.
 pub enum Error {
-    #[fail(display = "Sqlite pool error: {}", _0)]
+    #[error("Sqlite pool error: {}", _0)]
     /// Error signaling that there was an error with the Sqlite connection
     /// pool.
-    PoolError(r2d2::Error),
-    #[fail(display = "Sqlite database error: {}", _0)]
+    PoolError(#[from] r2d2::Error),
+    #[error("Sqlite database error: {}", _0)]
     /// Error signaling that there was an error with a Sqlite transaction.
-    DatabaseError(rusqlite::Error),
-    #[fail(display = "Index error: {}", _0)]
+    DatabaseError(#[from] rusqlite::Error),
+    #[error("Index error: {}", _0)]
     /// Error signaling that there was an error with the event indexer.
     IndexError(tantivy::TantivyError),
-    #[fail(display = "File system error: {}", _0)]
+    #[error("File system error: {}", _0)]
     /// Error signaling that there was an error while reading from the
     /// filesystem.
-    FsError(fs_extra::error::Error),
-    #[fail(display = "IO error: {}", _0)]
+    FsError(#[from] fs_extra::error::Error),
+    #[error("IO error: {}", _0)]
     /// Error signaling that there was an error while doing a IO operation.
-    IOError(std::io::Error),
+    IOError(#[from] std::io::Error),
     /// Error signaling that the database passphrase was incorrect.
-    #[fail(display = "Error unlocking the database: {}", _0)]
+    #[error("Error unlocking the database: {}", _0)]
     DatabaseUnlockError(String),
     /// Error when opening the Seshat database and reading the database version.
-    #[fail(display = "Database version missmatch.")]
+    #[error("Database version missmatch.")]
     DatabaseVersionError,
     /// Error when opening the Seshat database and reading the database version.
-    #[fail(display = "Error opening the database: {}", _0)]
+    #[error("Error opening the database: {}", _0)]
     DatabaseOpenError(String),
     /// Error signaling that sqlcipher support is missing.
-    #[fail(display = "Sqlcipher error: {}", _0)]
+    #[error("Sqlcipher error: {}", _0)]
     SqlCipherError(String),
     /// Error indicating that the index needs to be rebuilt.
-    #[fail(display = "Error opening the database, the index needs to be rebuilt.")]
+    #[error("Error opening the database, the index needs to be rebuilt.")]
     ReindexError,
-}
-
-impl From<r2d2::Error> for Error {
-    fn from(err: r2d2::Error) -> Self {
-        Error::PoolError(err)
-    }
-}
-
-impl From<rusqlite::Error> for Error {
-    fn from(err: rusqlite::Error) -> Self {
-        Error::DatabaseError(err)
-    }
 }
 
 impl From<tantivy::TantivyError> for Error {
     fn from(err: tantivy::TantivyError) -> Self {
         Error::IndexError(err)
-    }
-}
-
-impl From<fs_extra::error::Error> for Error {
-    fn from(err: fs_extra::error::Error) -> Self {
-        Error::FsError(err)
-    }
-}
-
-impl From<std::io::Error> for Error {
-    fn from(err: std::io::Error) -> Self {
-        Error::IOError(err)
     }
 }
