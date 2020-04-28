@@ -19,7 +19,8 @@ use crate::events::{EventType, RoomId};
 
 const DEFAULT_LOAD_LIMIT: usize = 20;
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[serde(default)]
 /// Search configuration
 /// A search configuration allows users to limit the search to a specific room
 /// or limit the search to specific event types.
@@ -252,10 +253,12 @@ impl Default for Config {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[allow(missing_docs)]
 pub enum LoadDirection {
+    #[serde(rename = "b", alias = "backwards", alias = "backward")]
     Backwards,
+    #[serde(rename = "f", alias = "forwards", alias = "forward")]
     Forwards,
 }
 
@@ -264,7 +267,7 @@ pub enum LoadDirection {
 /// A load configuration allows users to limit the number of events that will be
 /// loaded or to continue loading events from a specific point in the room
 /// history.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LoadConfig {
     pub(crate) room_id: String,
     pub(crate) limit: usize,

@@ -28,16 +28,19 @@ use fake::locales::*;
 use fake::{Dummy, Fake};
 
 /// Matrix event types.
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Serialize, Deserialize)]
 pub enum EventType {
     /// Matrix room messages, corresponds to the m.room.message type, has a body
     /// inside of the content.
+    #[serde(alias = "m.room.message", alias = "content.body")]
     Message,
     /// Matrix room messages, corresponds to the m.room.name type, has a name
     /// inside of the content.
+    #[serde(alias = "m.room.name", alias = "content.name")]
     Name,
     /// Matrix room messages, corresponds to the m.room.topic type, has a topic
     /// inside of the content.
+    #[serde(alias = "m.room.topic", alias = "content.topic")]
     Topic,
 }
 
@@ -80,7 +83,7 @@ impl FromSql for EventType {
 }
 
 /// Matrix event that can be added to the database.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct Event {
     /// The type of the event.
     pub event_type: EventType,
@@ -291,6 +294,7 @@ lazy_static! {
 }
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 /// A checkpoint that remembers the current point in a room timeline when
 /// fetching the history of the room.
 pub struct CrawlerCheckpoint {
@@ -300,6 +304,8 @@ pub struct CrawlerCheckpoint {
     /// the room and fetch more messages from the room history.
     pub token: String,
     /// Is this a checkpoint for a complete crawl of the message history.
+    // bool defaults to `false`
+    #[serde(default)]
     pub full_crawl: bool,
     /// The direction which should be used to crawl the room timeline.
     pub direction: CheckpointDirection,
@@ -308,7 +314,9 @@ pub struct CrawlerCheckpoint {
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 #[allow(missing_docs)]
 pub enum CheckpointDirection {
+    #[serde(rename = "f", alias = "forwards", alias = "forward")]
     Forwards,
+    #[serde(rename = "b", alias = "backwards", alias = "backward")]
     Backwards,
 }
 

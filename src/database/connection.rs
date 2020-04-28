@@ -30,6 +30,7 @@ use crate::Database;
 
 /// Statistical information about the database.
 #[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DatabaseStats {
     /// The number number of bytes the database is using on disk.
     pub size: u64,
