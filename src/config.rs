@@ -262,16 +262,24 @@ pub enum LoadDirection {
     Forwards,
 }
 
+impl Default for LoadDirection {
+    fn default() -> LoadDirection {
+        LoadDirection::Backwards
+    }
+}
+
 /// Configuration for the event loading methods.
 ///
 /// A load configuration allows users to limit the number of events that will be
 /// loaded or to continue loading events from a specific point in the room
 /// history.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct LoadConfig {
     pub(crate) room_id: String,
     pub(crate) limit: usize,
     pub(crate) from_event: Option<String>,
+    #[serde(default)]
     pub(crate) direction: LoadDirection,
 }
 
@@ -288,7 +296,7 @@ impl LoadConfig {
             room_id: room_id.into(),
             limit: DEFAULT_LOAD_LIMIT,
             from_event: None,
-            direction: LoadDirection::Backwards,
+            direction: LoadDirection::default(),
         }
     }
 
