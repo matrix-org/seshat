@@ -82,18 +82,24 @@ pub(crate) struct Index {
     sender_field: tv::schema::Field,
     date_field: tv::schema::Field,
     room_id_field: tv::schema::Field,
+    search_cache: Arc<RwLock<LruCache<String, String>>>,
+}
+
+struct Search {
+    event_ids: Vec<String>,
+    search_term: String,
 }
 
 pub(crate) struct Writer {
-    pub(crate) inner: tv::IndexWriter,
-    pub(crate) body_field: tv::schema::Field,
-    pub(crate) topic_field: tv::schema::Field,
-    pub(crate) name_field: tv::schema::Field,
-    pub(crate) event_id_field: tv::schema::Field,
-    pub(crate) sender_field: tv::schema::Field,
-    pub(crate) date_field: tv::schema::Field,
-    pub(crate) added_events: usize,
-    pub(crate) commit_timestamp: std::time::Instant,
+    inner: tv::IndexWriter,
+    body_field: tv::schema::Field,
+    topic_field: tv::schema::Field,
+    name_field: tv::schema::Field,
+    event_id_field: tv::schema::Field,
+    sender_field: tv::schema::Field,
+    date_field: tv::schema::Field,
+    added_events: usize,
+    commit_timestamp: std::time::Instant,
     room_id_field: tv::schema::Field,
 }
 
@@ -163,18 +169,18 @@ impl Writer {
 }
 
 pub(crate) struct IndexSearcher {
-    pub(crate) inner: tv::LeasedItem<tv::Searcher>,
-    pub(crate) schema: tv::schema::Schema,
-    pub(crate) tokenizer: tv::tokenizer::TokenizerManager,
-    pub(crate) body_field: tv::schema::Field,
-    pub(crate) topic_field: tv::schema::Field,
-    pub(crate) name_field: tv::schema::Field,
-    pub(crate) room_id_field: tv::schema::Field,
+    inner: tv::LeasedItem<tv::Searcher>,
+    schema: tv::schema::Schema,
+    tokenizer: tv::tokenizer::TokenizerManager,
+    body_field: tv::schema::Field,
+    topic_field: tv::schema::Field,
+    name_field: tv::schema::Field,
+    room_id_field: tv::schema::Field,
     #[used]
-    pub(crate) sender_field: tv::schema::Field,
+    sender_field: tv::schema::Field,
     #[used]
-    pub(crate) date_field: tv::schema::Field,
-    pub(crate) event_id_field: tv::schema::Field,
+    date_field: tv::schema::Field,
+    event_id_field: tv::schema::Field,
 }
 
 impl IndexSearcher {
