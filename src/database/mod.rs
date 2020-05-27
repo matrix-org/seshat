@@ -22,7 +22,8 @@ use fs_extra::dir;
 use r2d2::PooledConnection;
 use r2d2_sqlite::SqliteConnectionManager;
 #[cfg(feature = "encryption")]
-use rusqlite::{ToSql, NO_PARAMS};
+use rusqlite::NO_PARAMS;
+use rusqlite::ToSql;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{channel, Receiver, Sender};
