@@ -61,9 +61,9 @@ impl Searcher {
     /// Returns a tuple of the count of matching documents and a list of
     /// `SearchResult`.
     pub fn search(&self, term: &str, config: &SearchConfig) -> Result<(usize, Vec<SearchResult>)> {
-        let (count, search_result) = self.inner.search(term, config)?;
+        let search_result = self.inner.search(term, config)?;
 
-        if search_result.is_empty() {
+        if search_result.results.is_empty() {
             return Ok((0, vec![]));
         }
 
@@ -72,7 +72,7 @@ impl Searcher {
         let events = loop {
             match Database::load_events(
                 &*self.database.lock().unwrap(),
-                &search_result,
+                &search_result.results,
                 config.before_limit,
                 config.after_limit,
                 config.order_by_recency,
@@ -98,6 +98,6 @@ impl Searcher {
             }
         };
 
-        Ok((count, events))
+        Ok((search_result.count, events))
     }
 }

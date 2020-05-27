@@ -20,6 +20,8 @@ rusqlite = "0.23.1"
 fs_extra = "1.1.0"
 r2d2_sqlite = "0.16.0"
 r2d2 = "0.8.8"
+lru-cache = "0.1.2"
+uuid = { version = "0.8.1", features = ["v4"] }
 
 aes-ctr = { version = "0.3.0", optional = true }
 crypto-mac = { version = "0.7.0", optional = true }

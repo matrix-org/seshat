@@ -20,11 +20,15 @@ mod japanese_tokenizer;
 
 use std::convert::TryInto;
 use std::path::Path;
+use std::sync::{Arc, RwLock};
 use std::time::Duration;
+
+use lru_cache::LruCache;
 use tantivy as tv;
 use tantivy::chrono::{NaiveDateTime, Utc};
 use tantivy::collector::{Count, MultiCollector, TopDocs};
 use tantivy::Term;
+use uuid::Uuid;
 
 use crate::config::{Config, Language, SearchConfig};
 use crate::events::{Event, EventId, EventType};
@@ -66,6 +70,12 @@ const COMMIT_RATE: usize = 500;
 /// committed.
 const COMMIT_TIME: Duration = Duration::from_secs(5);
 
+/// How many searches should be cached so pagination is supported.
+const SEARCH_CACHE_SIZE: usize = 100;
+/// How much should the result limit increase every time we need to find more
+/// results due to a paginated search.
+const SEARCH_LIMIT_INCREMENT: usize = 50;
+
 #[cfg(test)]
 use tempfile::TempDir;
 
@@ -82,12 +92,20 @@ pub(crate) struct Index {
     sender_field: tv::schema::Field,
     date_field: tv::schema::Field,
     room_id_field: tv::schema::Field,
-    search_cache: Arc<RwLock<LruCache<String, String>>>,
+    search_cache: Arc<RwLock<LruCache<Uuid, Search>>>,
 }
 
+#[derive(Clone)]
 struct Search {
-    event_ids: Vec<String>,
-    search_term: String,
+    query: Arc<Box<dyn tv::query::Query>>,
+    event_ids: Arc<Vec<String>>,
+}
+
+#[derive(Debug)]
+pub(crate) struct SearchResult {
+    pub(crate) count: usize,
+    pub(crate) results: Vec<(f32, EventId)>,
+    pub(crate) next_batch: Uuid,
 }
 
 pub(crate) struct Writer {
@@ -181,14 +199,15 @@ pub(crate) struct IndexSearcher {
     #[used]
     date_field: tv::schema::Field,
     event_id_field: tv::schema::Field,
+    search_cache: Arc<RwLock<LruCache<Uuid, Search>>>,
 }
 
 impl IndexSearcher {
-    pub fn search(
+    fn parse_query(
         &self,
         term: &str,
         config: &SearchConfig,
-    ) -> Result<(usize, Vec<(f32, EventId)>), tv::TantivyError> {
+    ) -> Result<Box<dyn tv::query::Query>, tv::TantivyError> {
         let mut keys = Vec::new();
 
         let term = if let Some(room) = &config.room_id {
@@ -219,18 +238,29 @@ impl IndexSearcher {
         let query_parser =
             tv::query::QueryParser::new(self.schema.clone(), keys, self.tokenizer.clone());
 
-        let query = query_parser.parse_query(&term)?;
+        Ok(query_parser.parse_query(&term)?)
+    }
 
+    fn search_helper(
+        &self,
+        og_limit: usize,
+        limit: usize,
+        previous_results: &[EventId],
+        query: &Box<dyn tv::query::Query>,
+    ) -> Result<((usize, Vec<(f32, EventId)>), Vec<EventId>), tv::TantivyError> {
         let mut multicollector = MultiCollector::new();
         let count_handle = multicollector.add_collector(Count);
-        let top_docs_handle = multicollector.add_collector(TopDocs::with_limit(config.limit));
+        let top_docs_handle = multicollector.add_collector(TopDocs::with_limit(limit));
 
-        let mut result = self.inner.search(&query, &multicollector)?;
+        let mut result = self.inner.search(query, &multicollector)?;
 
         let mut docs = Vec::new();
+        let mut event_ids = Vec::new();
 
         let top_docs = top_docs_handle.extract(&mut result);
         let count = count_handle.extract(&mut result);
+
+        let end = count == top_docs.len();
 
         for (score, docaddress) in top_docs {
             let doc = match self.inner.doc(docaddress) {
@@ -243,9 +273,73 @@ impl IndexSearcher {
                 None => continue,
             };
 
+            // Skip results that were already returne in a previous search.
+            if previous_results.contains(&event_id) {
+                continue;
+            }
+
+            event_ids.push(event_id.clone());
             docs.push((score, event_id));
         }
-        Ok((count, docs))
+
+        if docs.len() < og_limit {
+            if end {
+                Ok(((count, docs), event_ids))
+            } else {
+                self.search_helper(
+                    limit + SEARCH_LIMIT_INCREMENT,
+                    og_limit,
+                    &previous_results,
+                    &query,
+                )
+            }
+        } else {
+            Ok(((count, docs), event_ids))
+        }
+    }
+
+    pub fn search(
+        &self,
+        term: &str,
+        config: &SearchConfig,
+    ) -> Result<SearchResult, tv::TantivyError> {
+        let past_search = if let Some(token) = &config.next_batch {
+            let mut search_cache = self.search_cache.write().unwrap();
+            search_cache.get_mut(&token).cloned()
+        } else {
+            None
+        };
+
+        let ((result, event_ids), query) = if let Some(past_search) = past_search {
+            let query = &past_search.query;
+            let previous_results = &past_search.event_ids;
+            let (result, mut event_ids) =
+                self.search_helper(config.limit, config.limit, previous_results, &query)?;
+            event_ids.extend(previous_results.iter().cloned());
+            ((result, event_ids), query.clone())
+        } else {
+            let query = self.parse_query(term, config)?;
+            (
+                self.search_helper(config.limit, config.limit, &[], &query)?,
+                Arc::new(query),
+            )
+        };
+
+        let mut search_cache = self.search_cache.write().unwrap();
+
+        let search = Search {
+            query,
+            event_ids: Arc::new(event_ids),
+        };
+
+        let token = Uuid::new_v4();
+        search_cache.insert(token, search);
+
+        Ok(SearchResult {
+            next_batch: token,
+            count: result.0,
+            results: result.1,
+        })
     }
 }
 
@@ -300,6 +394,7 @@ impl Index {
             sender_field,
             date_field,
             room_id_field,
+            search_cache: Arc::new(RwLock::new(LruCache::new(SEARCH_CACHE_SIZE))),
         })
     }
 
@@ -369,6 +464,7 @@ impl Index {
             sender_field: self.sender_field,
             date_field: self.date_field,
             event_id_field: self.event_id_field,
+            search_cache: self.search_cache.clone(),
         }
     }
 
@@ -407,7 +503,10 @@ fn add_an_event() {
     index.reload().unwrap();
 
     let searcher = index.get_searcher();
-    let result = searcher.search("Test", &Default::default()).unwrap().1;
+    let result = searcher
+        .search("Test", &Default::default())
+        .unwrap()
+        .results;
 
     let event_id = EVENT.event_id.to_string();
 
@@ -437,12 +536,15 @@ fn add_events_to_differing_rooms() {
     let result = searcher
         .search("Test", &SearchConfig::new().for_room(&EVENT.room_id))
         .unwrap()
-        .1;
+        .results;
 
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].1, event_id);
 
-    let result = searcher.search("Test", &Default::default()).unwrap().1;
+    let result = searcher
+        .search("Test", &Default::default())
+        .unwrap()
+        .results;
     assert_eq!(result.len(), 2);
 }
 
@@ -459,7 +561,10 @@ fn switch_languages() {
     index.reload().unwrap();
 
     let searcher = index.get_searcher();
-    let result = searcher.search("Test", &Default::default()).unwrap().1;
+    let result = searcher
+        .search("Test", &Default::default())
+        .unwrap()
+        .results;
 
     let event_id = EVENT.event_id.to_string();
 
@@ -490,7 +595,10 @@ fn japanese_tokenizer() {
     index.reload().unwrap();
 
     let searcher = index.get_searcher();
-    let result = searcher.search("伝説", &Default::default()).unwrap().1;
+    let result = searcher
+        .search("伝説", &Default::default())
+        .unwrap()
+        .results;
 
     let event_id = JAPANESE_EVENTS[1].event_id.to_string();
 
@@ -528,7 +636,10 @@ fn delete_an_event() {
     index.reload().unwrap();
 
     let searcher = index.get_searcher();
-    let result = searcher.search("Test", &Default::default()).unwrap().1;
+    let result = searcher
+        .search("Test", &Default::default())
+        .unwrap()
+        .results;
 
     let event_id = &EVENT.event_id;
 
@@ -540,7 +651,53 @@ fn delete_an_event() {
     index.reload().unwrap();
 
     let searcher = index.get_searcher();
-    let result = searcher.search("Test", &Default::default()).unwrap().1;
+    let result = searcher
+        .search("Test", &Default::default())
+        .unwrap()
+        .results;
     assert_eq!(result.len(), 1);
     assert_eq!(&result[0].1, &TOPIC_EVENT.event_id);
+}
+
+#[test]
+fn paginated_search() {
+    let tmpdir = TempDir::new().unwrap();
+    let config = Config::new().set_language(&Language::English);
+    let index = Index::new(&tmpdir, &config).unwrap();
+
+    let mut writer = index.get_writer().unwrap();
+
+    writer.add_event(&EVENT);
+    writer.add_event(&TOPIC_EVENT);
+    writer.force_commit().unwrap();
+    index.reload().unwrap();
+
+    let searcher = index.get_searcher();
+    let first_search = searcher
+        .search("Test", SearchConfig::new().limit(1))
+        .unwrap();
+
+    assert_eq!(first_search.results.len(), 1);
+
+    let second_search = searcher
+        .search(
+            "Test",
+            SearchConfig::new()
+                .limit(1)
+                .next_batch(first_search.next_batch),
+        )
+        .unwrap();
+    assert_eq!(second_search.results.len(), 1);
+    assert_eq!(&first_search.results[0].1, &EVENT.event_id);
+    assert_eq!(&second_search.results[0].1, &TOPIC_EVENT.event_id);
+
+    let third_search = searcher
+        .search(
+            "Test",
+            SearchConfig::new()
+                .limit(1)
+                .next_batch(second_search.next_batch),
+        )
+        .unwrap();
+    assert!(third_search.results.is_empty());
 }

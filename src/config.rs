@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use uuid::Uuid;
 #[cfg(feature = "encryption")]
 use zeroize::Zeroizing;
 
@@ -32,6 +33,7 @@ pub struct SearchConfig {
     pub(crate) order_by_recency: bool,
     pub(crate) room_id: Option<RoomId>,
     pub(crate) keys: Vec<EventType>,
+    pub(crate) next_batch: Option<Uuid>,
 }
 
 impl SearchConfig {
@@ -111,6 +113,12 @@ impl SearchConfig {
 
         self
     }
+
+    /// Set the next batch.
+    pub fn next_batch(&mut self, token: Uuid) -> &mut Self {
+        self.next_batch = Some(token);
+        self
+    }
 }
 
 impl Default for SearchConfig {
@@ -122,6 +130,7 @@ impl Default for SearchConfig {
             order_by_recency: false,
             room_id: None,
             keys: Vec::new(),
+            next_batch: None,
         }
     }
 }
