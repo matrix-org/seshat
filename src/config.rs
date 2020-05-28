@@ -114,7 +114,8 @@ impl SearchConfig {
         self
     }
 
-    /// Set the next batch.
+    /// The point to return events from. If given, this should be a next_batch
+    /// result from a previous search.
     pub fn next_batch(&mut self, token: Uuid) -> &mut Self {
         self.next_batch = Some(token);
         self
