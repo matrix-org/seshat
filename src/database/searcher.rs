@@ -17,6 +17,7 @@ use std::sync::{Arc, Mutex};
 use std::thread::sleep;
 use std::time::Duration;
 
+use uuid::Uuid;
 use r2d2::PooledConnection;
 use r2d2_sqlite::SqliteConnectionManager;
 
@@ -60,11 +61,11 @@ impl Searcher {
     ///
     /// Returns a tuple of the count of matching documents and a list of
     /// `SearchResult`.
-    pub fn search(&self, term: &str, config: &SearchConfig) -> Result<(usize, Vec<SearchResult>)> {
+    pub fn search(&self, term: &str, config: &SearchConfig) -> Result<(Option<Uuid>, usize, Vec<SearchResult>)> {
         let search_result = self.inner.search(term, config)?;
 
         if search_result.results.is_empty() {
-            return Ok((0, vec![]));
+            return Ok((search_result.next_batch, 0, vec![]));
         }
 
         let mut retry = 0;
@@ -98,6 +99,6 @@ impl Searcher {
             }
         };
 
-        Ok((search_result.count, events))
+        Ok((search_result.next_batch, search_result.count, events))
     }
 }

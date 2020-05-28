@@ -97,7 +97,8 @@ pub(crate) struct Index {
 
 #[derive(Clone)]
 struct Search {
-    query: Arc<Box<dyn tv::query::Query>>,
+    search_term: Arc<String>,
+    search_config: Arc<SearchConfig>,
     event_ids: Arc<Vec<String>>,
 }
 
@@ -105,7 +106,7 @@ struct Search {
 pub(crate) struct SearchResult {
     pub(crate) count: usize,
     pub(crate) results: Vec<(f32, EventId)>,
-    pub(crate) next_batch: Uuid,
+    pub(crate) next_batch: Option<Uuid>,
 }
 
 pub(crate) struct Writer {
@@ -310,35 +311,47 @@ impl IndexSearcher {
             None
         };
 
-        let ((result, event_ids), query) = if let Some(past_search) = past_search {
-            let query = &past_search.query;
+        let ((result, event_ids), term, config) = if let Some(past_search) = past_search {
+            let query = self.parse_query(term, &past_search.search_config)?;
             let previous_results = &past_search.event_ids;
+
             let (result, mut event_ids) =
                 self.search_helper(config.limit, config.limit, previous_results, &query)?;
+
+            // Add the previous results to the current ones.
             event_ids.extend(previous_results.iter().cloned());
-            ((result, event_ids), query.clone())
+
+            ((result, event_ids), past_search.search_term.clone(), past_search.search_config.clone())
         } else {
             let query = self.parse_query(term, config)?;
             (
                 self.search_helper(config.limit, config.limit, &[], &query)?,
-                Arc::new(query),
+                Arc::new(term.to_owned()),
+                Arc::new(config.clone()),
             )
         };
 
-        let mut search_cache = self.search_cache.write().unwrap();
+        let (count, results) = result;
 
-        let search = Search {
-            query,
-            event_ids: Arc::new(event_ids),
+        let next_batch = if event_ids.len() == count {
+            None
+        } else {
+            let mut search_cache = self.search_cache.write().unwrap();
+            let search = Search {
+                search_term: term,
+                search_config: config,
+                event_ids: Arc::new(event_ids),
+            };
+
+            let token = Uuid::new_v4();
+            search_cache.insert(token, search);
+            Some(token)
         };
 
-        let token = Uuid::new_v4();
-        search_cache.insert(token, search);
-
         Ok(SearchResult {
-            next_batch: token,
-            count: result.0,
-            results: result.1,
+            next_batch,
+            count,
+            results,
         })
     }
 }
@@ -684,20 +697,11 @@ fn paginated_search() {
             "Test",
             SearchConfig::new()
                 .limit(1)
-                .next_batch(first_search.next_batch),
+                .next_batch(first_search.next_batch.unwrap()),
         )
         .unwrap();
     assert_eq!(second_search.results.len(), 1);
     assert_eq!(&first_search.results[0].1, &EVENT.event_id);
     assert_eq!(&second_search.results[0].1, &TOPIC_EVENT.event_id);
-
-    let third_search = searcher
-        .search(
-            "Test",
-            SearchConfig::new()
-                .limit(1)
-                .next_batch(second_search.next_batch),
-        )
-        .unwrap();
-    assert!(third_search.results.is_empty());
+    assert!(second_search.next_batch.is_none());
 }

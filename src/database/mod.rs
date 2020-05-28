@@ -24,6 +24,7 @@ use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::ToSql;
 #[cfg(feature = "encryption")]
 use rusqlite::NO_PARAMS;
+use uuid::Uuid;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{channel, Receiver, Sender};
@@ -405,7 +406,7 @@ impl Database {
     /// # Arguments
     ///
     /// * `term` - The search term that should be used to search the index.
-    pub fn search(&self, term: &str, config: &SearchConfig) -> Result<(usize, Vec<SearchResult>)> {
+    pub fn search(&self, term: &str, config: &SearchConfig) -> Result<(Option<Uuid>, usize, Vec<SearchResult>)> {
         let searcher = self.get_searcher();
         searcher.search(term, config)
     }
@@ -866,7 +867,7 @@ fn resume_committing() {
     assert!(db
         .search("test", &SearchConfig::new())
         .unwrap()
-        .1
+        .2
         .is_empty());
 
     // Let us drop the DB to check if we're loading the uncommitted events
@@ -905,7 +906,7 @@ fn resume_committing() {
             .is_empty()
     );
 
-    let result = db.search("test", &SearchConfig::new()).unwrap().1;
+    let result = db.search("test", &SearchConfig::new()).unwrap().2;
 
     // The search is now successful.
     assert!(!result.is_empty());
@@ -1016,7 +1017,7 @@ fn database_upgrade_v1_2() {
     let (version, _) = Database::get_version(&mut connection).unwrap();
     assert_eq!(version, DATABASE_VERSION);
 
-    let result = db.search("Hello", &SearchConfig::new()).unwrap().1;
+    let result = db.search("Hello", &SearchConfig::new()).unwrap().2;
     assert!(!result.is_empty())
 }
 
