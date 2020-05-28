@@ -16,6 +16,8 @@ use fs_extra::dir;
 use std::path::PathBuf;
 use std::sync::Mutex;
 
+use uuid::Uuid;
+
 use crate::utils::*;
 use neon::prelude::*;
 use seshat::{
@@ -55,7 +57,7 @@ pub(crate) struct SearchTask {
 }
 
 impl Task for SearchTask {
-    type Output = (usize, Vec<SearchResult>);
+    type Output = (Option<Uuid>, usize, Vec<SearchResult>);
     type Error = seshat::Error;
     type JsEvent = JsObject;
 
@@ -73,10 +75,10 @@ impl Task for SearchTask {
             Err(e) => return cx.throw_type_error(e.to_string()),
         };
 
-        let results = JsArray::new(&mut cx, ret.1.len() as u32);
-        let count = JsNumber::new(&mut cx, ret.0 as f64);
+        let results = JsArray::new(&mut cx, ret.2.len() as u32);
+        let count = JsNumber::new(&mut cx, ret.1 as f64);
 
-        for (i, element) in ret.1.drain(..).enumerate() {
+        for (i, element) in ret.2.drain(..).enumerate() {
             let object = search_result_to_js(&mut cx, element)?;
             results.set(&mut cx, i as u32, object)?;
         }
@@ -87,6 +89,11 @@ impl Task for SearchTask {
         search_result.set(&mut cx, "count", count)?;
         search_result.set(&mut cx, "results", results)?;
         search_result.set(&mut cx, "highlights", highlights)?;
+
+        if let Some(next_batch) = ret.0 {
+            let next_batch = JsString::new(&mut cx, next_batch.to_hyphenated().to_string());
+            search_result.set(&mut cx, "next_batch", next_batch)?;
+        }
 
         Ok(search_result)
     }

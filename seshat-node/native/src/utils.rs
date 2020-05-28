@@ -14,6 +14,7 @@
 
 use crate::Seshat;
 use neon::prelude::*;
+use uuid::Uuid;
 use neon_serde;
 use serde_json;
 use seshat::{
@@ -94,6 +95,18 @@ pub(crate) fn parse_search_object(
     if let Ok(r) = argument.get(&mut *cx, "room_id") {
         if let Ok(r) = r.downcast::<JsString>() {
             config.for_room(&r.value());
+        }
+    }
+
+    if let Ok(t) = argument.get(&mut *cx, "next_batch") {
+        if let Ok(t) = t.downcast::<JsString>() {
+            let token = if let Ok(t) = Uuid::parse_str(&t.value()) {
+                t
+            } else {
+                return cx.throw_type_error(format!("Invalid next_batch token {}", t.value()));
+            };
+
+            config.next_batch(token);
         }
     }
 
