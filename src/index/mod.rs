@@ -18,14 +18,12 @@ mod encrypted_dir;
 mod encrypted_stream;
 mod japanese_tokenizer;
 
-use std::convert::TryInto;
 use std::path::Path;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
 use lru_cache::LruCache;
 use tantivy as tv;
-use tantivy::chrono::{NaiveDateTime, Utc};
 use tantivy::collector::{Count, MultiCollector, TopDocs};
 use tantivy::Term;
 use uuid::Uuid;
@@ -159,17 +157,7 @@ impl Writer {
         doc.add_text(self.event_id_field, &event.event_id);
         doc.add_text(self.room_id_field, &event.room_id);
         doc.add_text(self.sender_field, &event.sender);
-
-        let seconds: i64 = event.server_ts / 1000;
-        let nano_seconds: u32 = ((event.server_ts % 1000) * 1000)
-            .try_into()
-            .unwrap_or_default();
-        let naive_date = NaiveDateTime::from_timestamp_opt(seconds, nano_seconds);
-
-        if let Some(d) = naive_date {
-            let date = tv::DateTime::from_utc(d, Utc);
-            doc.add_date(self.date_field, &date);
-        }
+        doc.add_u64(self.date_field, event.server_ts as u64);
 
         self.inner.add_document(doc);
         self.added_events += 1;
@@ -246,19 +234,37 @@ impl IndexSearcher {
         &self,
         og_limit: usize,
         limit: usize,
+        order_by_recency: bool,
         previous_results: &[EventId],
         query: &Box<dyn tv::query::Query>,
     ) -> Result<((usize, Vec<(f32, EventId)>), Vec<EventId>), tv::TantivyError> {
         let mut multicollector = MultiCollector::new();
         let count_handle = multicollector.add_collector(Count);
-        let top_docs_handle = multicollector.add_collector(TopDocs::with_limit(limit));
 
-        let mut result = self.inner.search(query, &multicollector)?;
+        let (mut result, top_docs) = if order_by_recency {
+            let top_docs_handle = multicollector
+                .add_collector(TopDocs::with_limit(limit).order_by_u64_field(self.date_field));
+
+            let mut result = self.inner.search(query, &multicollector)?;
+            let mut top_docs = top_docs_handle.extract(&mut result);
+            (
+                result,
+                top_docs
+                    .drain(..)
+                    .map(|(_, address)| (1.0, address))
+                    .collect(),
+            )
+        } else {
+            let top_docs_handle = multicollector.add_collector(TopDocs::with_limit(limit));
+            let mut result = self.inner.search(query, &multicollector)?;
+
+            let top_docs = top_docs_handle.extract(&mut result);
+            (result, top_docs)
+        };
 
         let mut docs = Vec::new();
         let mut event_ids = Vec::new();
 
-        let top_docs = top_docs_handle.extract(&mut result);
         let count = count_handle.extract(&mut result);
 
         let end = count == top_docs.len();
@@ -290,6 +296,7 @@ impl IndexSearcher {
                 self.search_helper(
                     limit + SEARCH_LIMIT_INCREMENT,
                     og_limit,
+                    order_by_recency,
                     &previous_results,
                     &query,
                 )
@@ -315,17 +322,32 @@ impl IndexSearcher {
             let query = self.parse_query(term, &past_search.search_config)?;
             let previous_results = &past_search.event_ids;
 
-            let (result, mut event_ids) =
-                self.search_helper(config.limit, config.limit, previous_results, &query)?;
+            let (result, mut event_ids) = self.search_helper(
+                config.limit,
+                config.limit,
+                config.order_by_recency,
+                previous_results,
+                &query,
+            )?;
 
             // Add the previous results to the current ones.
             event_ids.extend(previous_results.iter().cloned());
 
-            ((result, event_ids), past_search.search_term.clone(), past_search.search_config.clone())
+            (
+                (result, event_ids),
+                past_search.search_term.clone(),
+                past_search.search_config.clone(),
+            )
         } else {
             let query = self.parse_query(term, config)?;
             (
-                self.search_helper(config.limit, config.limit, &[], &query)?,
+                self.search_helper(
+                    config.limit,
+                    config.limit,
+                    config.order_by_recency,
+                    &[],
+                    &query,
+                )?,
                 Arc::new(term.to_owned()),
                 Arc::new(config.clone()),
             )
@@ -367,7 +389,7 @@ impl Index {
         let topic_field = schemabuilder.add_text_field("topic", text_field_options.clone());
         let name_field = schemabuilder.add_text_field("name", text_field_options);
 
-        let date_field = schemabuilder.add_date_field("date", tv::schema::INDEXED);
+        let date_field = schemabuilder.add_u64_field("date", tv::schema::FAST);
 
         let sender_field = schemabuilder.add_text_field("sender", tv::schema::STRING);
         let room_id_field =

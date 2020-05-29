@@ -24,13 +24,13 @@ use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::ToSql;
 #[cfg(feature = "encryption")]
 use rusqlite::NO_PARAMS;
-use uuid::Uuid;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::thread::JoinHandle;
+use uuid::Uuid;
 
 use crate::config::{Config, SearchConfig};
 pub use crate::database::connection::{Connection, DatabaseStats};
@@ -406,7 +406,11 @@ impl Database {
     /// # Arguments
     ///
     /// * `term` - The search term that should be used to search the index.
-    pub fn search(&self, term: &str, config: &SearchConfig) -> Result<(Option<Uuid>, usize, Vec<SearchResult>)> {
+    pub fn search(
+        &self,
+        term: &str,
+        config: &SearchConfig,
+    ) -> Result<(Option<Uuid>, usize, Vec<SearchResult>)> {
         let searcher = self.get_searcher();
         searcher.search(term, config)
     }

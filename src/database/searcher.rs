@@ -17,9 +17,9 @@ use std::sync::{Arc, Mutex};
 use std::thread::sleep;
 use std::time::Duration;
 
-use uuid::Uuid;
 use r2d2::PooledConnection;
 use r2d2_sqlite::SqliteConnectionManager;
+use uuid::Uuid;
 
 use crate::config::SearchConfig;
 use crate::error::Result;
@@ -61,7 +61,11 @@ impl Searcher {
     ///
     /// Returns a tuple of the count of matching documents and a list of
     /// `SearchResult`.
-    pub fn search(&self, term: &str, config: &SearchConfig) -> Result<(Option<Uuid>, usize, Vec<SearchResult>)> {
+    pub fn search(
+        &self,
+        term: &str,
+        config: &SearchConfig,
+    ) -> Result<(Option<Uuid>, usize, Vec<SearchResult>)> {
         let search_result = self.inner.search(term, config)?;
 
         if search_result.results.is_empty() {
