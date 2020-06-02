@@ -18,10 +18,31 @@ const seshat = require('../native');
 /**
  * @typedef searchResult
  * @type {Object}
- * @property {number} rank The rank of the search result.
- * @property {Object} matrixEvent The full event of the search result.
+ * @property {string} next_batch A token that can be used to grab more results
+ * in the next search call.
+ * @property {number} count The total number of results that were found.
+ * @property {Array.<singleResult>} results The list of results that was found.
  */
 
+/**
+ * @typedef singleResult
+ * @type {Object}
+ * @property {number} rank The rank of the search result.
+ * @property {matrixEvent} result The full event of the search result.
+ * @property {searchContext} context The context of the result, containing
+ * events before and after the result.
+ */
+
+/**
+ * @typedef searchContext
+ * @type {Object}
+ * @property {Array.<matrixEvent>} events_before Events that happened before the
+ * search result.
+ * @property {Array.<matrixEvent>} events_after Events that happened after the
+ * search result.
+ * @property {{user_id: matrixProfile}} profile_info The historic profile
+ * information of the users that sent the events returned.
+ */
 
 /**
  * @typedef matrixEvent
@@ -169,8 +190,7 @@ class Seshat extends seshat.Seshat {
      * @param  {matrixProfile} profile The user profile of the sender at the
      * time the event was sent.
      *
-     * @return {Array.<searchResult>} The array of events that matched the
-     * search term.
+     * @return {Void}
      */
     addEvent(matrixEvent, profile = {}) {
         return super.addEvent(matrixEvent, profile);
@@ -261,8 +281,10 @@ class Seshat extends seshat.Seshat {
      * followed the event that matched the search term.
      * @param  {boolean} args.order_by_recency Should the search results be
      * ordered by event recency.
+     * @param  {string} args.next_batch Should the search results be
+     * ordered by event recency.
      *
-     * @return {Promise<Array.<searchResult>>} The array of events that matched
+     * @return {Promise<searchResult>} The array of events that matched
      * the search term.
      */
     async search(args) {
@@ -287,7 +309,7 @@ class Seshat extends seshat.Seshat {
      * @param  {boolean} order_by_recency Should the search results be ordered
      * by event recency.
      *
-     * @return {Array.<searchResult>} The array of events that matched the
+     * @return {searchResult} The array of events that matched the
      * search term.
      */
     searchSync(term, limit = 10, before_limit = 0, after_limit = 0,
