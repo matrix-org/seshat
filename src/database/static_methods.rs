@@ -255,6 +255,17 @@ impl Database {
             version = 3;
         }
 
+        if version == 3 {
+            let transaction = connection.transaction()?;
+
+            transaction.execute("UPDATE reindex_needed SET reindex_needed = ?1", &[true])?;
+            transaction.execute("UPDATE version SET version = '4'", NO_PARAMS)?;
+            transaction.commit()?;
+
+            reindex_needed = true;
+            version = 4;
+        }
+
         Ok((version, reindex_needed))
     }
 
