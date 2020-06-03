@@ -439,6 +439,26 @@ class Seshat extends seshat.Seshat {
     }
 
     /**
+     * Change the passphrase of the database
+     *
+     * This will also close the database, just like shutdown does.
+     *
+     * @param  {string} newPassphrase The new passphrase that should from now on
+     * be used to encrypt the database.
+     *
+     * @return {Promise} A promise that will resolve when the passphrase has
+     * been changed.
+     */
+    async changePassphrase(newPassphrase) {
+        return new Promise((resolve, reject) => {
+            super.changePassphrase(newPassphrase, (err, res) => {
+                if (err) reject(err);
+                else resolve(res);
+            });
+        });
+    }
+
+    /**
      * Check if the database is completely empty.
      *
      * @return {Promise<boolean>} A promise that will resolve to true if the

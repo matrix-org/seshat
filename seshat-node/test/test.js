@@ -451,6 +451,22 @@ describe('Database', function() {
         expect(() => db = new Seshat(tempDir)).toThrow('');
     });
 
+    it('should allow us to create an change the passphrase of the encrypted db', async function() {
+        const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'seshat-'));
+        let db = new Seshat(tempDir, {passphrase: "wordpass"});
+
+        expect(await db.isEmpty()).toBeTruthy();
+        db.addEvent(matrixEvent, matrixProfileOnlyDisplayName);
+        await db.commit(true);
+        expect(await db.isEmpty()).toBeFalsy();
+
+        await db.changePassphrase("password");
+        expect(() => db = new Seshat(tempDir, {passphrase: "wordpass"})).toThrow('');
+
+        db = new Seshat(tempDir, {passphrase: "password"});
+        expect(await db.isEmpty()).toBeFalsy();
+    });
+
     it('should allow us to load events that contain files from the db', async function() {
         const db = createDb();
         db.addEvent(matrixEvent, matrixProfileOnlyDisplayName);

@@ -413,3 +413,30 @@ impl Task for DeleteEventTask {
         }
     }
 }
+
+pub(crate) struct ChangePassphraseTask {
+    pub(crate) database: Mutex<Option<seshat::Database>>,
+    pub(crate) new_passphrase: String,
+}
+
+impl Task for ChangePassphraseTask {
+    type Output = ();
+    type Error = seshat::Error;
+    type JsEvent = JsUndefined;
+
+    fn perform(&self) -> Result<Self::Output, Self::Error> {
+        let database = self.database.lock().unwrap().take().expect("No database found while changing passphrase");
+        database.change_passphrase(&self.new_passphrase)
+    }
+
+    fn complete(
+        self,
+        mut cx: TaskContext,
+        result: Result<Self::Output, Self::Error>,
+    ) -> JsResult<Self::JsEvent> {
+        match result {
+            Ok(_) => Ok(cx.undefined()),
+            Err(e) => cx.throw_error(format!("Error while changing the passphrase: {}", e.to_string())),
+        }
+    }
+}
