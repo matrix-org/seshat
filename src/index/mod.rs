@@ -287,6 +287,10 @@ impl IndexSearcher {
 
             event_ids.push(event_id.clone());
             docs.push((score, event_id));
+
+            if docs.len() >= og_limit {
+                break;
+            }
         }
 
         if docs.len() < og_limit {
