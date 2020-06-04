@@ -501,6 +501,33 @@ declare_types! {
             Ok(cx.undefined().upcast())
         }
 
+        method changePassphrase(mut cx) {
+            let new_passphrase = cx.argument::<JsString>(0)?;
+            let f = cx.argument::<JsFunction>(1)?;
+
+            let mut this = cx.this();
+
+            let db = {
+                let guard = cx.lock();
+                let db = &mut this.borrow_mut(&guard).0;
+                db.take()
+            };
+
+            let db = match db {
+                Some(db) => db,
+                None => return cx.throw_type_error("Database has been closed or deleted")
+            };
+
+            let task = ChangePassphraseTask {
+                database: Mutex::new(Some(db)),
+                new_passphrase: new_passphrase.value(),
+            };
+
+            task.schedule(f);
+
+            Ok(cx.undefined().upcast())
+        }
+
         method shutdown(mut cx) {
             let f = cx.argument::<JsFunction>(0)?;
 
