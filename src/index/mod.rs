@@ -294,8 +294,8 @@ impl IndexSearcher {
                 Ok(((count, docs), event_ids))
             } else {
                 self.search_helper(
-                    limit + SEARCH_LIMIT_INCREMENT,
                     og_limit,
+                    limit + SEARCH_LIMIT_INCREMENT,
                     order_by_recency,
                     &previous_results,
                     &query,
