@@ -86,6 +86,21 @@ impl Connection {
         Ok(event_count == 0 && checkpoint_count == 0)
     }
 
+    /// Is a room already indexed.
+    ///
+    /// Returns true if the database contains events from a room, false
+    /// otherwise.
+    pub fn is_room_indexed(&self, room_id: &str) -> Result<bool> {
+        let event_count: i64 = Database::get_event_count_for_room(&self.inner, room_id)?;
+        let checkpoint_count: i64 = self.query_row(
+            "SELECT COUNT(*) FROM crawlercheckpoints WHERE room_id=?1",
+            &[room_id],
+            |row| row.get(0),
+        )?;
+
+        Ok(event_count != 0 || checkpoint_count != 0)
+    }
+
     /// Get statistical information of the database.
     pub fn get_stats(&self) -> Result<DatabaseStats> {
         let event_count = Database::get_event_count(&self.inner)? as u64;

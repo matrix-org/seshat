@@ -357,6 +357,18 @@ impl Database {
         connection.query_row("SELECT COUNT(*) FROM events", NO_PARAMS, |row| row.get(0))
     }
 
+    pub(crate) fn get_event_count_for_room(
+        connection: &rusqlite::Connection,
+        room_id: &str,
+    ) -> rusqlite::Result<i64> {
+        let room_id = Database::get_room_id(connection, &room_id)?;
+        connection.query_row(
+            "SELECT COUNT(*) FROM events WHERE room_id=?1",
+            &[room_id],
+            |row| row.get(0),
+        )
+    }
+
     pub(crate) fn get_room_count(connection: &rusqlite::Connection) -> rusqlite::Result<i64> {
         // TODO once we support upgraded rooms we should return only leaf rooms
         // here, rooms that are not ancestors to another one.

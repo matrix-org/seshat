@@ -1100,3 +1100,21 @@ fn add_events_with_null_byte() {
         .unwrap()
         .expect("Event should be added");
 }
+
+#[test]
+fn is_room_indexed() {
+    let tmpdir = tempdir().unwrap();
+    let mut db = Database::new(tmpdir.path()).unwrap();
+
+    let connection = db.get_connection().unwrap();
+
+    assert!(connection.is_empty().unwrap());
+    assert!(!connection.is_room_indexed("!test_room:localhost").unwrap());
+
+    let profile = Profile::new("Alice", "");
+    db.add_event(EVENT.clone(), profile.clone());
+    db.force_commit().unwrap();
+
+    assert!(connection.is_room_indexed("!test_room:localhost").unwrap());
+    assert!(!connection.is_room_indexed("!test_room2:localhost").unwrap());
+}
