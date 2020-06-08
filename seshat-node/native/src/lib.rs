@@ -354,6 +354,36 @@ declare_types! {
             Ok(cx.undefined().upcast())
         }
 
+        method isRoomIndexed(mut cx) {
+            let room_id = cx.argument::<JsString>(0)?.value();
+            let f = cx.argument::<JsFunction>(1)?;
+            let mut this = cx.this();
+
+            let connection = {
+                let guard = cx.lock();
+                let db = &mut this.borrow_mut(&guard).0;
+
+                db.as_mut().map_or_else(|| Err("Database has been closed or deleted"),
+                                        |db| Ok(db.get_connection()))
+            };
+
+            let connection = match connection {
+                Ok(c) => match c {
+                    Ok(c) => c,
+                    Err(e) => return cx.throw_type_error(format!(
+                        "Unable to get a database connection {}",
+                        e.to_string()
+                    )),
+                },
+                Err(e) => return cx.throw_type_error(e),
+            };
+
+            let task = IsRoomIndexedTask { connection, room_id };
+            task.schedule(f);
+
+            Ok(cx.undefined().upcast())
+        }
+
         method commitSync(mut cx) {
             let wait: bool = match cx.argument_opt(0) {
                 Some(w) => w.downcast::<JsBoolean>().or_throw(&mut cx)?.value(),

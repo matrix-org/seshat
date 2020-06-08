@@ -497,6 +497,24 @@ class Seshat extends seshat.Seshat {
     }
 
     /**
+     * Check if the room with the given id is already indexed.
+     *
+     * @param  {string} roomId The ID of the room which we want to check if it
+     * has been already indexed.
+     *
+     * @return {Promise<boolean>} A promise that will resolve to true if the
+     * database contains events for the given room, false otherwise.
+     */
+    async isRoomIndexed(roomId) {
+        return new Promise((resolve, reject) => {
+            super.isRoomIndexed(roomId, (err, res) => {
+                if (err) reject(err);
+                else resolve(res);
+            });
+        });
+    }
+
+    /**
      * Load events that contain an mxc URL to a file.
      *
      * @param  {object} args Arguments object for the method.

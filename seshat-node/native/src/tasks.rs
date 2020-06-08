@@ -197,6 +197,32 @@ impl Task for IsEmptyTask {
     }
 }
 
+pub(crate) struct IsRoomIndexedTask {
+    pub(crate) connection: Connection,
+    pub(crate) room_id: String,
+}
+
+impl Task for IsRoomIndexedTask {
+    type Output = bool;
+    type Error = seshat::Error;
+    type JsEvent = JsBoolean;
+
+    fn perform(&self) -> Result<Self::Output, Self::Error> {
+        self.connection.is_room_indexed(&self.room_id)
+    }
+
+    fn complete(
+        self,
+        mut cx: TaskContext,
+        result: Result<Self::Output, Self::Error>,
+    ) -> JsResult<Self::JsEvent> {
+        match result {
+            Ok(r) => Ok(JsBoolean::new(&mut cx, r)),
+            Err(e) => cx.throw_type_error(e.to_string()),
+        }
+    }
+}
+
 pub(crate) struct StatsTask {
     pub(crate) connection: Connection,
 }

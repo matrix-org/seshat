@@ -439,6 +439,19 @@ describe('Database', function() {
         expect(await db.isEmpty()).toBeFalsy();
     });
 
+    it('should allow us to check if the db is empty', async function() {
+        const db = createDb();
+        expect(await db.isEmpty()).toBeTruthy();
+        expect(await db.isRoomIndexed(matrixEvent.room_id)).toBeFalsy();
+
+        db.addEvent(matrixEvent, matrixProfileOnlyDisplayName);
+        await db.commit(true);
+
+        expect(await db.isEmpty()).toBeFalsy();
+        expect(await db.isRoomIndexed(matrixEvent.room_id)).toBeTruthy();
+        expect(await db.isRoomIndexed("!fakeRoom:localhost")).toBeFalsy();
+    });
+
     it('should allow us to create an encrypted db', async function() {
         const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'seshat-'));
         let db = new Seshat(tempDir, {passphrase: "wordpass"});
