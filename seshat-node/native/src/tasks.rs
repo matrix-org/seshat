@@ -16,13 +16,11 @@ use fs_extra::dir;
 use std::path::PathBuf;
 use std::sync::Mutex;
 
-use uuid::Uuid;
-
 use crate::utils::*;
 use neon::prelude::*;
 use seshat::{
     CheckpointDirection, Connection, CrawlerCheckpoint, DatabaseStats, LoadConfig, Profile,
-    Receiver, RecoveryDatabase, SearchConfig, SearchResult, Searcher,
+    Receiver, RecoveryDatabase, SearchBatch, SearchConfig, Searcher,
 };
 
 pub(crate) struct CommitTask {
@@ -57,7 +55,7 @@ pub(crate) struct SearchTask {
 }
 
 impl Task for SearchTask {
-    type Output = (Option<Uuid>, usize, Vec<SearchResult>);
+    type Output = SearchBatch;
     type Error = seshat::Error;
     type JsEvent = JsObject;
 
@@ -75,10 +73,10 @@ impl Task for SearchTask {
             Err(e) => return cx.throw_type_error(e.to_string()),
         };
 
-        let results = JsArray::new(&mut cx, ret.2.len() as u32);
-        let count = JsNumber::new(&mut cx, ret.1 as f64);
+        let results = JsArray::new(&mut cx, ret.results.len() as u32);
+        let count = JsNumber::new(&mut cx, ret.count as f64);
 
-        for (i, element) in ret.2.drain(..).enumerate() {
+        for (i, element) in ret.results.drain(..).enumerate() {
             let object = search_result_to_js(&mut cx, element)?;
             results.set(&mut cx, i as u32, object)?;
         }
@@ -90,7 +88,7 @@ impl Task for SearchTask {
         search_result.set(&mut cx, "results", results)?;
         search_result.set(&mut cx, "highlights", highlights)?;
 
-        if let Some(next_batch) = ret.0 {
+        if let Some(next_batch) = ret.next_batch {
             let next_batch = JsString::new(&mut cx, next_batch.to_hyphenated().to_string());
             search_result.set(&mut cx, "next_batch", next_batch)?;
         }
@@ -458,7 +456,12 @@ impl Task for ChangePassphraseTask {
     type JsEvent = JsUndefined;
 
     fn perform(&self) -> Result<Self::Output, Self::Error> {
-        let database = self.database.lock().unwrap().take().expect("No database found while changing passphrase");
+        let database = self
+            .database
+            .lock()
+            .unwrap()
+            .take()
+            .expect("No database found while changing passphrase");
         database.change_passphrase(&self.new_passphrase)
     }
 
@@ -469,7 +472,10 @@ impl Task for ChangePassphraseTask {
     ) -> JsResult<Self::JsEvent> {
         match result {
             Ok(_) => Ok(cx.undefined()),
-            Err(e) => cx.throw_error(format!("Error while changing the passphrase: {}", e.to_string())),
+            Err(e) => cx.throw_error(format!(
+                "Error while changing the passphrase: {}",
+                e.to_string()
+            )),
         }
     }
 }

@@ -45,6 +45,20 @@ pub struct SearchResult {
     pub profile_info: HashMap<MxId, Profile>,
 }
 
+#[derive(Debug, PartialEq, Default, Clone, Serialize, Deserialize)]
+/// A batch of search results that were returned during a search.
+pub struct SearchBatch {
+    /// The total number of events that were found.
+    pub count: usize,
+    /// The list of search results that were returned. The number of results is
+    /// always smaller of equal to the count and depends on the limit that was
+    /// given in the `SearchConfig`.
+    pub results: Vec<SearchResult>,
+    /// A token that can be set in the `SearchConfig` to continue fetching the
+    /// next batch of `SearchResult`s.
+    pub next_batch: Option<Uuid>,
+}
+
 /// The main entry point to the index and database.
 pub struct Searcher {
     pub(crate) inner: IndexSearcher,
@@ -61,15 +75,15 @@ impl Searcher {
     ///
     /// Returns a tuple of the count of matching documents and a list of
     /// `SearchResult`.
-    pub fn search(
-        &self,
-        term: &str,
-        config: &SearchConfig,
-    ) -> Result<(Option<Uuid>, usize, Vec<SearchResult>)> {
+    pub fn search(&self, term: &str, config: &SearchConfig) -> Result<SearchBatch> {
         let search_result = self.inner.search(term, config)?;
 
         if search_result.results.is_empty() {
-            return Ok((search_result.next_batch, 0, vec![]));
+            return Ok(SearchBatch {
+                count: 0,
+                next_batch: search_result.next_batch,
+                results: vec![],
+            });
         }
 
         let mut retry = 0;
@@ -103,6 +117,10 @@ impl Searcher {
             }
         };
 
-        Ok((search_result.next_batch, search_result.count, events))
+        Ok(SearchBatch {
+            count: search_result.count,
+            next_batch: search_result.next_batch,
+            results: events,
+        })
     }
 }

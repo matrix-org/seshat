@@ -14,13 +14,13 @@
 
 use crate::Seshat;
 use neon::prelude::*;
-use uuid::Uuid;
 use neon_serde;
 use serde_json;
 use seshat::{
     CheckpointDirection, Config, CrawlerCheckpoint, Event, EventType, Language, Profile, Receiver,
     SearchConfig, SearchResult,
 };
+use uuid::Uuid;
 
 pub(crate) fn parse_database_config(
     cx: &mut CallContext<JsUndefined>,

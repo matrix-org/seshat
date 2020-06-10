@@ -64,7 +64,8 @@ mod events;
 mod index;
 
 pub use database::{
-    Connection, Database, DatabaseStats, RecoveryDatabase, RecoveryInfo, SearchResult, Searcher,
+    Connection, Database, DatabaseStats, RecoveryDatabase, RecoveryInfo, SearchBatch, SearchResult,
+    Searcher,
 };
 
 pub use error::{Error, Result};

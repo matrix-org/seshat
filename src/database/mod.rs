@@ -30,12 +30,11 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::thread::JoinHandle;
-use uuid::Uuid;
 
 use crate::config::{Config, SearchConfig};
 pub use crate::database::connection::{Connection, DatabaseStats};
 pub use crate::database::recovery::{RecoveryDatabase, RecoveryInfo};
-pub use crate::database::searcher::{SearchResult, Searcher};
+pub use crate::database::searcher::{SearchBatch, SearchResult, Searcher};
 use crate::database::writer::Writer;
 use crate::error::{Error, Result};
 use crate::events::{CrawlerCheckpoint, Event, EventId, HistoricEventsT, Profile};
@@ -406,11 +405,7 @@ impl Database {
     /// # Arguments
     ///
     /// * `term` - The search term that should be used to search the index.
-    pub fn search(
-        &self,
-        term: &str,
-        config: &SearchConfig,
-    ) -> Result<(Option<Uuid>, usize, Vec<SearchResult>)> {
+    pub fn search(&self, term: &str, config: &SearchConfig) -> Result<SearchBatch> {
         let searcher = self.get_searcher();
         searcher.search(term, config)
     }

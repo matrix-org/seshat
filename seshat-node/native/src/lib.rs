@@ -449,11 +449,11 @@ declare_types! {
                 Err(e) => return cx.throw_type_error(e.to_string()),
             };
 
-            let count = ret.1;
-            let results = JsArray::new(&mut cx, count as u32);
+            let count = ret.count;
+            let results = JsArray::new(&mut cx, ret.results.len() as u32);
             let count = JsNumber::new(&mut cx, count as f64);
 
-            for (i, element) in ret.2.drain(..).enumerate() {
+            for (i, element) in ret.results.drain(..).enumerate() {
                 let object = search_result_to_js(&mut cx, element)?;
                 results.set(&mut cx, i as u32, object)?;
             }
@@ -465,7 +465,7 @@ declare_types! {
             search_result.set(&mut cx, "results", results)?;
             search_result.set(&mut cx, "highlights", highlights)?;
 
-            if let Some(next_batch) = ret.0 {
+            if let Some(next_batch) = ret.next_batch {
                 let next_batch = JsString::new(&mut cx, next_batch.to_hyphenated().to_string());
                 search_result.set(&mut cx, "next_batch", next_batch)?;
             }
