@@ -184,7 +184,7 @@ fn save_and_search() {
     db.force_commit().unwrap();
     db.reload().unwrap();
 
-    let result = db.search("Test", &Default::default()).unwrap().2;
+    let result = db.search("Test", &Default::default()).unwrap().results;
     assert!(!result.is_empty());
     assert_eq!(result[0].event_source, EVENT.source);
 }
@@ -202,7 +202,7 @@ fn duplicate_events() {
     db.reload().unwrap();
 
     let searcher = db.get_searcher();
-    let result = searcher.search("Test", &Default::default()).unwrap().2;
+    let result = searcher.search("Test", &Default::default()).unwrap().results;
     assert_eq!(result.len(), 1);
 }
 
@@ -275,7 +275,7 @@ fn add_differing_events() {
     db.reload().unwrap();
 
     let searcher = db.get_searcher();
-    let result = searcher.search("Test", &SearchConfig::new()).unwrap().2;
+    let result = searcher.search("Test", &SearchConfig::new()).unwrap().results;
     assert_eq!(result.len(), 2);
 }
 
@@ -293,7 +293,7 @@ fn search_with_specific_key() {
     let result = searcher
         .search("Test", &SearchConfig::new().with_key(EventType::Topic))
         .unwrap()
-        .2;
+        .results;
     assert!(result.is_empty());
 
     db.add_event(TOPIC_EVENT.clone(), profile);
@@ -304,7 +304,7 @@ fn search_with_specific_key() {
     let result = searcher
         .search("Test", &SearchConfig::new().with_key(EventType::Topic))
         .unwrap()
-        .2;
+        .results;
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].event_source, TOPIC_EVENT.source)
 }
@@ -334,7 +334,7 @@ fn encrypted_save_and_search() {
     db.force_commit().unwrap();
     db.reload().unwrap();
 
-    let result = db.search("Test", &Default::default()).unwrap().2;
+    let result = db.search("Test", &Default::default()).unwrap().results;
     assert!(!result.is_empty());
     assert_eq!(result[0].event_source, EVENT.source);
 }
@@ -438,7 +438,7 @@ fn delete_events() {
     db.reload().unwrap();
 
     let searcher = db.get_searcher();
-    let result = searcher.search("Test", &SearchConfig::new()).unwrap().2;
+    let result = searcher.search("Test", &SearchConfig::new()).unwrap().results;
     assert_eq!(result.len(), 2);
 
     let receiver = db.delete_event(&EVENT.event_id);
@@ -447,7 +447,7 @@ fn delete_events() {
     db.force_commit().unwrap();
     db.reload().unwrap();
 
-    let result = searcher.search("Test", &SearchConfig::new()).unwrap().2;
+    let result = searcher.search("Test", &SearchConfig::new()).unwrap().results;
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].event_source, TOPIC_EVENT.source);
 }

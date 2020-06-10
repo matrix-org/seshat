@@ -866,7 +866,7 @@ fn resume_committing() {
     assert!(db
         .search("test", &SearchConfig::new())
         .unwrap()
-        .2
+        .results
         .is_empty());
 
     // Let us drop the DB to check if we're loading the uncommitted events
@@ -905,7 +905,7 @@ fn resume_committing() {
             .is_empty()
     );
 
-    let result = db.search("test", &SearchConfig::new()).unwrap().2;
+    let result = db.search("test", &SearchConfig::new()).unwrap().results;
 
     // The search is now successful.
     assert!(!result.is_empty());
@@ -1016,7 +1016,7 @@ fn database_upgrade_v1_2() {
     let (version, _) = Database::get_version(&mut connection).unwrap();
     assert_eq!(version, DATABASE_VERSION);
 
-    let result = db.search("Hello", &SearchConfig::new()).unwrap().2;
+    let result = db.search("Hello", &SearchConfig::new()).unwrap().results;
     assert!(!result.is_empty())
 }
 
