@@ -11,10 +11,6 @@ edition = "2018"
 name = "seshat_node"
 crate-type = ["cdylib"]
 
-# We pin the neon versions since neon introduced a breaking change in a minor
-# version bump. While this is unlikely to occur again let us pin the versions
-# for a while.
-
 [build-dependencies]
 neon-build = "0.4.0"
 
