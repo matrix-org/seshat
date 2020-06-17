@@ -188,6 +188,19 @@ impl Database {
         Ok((ret, committed))
     }
 
+    pub(crate) fn get_user_version(connection: &rusqlite::Connection) -> Result<i64> {
+        Ok(
+            connection.query_row("SELECT version FROM user_version", NO_PARAMS, |row| {
+                row.get(0)
+            })?,
+        )
+    }
+
+    pub(crate) fn set_user_version(connection: &rusqlite::Connection, version: i64) -> Result<()> {
+        connection.execute("UPDATE user_version SET version = ?", &[version])?;
+        Ok(())
+    }
+
     pub(crate) fn get_version(connection: &mut rusqlite::Connection) -> Result<(i64, bool)> {
         connection.execute(
             "CREATE TABLE IF NOT EXISTS version (
@@ -348,6 +361,19 @@ impl Database {
         conn.execute(
             "CREATE INDEX IF NOT EXISTS room_events ON events (room_id, type, msgtype)",
             NO_PARAMS,
+        )?;
+
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS user_version (
+                id INTEGER NOT NULL PRIMARY KEY CHECK (id = 1),
+                version INTEGER NOT NULL
+            )",
+            NO_PARAMS,
+        )?;
+
+        conn.execute(
+            "INSERT OR IGNORE INTO user_version ( version ) VALUES(?1)",
+            &[0],
         )?;
 
         Ok(())

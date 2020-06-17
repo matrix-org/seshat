@@ -202,7 +202,10 @@ fn duplicate_events() {
     db.reload().unwrap();
 
     let searcher = db.get_searcher();
-    let result = searcher.search("Test", &Default::default()).unwrap().results;
+    let result = searcher
+        .search("Test", &Default::default())
+        .unwrap()
+        .results;
     assert_eq!(result.len(), 1);
 }
 
@@ -275,7 +278,10 @@ fn add_differing_events() {
     db.reload().unwrap();
 
     let searcher = db.get_searcher();
-    let result = searcher.search("Test", &SearchConfig::new()).unwrap().results;
+    let result = searcher
+        .search("Test", &SearchConfig::new())
+        .unwrap()
+        .results;
     assert_eq!(result.len(), 2);
 }
 
@@ -438,7 +444,10 @@ fn delete_events() {
     db.reload().unwrap();
 
     let searcher = db.get_searcher();
-    let result = searcher.search("Test", &SearchConfig::new()).unwrap().results;
+    let result = searcher
+        .search("Test", &SearchConfig::new())
+        .unwrap()
+        .results;
     assert_eq!(result.len(), 2);
 
     let receiver = db.delete_event(&EVENT.event_id);
@@ -447,7 +456,10 @@ fn delete_events() {
     db.force_commit().unwrap();
     db.reload().unwrap();
 
-    let result = searcher.search("Test", &SearchConfig::new()).unwrap().results;
+    let result = searcher
+        .search("Test", &SearchConfig::new())
+        .unwrap()
+        .results;
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].event_source, TOPIC_EVENT.source);
 }

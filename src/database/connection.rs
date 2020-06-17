@@ -140,6 +140,23 @@ impl Connection {
             &load_config.direction,
         )?)
     }
+
+    /// Get the user version stored in the database.
+    ///
+    /// This version isn't used anywhere internally and can be set by the user
+    /// to signal changes between the JSON that gets stored inside of Seshat.
+    pub fn get_user_version(&self) -> Result<i64> {
+        Database::get_user_version(self)
+    }
+
+    /// Set the user version to the given version.
+    ///
+    /// # Arguments
+    ///
+    /// * `version` - The new version that will be stored in the database.
+    pub fn set_user_version(&self, version: i64) -> Result<()> {
+        Database::set_user_version(self, version)
+    }
 }
 
 impl Deref for Connection {

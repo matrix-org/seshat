@@ -1113,3 +1113,14 @@ fn is_room_indexed() {
     assert!(connection.is_room_indexed("!test_room:localhost").unwrap());
     assert!(!connection.is_room_indexed("!test_room2:localhost").unwrap());
 }
+
+#[test]
+fn user_version() {
+    let tmpdir = tempdir().unwrap();
+    let db = Database::new(tmpdir.path()).unwrap();
+    let connection = db.get_connection().unwrap();
+
+    assert_eq!(connection.get_user_version().unwrap(), 0);
+    connection.set_user_version(10).unwrap();
+    assert_eq!(connection.get_user_version().unwrap(), 10);
+}
