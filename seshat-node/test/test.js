@@ -439,7 +439,7 @@ describe('Database', function() {
         expect(await db.isEmpty()).toBeFalsy();
     });
 
-    it('should allow us to check if the db is empty', async function() {
+    it('should allow us to check if a room is already indexed', async function() {
         const db = createDb();
         expect(await db.isEmpty()).toBeTruthy();
         expect(await db.isRoomIndexed(matrixEvent.room_id)).toBeFalsy();
@@ -450,6 +450,15 @@ describe('Database', function() {
         expect(await db.isEmpty()).toBeFalsy();
         expect(await db.isRoomIndexed(matrixEvent.room_id)).toBeTruthy();
         expect(await db.isRoomIndexed("!fakeRoom:localhost")).toBeFalsy();
+    });
+
+    it('should allow us to store a user specified version in the db', async function() {
+        const db = createDb();
+        expect(await db.getUserVersion()).toEqual(0);
+
+        await db.setUserVersion(10);
+
+        expect(await db.getUserVersion()).toEqual(10);
     });
 
     it('should allow us to create an encrypted db', async function() {

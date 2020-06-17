@@ -479,3 +479,63 @@ impl Task for ChangePassphraseTask {
         }
     }
 }
+
+pub(crate) struct GetUserVersionTask {
+    pub(crate) connection: Connection,
+}
+
+impl Task for GetUserVersionTask {
+    type Output = i64;
+    type Error = seshat::Error;
+    type JsEvent = JsNumber;
+
+    fn perform(&self) -> Result<Self::Output, Self::Error> {
+        self.connection.get_user_version()
+    }
+
+    fn complete(
+        self,
+        mut cx: TaskContext,
+        result: Result<Self::Output, Self::Error>,
+    ) -> JsResult<Self::JsEvent> {
+        match result {
+            Ok(version) => {
+                let version = JsNumber::new(&mut cx, version as f64);
+                Ok(version)
+            }
+            Err(e) => cx.throw_error(format!(
+                "Error while getting the user version: {}",
+                e.to_string()
+            )),
+        }
+    }
+}
+
+pub(crate) struct SetUserVersionTask {
+    pub(crate) connection: Connection,
+    pub(crate) new_version: i64,
+}
+
+impl Task for SetUserVersionTask {
+    type Output = ();
+    type Error = seshat::Error;
+    type JsEvent = JsUndefined;
+
+    fn perform(&self) -> Result<Self::Output, Self::Error> {
+        self.connection.set_user_version(self.new_version)
+    }
+
+    fn complete(
+        self,
+        mut cx: TaskContext,
+        result: Result<Self::Output, Self::Error>,
+    ) -> JsResult<Self::JsEvent> {
+        match result {
+            Ok(_) => Ok(cx.undefined()),
+            Err(e) => cx.throw_error(format!(
+                "Error while setting the user version: {}",
+                e.to_string()
+            )),
+        }
+    }
+}

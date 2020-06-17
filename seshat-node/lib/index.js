@@ -515,6 +515,39 @@ class Seshat extends seshat.Seshat {
     }
 
     /**
+     * Get the custom user specific version from the database.
+     *
+     * @return {Promise<boolean>} A promise that will resolve to a number that
+     * represents the user version of the database.
+     */
+    async getUserVersion() {
+        return new Promise((resolve, reject) => {
+            super.getUserVersion((err, res) => {
+                if (err) reject(err);
+                else resolve(res);
+            });
+        });
+    }
+
+    /**
+     * Set the custom user version to the given value.
+     *
+     * @param  {number} version The new version that should be stored in the
+     * database.
+     *
+     * @return {Promise<void>} A promise that will resolve once the new version
+     * has been stored in the database.
+     */
+    async setUserVersion(version) {
+        return new Promise((resolve, reject) => {
+            super.setUserVersion(version, (err, res) => {
+                if (err) reject(err);
+                else resolve(res);
+            });
+        });
+    }
+
+    /**
      * Load events that contain an mxc URL to a file.
      *
      * @param  {object} args Arguments object for the method.
