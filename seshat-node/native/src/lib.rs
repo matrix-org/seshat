@@ -66,6 +66,52 @@ declare_types! {
             Ok(cx.undefined().upcast())
         }
 
+        method getUserVersion(mut cx) {
+            let f = cx.argument::<JsFunction>(0)?;
+            let mut this = cx.this();
+
+            let connection = {
+                let guard = cx.lock();
+                let db = &mut this.borrow_mut(&guard).database;
+
+                db.as_mut().map_or_else(|| Err("Database has been closed or deleted"),
+                                        |db| Ok(db.get_connection()))
+            };
+
+            let connection = match connection {
+                Ok(c) => match c {
+                    Ok(c) => c,
+                    Err(e) => return cx.throw_type_error(format!(
+                        "Unable to get a database connection {}",
+                        e.to_string()
+                    )),
+                },
+                Err(e) => return cx.throw_type_error(e),
+            };
+
+            let task = GetUserVersionTask { connection };
+            task.schedule(f);
+
+            Ok(cx.undefined().upcast())
+        }
+
+        method shutdown(mut cx) {
+            let f = cx.argument::<JsFunction>(0)?;
+
+            let mut this = cx.this();
+
+            let database = {
+                let guard = cx.lock();
+                let db = &mut this.borrow_mut(&guard).database;
+                db.take()
+            };
+
+            let task = ShutDownReindexTask(Mutex::new(database));
+            task.schedule(f);
+
+            Ok(cx.undefined().upcast())
+        }
+
         method info(mut cx) {
             let mut this = cx.this();
 

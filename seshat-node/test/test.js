@@ -622,6 +622,7 @@ describe('Database', function() {
         expect(() => new Seshat(dir)).toThrow(ReindexError);
 
         const recovery = new SeshatRecovery(dir);
+        expect(await recovery.getUserVersion()).toEqual(0);
         await recovery.reindex();
 
         const db = new Seshat(dir);

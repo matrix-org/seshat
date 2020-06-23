@@ -539,3 +539,32 @@ impl Task for SetUserVersionTask {
         }
     }
 }
+
+pub(crate) struct ShutDownReindexTask(pub(crate) Mutex<Option<RecoveryDatabase>>);
+
+impl Task for ShutDownReindexTask {
+    type Output = ();
+    type Error = seshat::Error;
+    type JsEvent = JsUndefined;
+
+    fn perform(&self) -> Result<Self::Output, Self::Error> {
+        let db = self.0.lock().unwrap().take();
+
+        if let Some(db) = db {
+            db.shutdown()
+        } else {
+            Ok(())
+        }
+    }
+
+    fn complete(
+        self,
+        mut cx: TaskContext,
+        result: Result<Self::Output, Self::Error>,
+    ) -> JsResult<Self::JsEvent> {
+        match result {
+            Ok(_) => Ok(cx.undefined()),
+            Err(e) => cx.throw_error(e.to_string()),
+        }
+    }
+}

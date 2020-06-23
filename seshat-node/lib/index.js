@@ -615,6 +615,36 @@ class SeshatRecovery extends seshat.SeshatRecovery {
     }
 
     /**
+     * Get the custom user specific version from the database.
+     *
+     * @return {Promise<boolean>} A promise that will resolve to a number that
+     * represents the user version of the database.
+     */
+    async getUserVersion() {
+        return new Promise((resolve, reject) => {
+            super.getUserVersion((err, res) => {
+                if (err) reject(err);
+                else resolve(res);
+            });
+        });
+    }
+
+    /**
+     * Shutdown and close the Seshat recovery database.
+     *
+     * @return {Promise} A promise that will resolve when the database has
+     * been closed.
+     */
+    async shutdown() {
+        return new Promise((resolve, reject) => {
+            super.shutdown((err, res) => {
+                if (err) reject(err);
+                else resolve(res);
+            });
+        });
+    }
+
+    /**
      * Re-index the database.
      *
      * @return {Promise} A promise that will resolve once the database has
