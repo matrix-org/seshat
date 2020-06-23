@@ -332,6 +332,17 @@ impl RecoveryDatabase {
             None => Err(Error::ReindexError),
         }
     }
+
+    /// Shut the database down.
+    ///
+    /// This will terminate the writer thread making sure that no writes will
+    /// happen after this operation.
+    pub fn shutdown(mut self) -> Result<()> {
+        let index_writer = self.index_writer.take();
+        index_writer.map_or(Ok(()), |i| i.wait_merging_threads())?;
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]
