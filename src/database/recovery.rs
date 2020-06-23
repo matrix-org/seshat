@@ -15,7 +15,7 @@ use crate::database::{DATABASE_VERSION, EVENTS_DB_NAME};
 use crate::error::{Error, Result};
 use crate::events::{Event, SerializedEvent};
 use crate::index::{Index, Writer};
-use crate::Database;
+use crate::{Connection, Database};
 
 use crate::EventType;
 use serde_json::Value;
@@ -277,6 +277,20 @@ impl RecoveryDatabase {
     /// Get the recovery info for the database.
     pub fn info(&self) -> &RecoveryInfo {
         &self.recovery_info
+    }
+
+    /// Get a database connection.
+    ///
+    /// Note that this connection should only be used for reading.
+    pub fn get_connection(&self) -> Result<Connection> {
+        let connection = self.pool.get()?;
+        Database::unlock(&connection, &self.config)?;
+        Database::set_pragmas(&connection)?;
+
+        Ok(Connection {
+            inner: connection,
+            path: self.path.clone(),
+        })
     }
 
     /// Re-index a batch of events.
