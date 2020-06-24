@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.1.0 - 2020-06-24
+
+### Added
+
+- [[#69]] Add support to get the user version from the recovery database and add
+      a shutdown method to the recovery database.
+
+[#69]: https://github.com/matrix-org/seshat/pull/69
+
 ## 2.0.0 - 2020-06-19
 
 ### Added
