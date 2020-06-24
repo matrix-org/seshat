@@ -106,7 +106,7 @@ declare_types! {
                 db.take()
             };
 
-            let task = ShutDownReindexTask(Mutex::new(database));
+            let task = ShutDownRecoveryDatabaseTask(Mutex::new(database));
             task.schedule(f);
 
             Ok(cx.undefined().upcast())

@@ -540,9 +540,9 @@ impl Task for SetUserVersionTask {
     }
 }
 
-pub(crate) struct ShutDownReindexTask(pub(crate) Mutex<Option<RecoveryDatabase>>);
+pub(crate) struct ShutDownRecoveryDatabaseTask(pub(crate) Mutex<Option<RecoveryDatabase>>);
 
-impl Task for ShutDownReindexTask {
+impl Task for ShutDownRecoveryDatabaseTask {
     type Output = ();
     type Error = seshat::Error;
     type JsEvent = JsUndefined;
