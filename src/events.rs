@@ -141,6 +141,7 @@ pub(crate) type EventContext = (
 );
 
 pub(crate) type RoomId = String;
+pub(crate) type SenderId = String;
 pub(crate) type MxId = String;
 pub(crate) type EventId = String;
 pub(crate) type SerializedEvent = String;

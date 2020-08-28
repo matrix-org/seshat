@@ -16,7 +16,7 @@ use uuid::Uuid;
 #[cfg(feature = "encryption")]
 use zeroize::Zeroizing;
 
-use crate::events::{EventType, RoomId};
+use crate::events::{EventType, RoomId, SenderId};
 
 const DEFAULT_LOAD_LIMIT: usize = 20;
 
@@ -32,6 +32,7 @@ pub struct SearchConfig {
     pub(crate) after_limit: usize,
     pub(crate) order_by_recency: bool,
     pub(crate) room_ids: Option<Vec<RoomId>>,
+    pub(crate) sender_ids: Option<Vec<SenderId>>,
     pub(crate) keys: Vec<EventType>,
     pub(crate) next_batch: Option<Uuid>,
 }
@@ -130,6 +131,7 @@ impl Default for SearchConfig {
             after_limit: 0,
             order_by_recency: false,
             room_ids: None,
+            sender_ids: None,
             keys: Vec::new(),
             next_batch: None,
         }
