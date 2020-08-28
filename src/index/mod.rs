@@ -199,9 +199,13 @@ impl IndexSearcher {
     ) -> Result<Box<dyn tv::query::Query>, tv::TantivyError> {
         let mut keys = Vec::new();
 
-        let term = if let Some(room) = &config.room_id {
+        let term = if let Some(rooms) = &config.room_ids {
+            let mut room_query_parts = Vec::new();
             keys.push(self.room_id_field);
-            format!("+room_id:\"{}\" AND \"{}\"", room, term)
+            for room in rooms {
+                room_query_parts.push(format!("room_id:\"{}\"", room))
+            }
+            format!("({}) +\"{}\"", room_query_parts.join(" "), term)
         } else if term.is_empty() {
             "*".to_owned()
         } else {

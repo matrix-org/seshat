@@ -31,7 +31,7 @@ pub struct SearchConfig {
     pub(crate) before_limit: usize,
     pub(crate) after_limit: usize,
     pub(crate) order_by_recency: bool,
-    pub(crate) room_id: Option<RoomId>,
+    pub(crate) room_ids: Option<Vec<RoomId>>,
     pub(crate) keys: Vec<EventType>,
     pub(crate) next_batch: Option<Uuid>,
 }
@@ -48,7 +48,7 @@ impl SearchConfig {
     ///
     /// * `room_id` - The unique id of the room.
     pub fn for_room(&mut self, room_id: &str) -> &mut Self {
-        self.room_id = Some(room_id.to_owned());
+        self.room_ids = Some(vec![room_id.to_owned()]);
         self
     }
 
@@ -129,7 +129,7 @@ impl Default for SearchConfig {
             before_limit: 0,
             after_limit: 0,
             order_by_recency: false,
-            room_id: None,
+            room_ids: None,
             keys: Vec::new(),
             next_batch: None,
         }
