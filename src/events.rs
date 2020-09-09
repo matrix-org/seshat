@@ -26,6 +26,16 @@ use fake::faker::internet::raw::*;
 use fake::locales::*;
 #[cfg(test)]
 use fake::{Dummy, Fake};
+#[cfg(test)]
+use rand::Rng;
+#[cfg(test)]
+extern crate base64;
+#[cfg(test)]
+use std::convert::TryFrom;
+#[cfg(test)]
+use std::mem;
+#[cfg(test)]
+use std::time::SystemTime;
 
 /// Matrix event types.
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Serialize, Deserialize)]
@@ -210,6 +220,89 @@ impl Profile {
             avatar_url: Some(avatar_url.to_string()),
         }
     }
+}
+
+#[cfg(test)]
+#[derive(Serialize)]
+pub struct EventSourceContent {
+    body: String,
+    msgtype: String
+}
+
+#[cfg(test)]
+#[derive(Serialize)]
+pub struct EventSourceUnsigned {
+    age: i64
+}
+
+#[cfg(test)]
+#[derive(Serialize)]
+pub struct EventSource {
+    content: EventSourceContent,
+    event_id: String,
+    origin_server_ts: i64,
+    room_id: String,
+    sender: String,
+    #[serde(rename = "type")]
+    _type: String,
+    unsigned: EventSourceUnsigned
+}
+
+#[cfg(test)]
+pub fn new_message_source(
+    message: String,
+    room_id: String,
+    sender: String,
+    ts: i64,
+    age: i64
+) -> EventSource {
+    let mut rng = rand::thread_rng();
+
+    let rbytes = unsafe { mem::transmute::<u128, [u8; 16]>(rng.gen()) };
+    let rstr = base64::encode_config(rbytes, base64::URL_SAFE_NO_PAD);
+
+    return EventSource {
+        content: EventSourceContent {
+            body: message,
+            msgtype: "m.text".to_string()
+        },
+        event_id: format!("${}:localhost", rstr),
+        origin_server_ts: ts,
+        room_id: room_id,
+        sender: sender,
+        _type: "m.room.message".to_string(),
+        unsigned: EventSourceUnsigned {
+            age: age
+        }
+    };
+}
+
+#[cfg(test)]
+pub fn new_message(message: &str, room_id: &str, sender: &str, ts_time: SystemTime) -> Event {
+    let age_duration = SystemTime::now().duration_since(ts_time).unwrap();
+    let age = i64::try_from(age_duration.as_millis()).unwrap();
+
+    let ts_duration = ts_time.duration_since(std::time::SystemTime::UNIX_EPOCH).unwrap();
+    let ts = i64::try_from(ts_duration.as_millis()).unwrap();
+
+    let event_source = new_message_source(
+        message.to_string(),
+        room_id.to_string(),
+        sender.to_string(),
+        ts,
+        age
+    );
+
+    return Event::new(
+        EventType::Message,
+        message,
+        Some("m.text"),
+        &event_source.event_id,
+        sender,
+        ts,
+        room_id,
+        &serde_json::to_string(&event_source).unwrap(),
+    )
 }
 
 #[cfg(test)]

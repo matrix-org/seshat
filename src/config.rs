@@ -53,6 +53,26 @@ impl SearchConfig {
         self
     }
 
+    /// Limit the search to a set of rooms.
+    /// The default is to search all rooms.
+    /// # Arguments
+    ///
+    /// * `room_ids` - The unique ids of the rooms.
+    pub fn for_rooms(&mut self, room_ids: &Vec<String>) -> &mut Self {
+        self.room_ids = Some(room_ids.to_owned());
+        self
+    }
+
+    /// Limit the search to a set of senders.
+    /// The default is to search all senders.
+    /// # Arguments
+    ///
+    /// * `sender_ids` - The unique ids of the senders.
+    pub fn for_senders(&mut self, sender_ids: &Vec<String>) -> &mut Self {
+        self.sender_ids = Some(sender_ids.to_owned());
+        self
+    }
+
     /// Limit the number of events that will be returned in the search result.
     /// The default for the limit is 10.
     /// # Arguments

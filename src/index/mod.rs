@@ -76,9 +76,13 @@ const SEARCH_LIMIT_INCREMENT: usize = 50;
 
 #[cfg(test)]
 use tempfile::TempDir;
+#[cfg(test)]
+use rand::Rng;
+#[cfg(test)]
+use std::time::SystemTime;
 
 #[cfg(test)]
-use crate::events::{EVENT, JAPANESE_EVENTS, TOPIC_EVENT};
+use crate::events::{EVENT, JAPANESE_EVENTS, TOPIC_EVENT, new_message};
 
 pub(crate) struct Index {
     index: tv::Index,
@@ -105,6 +109,13 @@ pub(crate) struct SearchResult {
     pub(crate) count: usize,
     pub(crate) results: Vec<(f32, EventId)>,
     pub(crate) next_batch: Option<Uuid>,
+}
+
+#[cfg(test)]
+impl SearchResult {
+    fn get_event_ids(&self) -> Vec<String> {
+        self.results.iter().map(|t| t.1.clone() ).collect()
+    }
 }
 
 pub(crate) struct Writer {
@@ -746,4 +757,113 @@ fn paginated_search() {
     assert_eq!(&first_search.results[0].1, &EVENT.event_id);
     assert_eq!(&second_search.results[0].1, &TOPIC_EVENT.event_id);
     assert!(second_search.next_batch.is_none());
+}
+
+#[cfg(test)]
+fn random_time_after(time: SystemTime) -> SystemTime {
+    let mut rng = rand::thread_rng();
+
+    let diff = SystemTime::now().duration_since(time).unwrap().as_secs();
+    let seconds = rng.gen_range(0, diff / 2);
+    let duration = Duration::from_secs(seconds);
+    return time + duration;
+}
+
+#[test]
+fn filtered_search() {
+    let tmpdir = TempDir::new().unwrap();
+    let config = Config::new().set_language(&Language::English);
+    let index = Index::new(&tmpdir, &config).unwrap();
+
+    let messages = ["foo", "bar"];
+    let rooms = ["!test1:localhost", "!test2:localhost", "!test3:localhost"];
+    let senders = ["@alice:localhost", "@bob:localhost", "@charlie:localhost"];
+
+    let mut rng = rand::thread_rng();
+    let age_seconds = rng.gen_range(0, 10 * 24 * 3600);
+    let age_duration = Duration::from_secs(age_seconds);
+
+    let mut time = SystemTime::now() - age_duration;
+
+    let mut solution = Vec::new();
+    let mut solution_alice_bob = Vec::new();
+    let mut solution_test1_test2 = Vec::new();
+    let mut solution_alice_bob_test1_test2 = Vec::new();
+
+    let mut writer = index.get_writer().unwrap();
+
+    for message in &messages {
+        for room in &rooms {
+            for sender in &senders {
+                time = random_time_after(time);
+
+                let msg = new_message(message, room, sender, time);
+
+                writer.add_event(&msg);
+
+                if message == &"foo" {
+                    solution.push(msg.event_id.clone());
+
+                    if sender == &"@alice:localhost" || sender == &"@bob:localhost" {
+                        solution_alice_bob.push(msg.event_id.clone());
+                    }
+                    if room == &"!test1:localhost" || room == &"!test2:localhost" {
+                        solution_test1_test2.push(msg.event_id.clone());
+
+                        if sender == &"@alice:localhost" || sender == &"@bob:localhost" {
+                            solution_alice_bob_test1_test2.push(msg.event_id.clone());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    writer.force_commit().unwrap();
+    index.reload().unwrap();
+
+    let searcher = index.get_searcher();
+
+    let alice_bob = vec![
+        "@alice:localhost".to_string(),
+        "@bob:localhost".to_string()
+    ];
+
+    let test1_test2 = vec![
+        "!test1:localhost".to_string(),
+        "!test2:localhost".to_string()
+    ];
+
+    let result = searcher
+        .search("foo", &SearchConfig::new())
+        .unwrap()
+        .get_event_ids();
+
+    assert_eq!(result.iter().eq(solution.iter()), true);
+
+    let result_alice_bob = searcher
+        .search("foo", SearchConfig::new().for_senders(&alice_bob))
+        .unwrap()
+        .get_event_ids();
+
+    assert_eq!(result_alice_bob.iter().eq(solution_alice_bob.iter()), true);
+
+    let result_test1_test2 = searcher
+        .search("foo", SearchConfig::new().for_rooms(&test1_test2))
+        .unwrap()
+        .get_event_ids();
+
+    assert_eq!(result_test1_test2.iter().eq(solution_test1_test2.iter()), true);
+
+    let result_alice_bob_test1_test2 = searcher
+        .search(
+            "foo",
+            SearchConfig::new()
+                .for_senders(&alice_bob)
+                .for_rooms(&test1_test2)
+        )
+        .unwrap()
+        .get_event_ids();
+
+    assert_eq!(result_alice_bob_test1_test2.iter().eq(solution_alice_bob_test1_test2.iter()), true);
 }
