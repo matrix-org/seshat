@@ -359,6 +359,16 @@ impl Database {
         )?;
 
         conn.execute(
+            "CREATE INDEX IF NOT EXISTS room_events_by_timestamp ON events (room_id, server_ts DESC, event_id)",
+            NO_PARAMS,
+        )?;
+
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS room_event_id ON events (event_id)",
+            NO_PARAMS,
+        )?;
+
+        conn.execute(
             "CREATE INDEX IF NOT EXISTS room_events ON events (room_id, type, msgtype)",
             NO_PARAMS,
         )?;
@@ -758,15 +768,20 @@ impl Database {
             vec![]
         } else {
             let mut stmt = connection.prepare(
-                "SELECT source, sender, displayname, avatar_url
-                 FROM events
-                 INNER JOIN profile on profile.id = events.profile_id
-                 WHERE (
-                     (event_id != ?1) &
-                     (room_id == ?2) &
-                     (server_ts <= ?3)
-                 ) ORDER BY server_ts DESC LIMIT ?4
-                 ",
+                "
+                WITH room_events AS (
+                    SELECT *
+                    FROM events
+                    WHERE room_id == ?2
+                )
+                SELECT source, sender, displayname, avatar_url
+                FROM room_events
+                INNER JOIN profile on profile.id = room_events.profile_id
+                WHERE (
+                    (event_id != ?1) &
+                    (server_ts <= ?3)
+                ) ORDER BY server_ts DESC LIMIT ?4
+                ",
             )?;
             let context = stmt.query_map(
                 &vec![
@@ -801,15 +816,20 @@ impl Database {
             vec![]
         } else {
             let mut stmt = connection.prepare(
-                "SELECT source, sender, displayname, avatar_url
-                 FROM events
-                 INNER JOIN profile on profile.id = events.profile_id
-                 WHERE (
-                     (event_id != ?1) &
-                     (room_id == ?2) &
-                     (server_ts >= ?3)
-                 ) ORDER BY server_ts ASC LIMIT ?4
-                 ",
+                "
+                WITH room_events AS (
+                    SELECT *
+                    FROM events
+                    WHERE room_id == ?2
+                )
+                SELECT source, sender, displayname, avatar_url
+                FROM room_events
+                INNER JOIN profile on profile.id = room_events.profile_id
+                WHERE (
+                    (event_id != ?1) &
+                    (server_ts >= ?3)
+                ) ORDER BY server_ts ASC LIMIT ?4
+                ",
             )?;
             let context = stmt.query_map(
                 &vec![
