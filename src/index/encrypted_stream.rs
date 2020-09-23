@@ -61,7 +61,7 @@ impl<E: NewStreamCipher + SyncStreamCipher, M: Mac, W: Write> AesWriter<E, M, W>
     /// * `key`: The encryption key for the stream cipher.
     /// * `mac_key`: The authentication key for the MAC.
     /// * `iv_size`: The size of the initialization vector or nonce for the
-    /// streaam cipher.
+    /// stream cipher.
     pub fn new(
         mut writer: W,
         key: &[u8],
@@ -70,7 +70,7 @@ impl<E: NewStreamCipher + SyncStreamCipher, M: Mac, W: Write> AesWriter<E, M, W>
     ) -> Result<AesWriter<E, M, W>> {
         let mut iv = vec![0u8; iv_size];
         let mut rng = thread_rng();
-        rng.try_fill(&mut iv[..])
+        rng.try_fill(&mut iv[0..iv_size / 2])
             .map_err(|e| Error::new(ErrorKind::Other, format!("error generating iv: {:?}", e)))?;
 
         let mac = M::new_varkey(mac_key)
