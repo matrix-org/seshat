@@ -61,7 +61,7 @@ impl<E: NewStreamCipher + SyncStreamCipher, M: Mac, W: Write> AesWriter<E, M, W>
     /// * `key`: The encryption key for the stream cipher.
     /// * `mac_key`: The authentication key for the MAC.
     /// * `iv_size`: The size of the initialization vector or nonce for the
-    /// streaam cipher.
+    /// stream cipher.
     pub fn new(
         mut writer: W,
         key: &[u8],
