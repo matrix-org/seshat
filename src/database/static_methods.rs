@@ -364,7 +364,7 @@ impl Database {
         )?;
 
         conn.execute(
-            "CREATE INDEX IF NOT EXISTS room_event_id ON events (event_id)",
+            "CREATE INDEX IF NOT EXISTS event_id ON events (event_id)",
             NO_PARAMS,
         )?;
 
