@@ -70,7 +70,7 @@ impl<E: NewStreamCipher + SyncStreamCipher, M: Mac, W: Write> AesWriter<E, M, W>
     ) -> Result<AesWriter<E, M, W>> {
         let mut iv = vec![0u8; iv_size];
         let mut rng = thread_rng();
-        rng.try_fill(&mut iv[..])
+        rng.try_fill(&mut iv[0..iv_size / 2])
             .map_err(|e| Error::new(ErrorKind::Other, format!("error generating iv: {:?}", e)))?;
 
         let mac = M::new_varkey(mac_key)
