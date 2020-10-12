@@ -20,13 +20,10 @@ use std::path::{Path, PathBuf};
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 
-use aes_ctr::stream_cipher::generic_array::GenericArray;
 use aes_ctr::stream_cipher::{NewStreamCipher, SyncStreamCipher};
 use aes_ctr::Aes256Ctr;
-use crypto_mac::Mac;
-use crypto_mac::MacResult;
 use hkdf::Hkdf;
-use hmac::Hmac;
+use hmac::{Hmac, NewMac, Mac};
 use pbkdf2::pbkdf2;
 use sha2::Sha256;
 use sha2::Sha512;
@@ -356,7 +353,6 @@ impl EncryptedMmapDirectory {
         let (key, hmac_key) = EncryptedMmapDirectory::rederive_key(passphrase, &salt, pbkdf_count);
 
         // First check our MAC of the encrypted key.
-        let expected_mac = MacResult::new(GenericArray::clone_from_slice(&expected_mac));
         let mac = EncryptedMmapDirectory::calculate_hmac(
             version[0],
             &iv,
@@ -365,7 +361,7 @@ impl EncryptedMmapDirectory {
             &hmac_key,
         )?;
 
-        if mac.result() != expected_mac {
+        if mac.verify(&expected_mac).is_err() {
             return Err(IoError::new(ErrorKind::Other, "invalid MAC of the store key").into());
         }
 
@@ -397,10 +393,10 @@ impl EncryptedMmapDirectory {
     ) -> std::io::Result<Hmac<Sha256>> {
         let mut hmac = Hmac::<Sha256>::new_varkey(hmac_key)
             .map_err(|e| IoError::new(ErrorKind::Other, format!("error creating hmac: {:?}", e)))?;
-        hmac.input(&[version]);
-        hmac.input(&iv);
-        hmac.input(&salt);
-        hmac.input(&encrypted_data);
+        hmac.update(&[version]);
+        hmac.update(&iv);
+        hmac.update(&salt);
+        hmac.update(&encrypted_data);
         Ok(hmac)
     }
 
@@ -476,8 +472,9 @@ impl EncryptedMmapDirectory {
         // the key.
         let mac =
             EncryptedMmapDirectory::calculate_hmac(VERSION, &iv, &salt, &encrypted_key, &hmac_key)?;
-        let mac = mac.result();
-        key_file.write_all(&mac.code())?;
+        let mac = mac.finalize();
+        let mac = mac.into_bytes();
+        key_file.write_all(mac.as_slice())?;
 
         // Write down the encrypted key.
         key_file.write_all(&encrypted_key)?;
@@ -511,7 +508,7 @@ impl EncryptedMmapDirectory {
         pbkdf2::<Hmac<Sha512>>(
             &passphrase.as_bytes(),
             &salt,
-            pbkdf_count as usize,
+            pbkdf_count,
             &mut *pbkdf_result,
         );
         let (key, hmac_key) = pbkdf_result.split_at(KEY_SIZE);
@@ -636,7 +633,7 @@ impl Directory for EncryptedMmapDirectory {
 
 // This Tantivy trait is used to indicate when no more writes are expected to be
 // done on a writer.
-impl<E: NewStreamCipher + SyncStreamCipher, M: Mac, W: Write> TerminatingWrite
+impl<E: NewStreamCipher + SyncStreamCipher, M: Mac + NewMac, W: Write> TerminatingWrite
     for AesWriter<E, M, W>
 {
     fn terminate_ref(&mut self, _: AntiCallToken) -> std::io::Result<()> {

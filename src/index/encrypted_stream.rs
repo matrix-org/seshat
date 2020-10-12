@@ -24,9 +24,8 @@ use std::convert::TryFrom;
 use std::io::{Error, ErrorKind, Read, Result, Seek, SeekFrom, Write};
 use std::ops::Neg;
 
-use crypto_mac::{Mac, MacResult};
+use hmac::{Mac, NewMac};
 
-use aes_ctr::stream_cipher::generic_array::GenericArray;
 use aes_ctr::stream_cipher::{NewStreamCipher, SyncStreamCipher, SyncStreamCipherSeek};
 
 use rand::{thread_rng, Rng};
@@ -39,7 +38,7 @@ const BUFFER_SIZE: usize = 8192;
 ///
 /// [be]: https://docs.rs/stream-cipher/0.3.2/stream_cipher/trait.SyncStreamCipher.html
 /// [mac]: https://docs.rs/crypto-mac/0.7.0/crypto_mac/trait.Mac.html
-pub struct AesWriter<E: NewStreamCipher + SyncStreamCipher, M: Mac, W: Write> {
+pub struct AesWriter<E: NewStreamCipher + SyncStreamCipher, M: Mac + NewMac, W: Write> {
     /// Writer to write encrypted data to
     writer: W,
     /// Encryptor to encrypt data with
@@ -48,7 +47,7 @@ pub struct AesWriter<E: NewStreamCipher + SyncStreamCipher, M: Mac, W: Write> {
     finalized: bool,
 }
 
-impl<E: NewStreamCipher + SyncStreamCipher, M: Mac, W: Write> AesWriter<E, M, W> {
+impl<E: NewStreamCipher + SyncStreamCipher, M: Mac + NewMac, W: Write> AesWriter<E, M, W> {
     /// Creates a new AesWriter with a random IV.
     ///
     /// The IV will be written as first block of the file.
@@ -111,7 +110,7 @@ impl<E: NewStreamCipher + SyncStreamCipher, M: Mac, W: Write> AesWriter<E, M, W>
             )
         })?;
         self.writer.write_all(buf)?;
-        self.mac.input(buf);
+        self.mac.update(buf);
 
         Ok(buf.len())
     }
@@ -123,8 +122,8 @@ impl<E: NewStreamCipher + SyncStreamCipher, M: Mac, W: Write> AesWriter<E, M, W>
         self.encrypt_write(&mut [])?;
 
         // Write our mac after our encrypted data.
-        let mac_result = self.mac.result_reset();
-        self.writer.write_all(mac_result.code().as_slice())?;
+        let mac_result = self.mac.finalize_reset().into_bytes();
+        self.writer.write_all(mac_result.as_slice())?;
 
         // Mark the file as finalized and flush our underlying writer.
         self.finalized = true;
@@ -134,7 +133,7 @@ impl<E: NewStreamCipher + SyncStreamCipher, M: Mac, W: Write> AesWriter<E, M, W>
     }
 }
 
-impl<E: NewStreamCipher + SyncStreamCipher, M: Mac, W: Write> Write for AesWriter<E, M, W> {
+impl<E: NewStreamCipher + SyncStreamCipher, M: Mac + NewMac, W: Write> Write for AesWriter<E, M, W> {
     /// Encrypts the passed buffer and writes the result to the underlying writer.
     fn write(&mut self, buf: &[u8]) -> Result<usize> {
         let mut buf = buf.to_owned();
@@ -149,7 +148,7 @@ impl<E: NewStreamCipher + SyncStreamCipher, M: Mac, W: Write> Write for AesWrite
     }
 }
 
-impl<E: NewStreamCipher + SyncStreamCipher, M: Mac, W: Write> Drop for AesWriter<E, M, W> {
+impl<E: NewStreamCipher + SyncStreamCipher, M: Mac + NewMac, W: Write> Drop for AesWriter<E, M, W> {
     /// Drop our AesWriter adding the MAC at the end of the file and flushing
     /// our buffers.
     fn drop(&mut self) {
@@ -196,7 +195,7 @@ impl<D: NewStreamCipher + SyncStreamCipher + SyncStreamCipherSeek, R: Read + See
     /// * `mac_key`: The authentication key for the MAC.
     /// * `iv_size`: The size of the initialization vector or nonce for the
     /// streaam cipher.
-    pub fn new<M: Mac>(
+    pub fn new<M: Mac + NewMac>(
         mut reader: R,
         key: &[u8],
         mac_key: &[u8],
@@ -234,8 +233,6 @@ impl<D: NewStreamCipher + SyncStreamCipher + SyncStreamCipherSeek, R: Read + See
         reader.seek(SeekFrom::End(seek_back))?;
         reader.read_exact(&mut expected_mac)?;
 
-        let expected_mac = MacResult::new(GenericArray::clone_from_slice(&expected_mac));
-
         reader.seek(SeekFrom::Start(u_iv_length))?;
 
         let mut buffer = [0u8; BUFFER_SIZE];
@@ -248,10 +245,10 @@ impl<D: NewStreamCipher + SyncStreamCipher + SyncStreamCipherSeek, R: Read + See
                 break;
             }
 
-            mac.input(&buffer[..read]);
+            mac.update(&buffer[..read]);
         }
 
-        if mac.result() != expected_mac {
+        if mac.verify(&expected_mac).is_err() {
             return Err(Error::new(ErrorKind::Other, "Invalid MAC"));
         }
 
