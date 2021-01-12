@@ -26,7 +26,7 @@ use std::ops::Neg;
 
 use hmac::{Mac, NewMac};
 
-use aes_ctr::stream_cipher::{NewStreamCipher, SyncStreamCipher, SyncStreamCipherSeek};
+use aes_ctr::cipher::{NewStreamCipher, SyncStreamCipher, SyncStreamCipherSeek};
 
 use rand::{thread_rng, Rng};
 

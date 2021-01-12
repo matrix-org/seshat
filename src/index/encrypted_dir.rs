@@ -20,7 +20,7 @@ use std::path::{Path, PathBuf};
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 
-use aes_ctr::stream_cipher::{NewStreamCipher, SyncStreamCipher};
+use aes_ctr::cipher::{NewStreamCipher, SyncStreamCipher};
 use aes_ctr::Aes256Ctr;
 use hkdf::Hkdf;
 use hmac::{Hmac, NewMac, Mac};
