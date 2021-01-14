@@ -14,7 +14,7 @@ encryption = ["rusqlite/sqlcipher", "aes-ctr", "crypto-mac", "hmac", "sha2",
               "hkdf", "pbkdf2", "rand", "zeroize", "byteorder"]
 
 [dependencies]
-tantivy = "0.13.2"
+tantivy = "0.12.0"
 tinysegmenter = "0.1.1"
 rusqlite = "0.24.2"
 fs_extra = "1.2.0"
