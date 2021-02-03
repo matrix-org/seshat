@@ -1681,7 +1681,7 @@ dependencies = [
 
 [[package]]
 name = "seshat"
-version = "2.2.2"
+version = "2.2.3"
 dependencies = [
  "aes-ctr",
  "byteorder",
@@ -1707,7 +1707,7 @@ dependencies = [
 
 [[package]]
 name = "seshat-node"
-version = "2.2.2"
+version = "2.2.3"
 dependencies = [
  "fs_extra",
  "neon",
