@@ -183,9 +183,8 @@ pub(crate) struct IndexSearcher {
     topic_field: tv::schema::Field,
     name_field: tv::schema::Field,
     room_id_field: tv::schema::Field,
-    #[used]
+    #[allow(dead_code)]
     sender_field: tv::schema::Field,
-    #[used]
     date_field: tv::schema::Field,
     event_id_field: tv::schema::Field,
     search_cache: Arc<RwLock<LruCache<Uuid, Search>>>,

@@ -28,7 +28,6 @@ use serde_json::Value;
 pub struct RecoveryDatabase {
     path: PathBuf,
     connection: PooledConnection<SqliteConnectionManager>,
-    #[used]
     pool: r2d2::Pool<SqliteConnectionManager>,
     config: Config,
     recovery_info: RecoveryInfo,
