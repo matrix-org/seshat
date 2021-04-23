@@ -19,10 +19,12 @@
 
 //! Read/Write Wrapper for AES Encryption and Decryption during I/O Operations
 //!
-use std::cmp;
-use std::convert::TryFrom;
-use std::io::{Error, ErrorKind, Read, Result, Seek, SeekFrom, Write};
-use std::ops::Neg;
+use std::{
+    cmp,
+    convert::TryFrom,
+    io::{Error, ErrorKind, Read, Result, Seek, SeekFrom, Write},
+    ops::Neg,
+};
 
 use hmac::{Mac, NewMac};
 
@@ -133,7 +135,9 @@ impl<E: NewStreamCipher + SyncStreamCipher, M: Mac + NewMac, W: Write> AesWriter
     }
 }
 
-impl<E: NewStreamCipher + SyncStreamCipher, M: Mac + NewMac, W: Write> Write for AesWriter<E, M, W> {
+impl<E: NewStreamCipher + SyncStreamCipher, M: Mac + NewMac, W: Write> Write
+    for AesWriter<E, M, W>
+{
     /// Encrypts the passed buffer and writes the result to the underlying writer.
     fn write(&mut self, buf: &[u8]) -> Result<usize> {
         let mut buf = buf.to_owned();

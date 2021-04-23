@@ -23,10 +23,12 @@ use r2d2::PooledConnection;
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::NO_PARAMS;
 
-use crate::config::LoadConfig;
-use crate::error::Result;
-use crate::events::{CrawlerCheckpoint, Profile, SerializedEvent};
-use crate::Database;
+use crate::{
+    config::LoadConfig,
+    error::Result,
+    events::{CrawlerCheckpoint, Profile, SerializedEvent},
+    Database,
+};
 
 /// Statistical information about the database.
 #[derive(Serialize, Deserialize)]

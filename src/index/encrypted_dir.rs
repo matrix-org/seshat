@@ -13,29 +13,30 @@
 // limitations under the License.
 
 use rand::{thread_rng, Rng};
-use std::fs::File;
-use std::io::Error as IoError;
-use std::io::{BufWriter, Cursor, ErrorKind, Read, Write};
-use std::path::{Path, PathBuf};
+use std::{
+    fs::File,
+    io::{BufWriter, Cursor, Error as IoError, ErrorKind, Read, Write},
+    path::{Path, PathBuf},
+};
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 
-use aes_ctr::cipher::{NewStreamCipher, SyncStreamCipher};
-use aes_ctr::Aes256Ctr;
-use hkdf::Hkdf;
-use hmac::{Hmac, NewMac, Mac};
-use pbkdf2::pbkdf2;
-use sha2::Sha256;
-use sha2::Sha512;
-
-use tantivy::directory::error::IOError as TvIoError;
-use tantivy::directory::error::{
-    DeleteError, LockError, OpenDirectoryError, OpenReadError, OpenWriteError,
+use aes_ctr::{
+    cipher::{NewStreamCipher, SyncStreamCipher},
+    Aes256Ctr,
 };
-use tantivy::directory::Directory;
-use tantivy::directory::WatchHandle;
+use hkdf::Hkdf;
+use hmac::{Hmac, Mac, NewMac};
+use pbkdf2::pbkdf2;
+use sha2::{Sha256, Sha512};
+
 use tantivy::directory::{
-    AntiCallToken, DirectoryLock, Lock, ReadOnlySource, TerminatingWrite, WatchCallback, WritePtr,
+    error::{
+        DeleteError, IOError as TvIoError, LockError, OpenDirectoryError, OpenReadError,
+        OpenWriteError,
+    },
+    AntiCallToken, Directory, DirectoryLock, Lock, ReadOnlySource, TerminatingWrite, WatchCallback,
+    WatchHandle, WritePtr,
 };
 
 use zeroize::Zeroizing;

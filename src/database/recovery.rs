@@ -1,21 +1,29 @@
-use std::fs;
-use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
+};
 
-use std::convert::TryInto;
-use std::io::{Error as IoError, ErrorKind};
+use std::{
+    convert::TryInto,
+    io::{Error as IoError, ErrorKind},
+};
 
 use r2d2::PooledConnection;
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::ToSql;
 
-use crate::config::Config;
-use crate::database::{DATABASE_VERSION, EVENTS_DB_NAME};
-use crate::error::{Error, Result};
-use crate::events::{Event, SerializedEvent};
-use crate::index::{Index, Writer};
-use crate::{Connection, Database};
+use crate::{
+    config::Config,
+    database::{DATABASE_VERSION, EVENTS_DB_NAME},
+    error::{Error, Result},
+    events::{Event, SerializedEvent},
+    index::{Index, Writer},
+    Connection, Database,
+};
 
 use crate::EventType;
 use serde_json::Value;
@@ -360,11 +368,11 @@ impl RecoveryDatabase {
 
 #[cfg(test)]
 pub(crate) mod test {
-    use crate::database::DATABASE_VERSION;
-    use crate::{Database, Error, Event, RecoveryDatabase, Result, SearchConfig};
+    use crate::{
+        database::DATABASE_VERSION, Database, Error, Event, RecoveryDatabase, Result, SearchConfig,
+    };
 
-    use std::path::PathBuf;
-    use std::sync::atomic::Ordering;
+    use std::{path::PathBuf, sync::atomic::Ordering};
 
     pub(crate) fn reindex_loop(
         db: &mut RecoveryDatabase,
