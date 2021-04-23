@@ -182,7 +182,8 @@ impl Database {
             None => panic!("Database isn't encrypted"),
         }
 
-        self.shutdown();
+        let receiver = self.shutdown();
+        receiver.recv().unwrap()?;
 
         Ok(())
     }
