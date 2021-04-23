@@ -178,7 +178,7 @@ impl Database {
     /// current one.
     #[cfg(feature = "encryption")]
     pub fn change_passphrase(self, new_passphrase: &str) -> Result<()> {
-        match self.config.passphrase {
+        match &self.config.passphrase {
             Some(p) => {
                 Index::change_passphrase(&self.path, &p, new_passphrase)?;
                 self.connection.lock().unwrap().pragma_update(
@@ -189,6 +189,9 @@ impl Database {
             }
             None => panic!("Database isn't encrypted"),
         }
+
+        let receiver = self.shutdown();
+        receiver.recv().unwrap()?;
 
         Ok(())
     }
