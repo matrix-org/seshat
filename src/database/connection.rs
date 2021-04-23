@@ -138,7 +138,7 @@ impl Connection {
             self,
             &load_config.room_id,
             load_config.limit,
-            load_config.from_event.as_ref().map(|x| &**x),
+            load_config.from_event.as_deref(),
             &load_config.direction,
         )?)
     }

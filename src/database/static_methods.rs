@@ -483,7 +483,7 @@ impl Database {
         connection: &rusqlite::Connection,
     ) -> rusqlite::Result<Vec<EventId>> {
         let mut stmt = connection.prepare("SELECT event_id from pending_deletion_events")?;
-        let events = stmt.query_map(NO_PARAMS, |row| Ok(row.get(0)?))?;
+        let events = stmt.query_map(NO_PARAMS, |row| row.get(0))?;
 
         events.collect()
     }
@@ -656,7 +656,7 @@ impl Database {
                         &event.server_ts as &dyn ToSql,
                         &(limit as i64),
                     ],
-                    |row| Ok(row.get(0)?),
+                    |row| row.get(0),
                 )?;
                 events.collect()
             }
@@ -668,7 +668,7 @@ impl Database {
                      ",
                 )?;
 
-                let events = stmt.query_map(&vec![&(limit as i64)], |row| Ok(row.get(0)?))?;
+                let events = stmt.query_map(&vec![&(limit as i64)], |row| row.get(0))?;
                 events.collect()
             }
         }
@@ -987,11 +987,7 @@ impl Database {
         // Sqlite orders by recency for us, but if we score by rank sqlite will
         // mess up our order, re-sort our events here.
         if !order_by_recency {
-            events.sort_by(|a, b| {
-                a.score
-                    .partial_cmp(&b.score)
-                    .unwrap_or_else(|| Ordering::Equal)
-            });
+            events.sort_by(|a, b| a.score.partial_cmp(&b.score).unwrap_or(Ordering::Equal));
         }
 
         Ok(events)

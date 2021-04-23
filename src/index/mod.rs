@@ -235,13 +235,14 @@ impl IndexSearcher {
         Ok(query_parser.parse_query(&term)?)
     }
 
+    #[allow(clippy::type_complexity)]
     fn search_helper(
         &self,
         og_limit: usize,
         limit: usize,
         order_by_recency: bool,
         previous_results: &[EventId],
-        query: &Box<dyn tv::query::Query>,
+        query: &dyn tv::query::Query,
     ) -> Result<((usize, Vec<(f32, EventId)>), Vec<EventId>), tv::TantivyError> {
         let mut multicollector = MultiCollector::new();
         let count_handle = multicollector.add_collector(Count);
@@ -307,7 +308,7 @@ impl IndexSearcher {
                     limit + SEARCH_LIMIT_INCREMENT,
                     order_by_recency,
                     &previous_results,
-                    &query,
+                    query,
                 )
             }
         } else {

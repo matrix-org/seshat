@@ -143,7 +143,7 @@ impl Database {
         Database::unlock(&writer_connection, config)?;
         Database::set_pragmas(&writer_connection)?;
 
-        let (t_handle, tx) = Database::spawn_writer(writer_connection, writer)?;
+        let (t_handle, tx) = Database::spawn_writer(writer_connection, writer);
 
         Ok(Database {
             path: path.into(),
@@ -246,7 +246,7 @@ impl Database {
     fn spawn_writer(
         connection: PooledConnection<SqliteConnectionManager>,
         index_writer: IndexWriter,
-    ) -> Result<WriterRet> {
+    ) -> WriterRet {
         let (tx, rx): (_, Receiver<ThreadMessage>) = channel();
 
         let t_handle = thread::spawn(move || {
@@ -294,7 +294,7 @@ impl Database {
             }
         });
 
-        Ok((t_handle, tx))
+        (t_handle, tx)
     }
 
     /// Add an event with the given profile to the database.
@@ -1115,7 +1115,7 @@ fn is_room_indexed() {
     assert!(!connection.is_room_indexed("!test_room:localhost").unwrap());
 
     let profile = Profile::new("Alice", "");
-    db.add_event(EVENT.clone(), profile.clone());
+    db.add_event(EVENT.clone(), profile);
     db.force_commit().unwrap();
 
     assert!(connection.is_room_indexed("!test_room:localhost").unwrap());
