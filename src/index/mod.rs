@@ -18,21 +18,27 @@ mod encrypted_dir;
 mod encrypted_stream;
 mod japanese_tokenizer;
 
-use std::path::Path;
-use std::sync::{Arc, RwLock};
-use std::time::Duration;
+use std::{
+    path::Path,
+    sync::{Arc, RwLock},
+    time::Duration,
+};
 
 use lru_cache::LruCache;
 use tantivy as tv;
-use tantivy::collector::{Count, MultiCollector, TopDocs};
-use tantivy::Term;
+use tantivy::{
+    collector::{Count, MultiCollector, TopDocs},
+    Term,
+};
 use uuid::Uuid;
 
-use crate::config::{Config, Language, SearchConfig};
-use crate::events::{Event, EventId, EventType};
 #[cfg(feature = "encryption")]
 use crate::index::encrypted_dir::{EncryptedMmapDirectory, PBKDF_COUNT};
-use crate::index::japanese_tokenizer::TinySegmenterTokenizer;
+use crate::{
+    config::{Config, Language, SearchConfig},
+    events::{Event, EventId, EventType},
+    index::japanese_tokenizer::TinySegmenterTokenizer,
+};
 
 // Tantivy requires at least 3MB per writer thread and will panic if we
 // give it less than 3MB for the total writer heap size. The amount of writer
@@ -229,13 +235,14 @@ impl IndexSearcher {
         Ok(query_parser.parse_query(&term)?)
     }
 
+    #[allow(clippy::type_complexity)]
     fn search_helper(
         &self,
         og_limit: usize,
         limit: usize,
         order_by_recency: bool,
         previous_results: &[EventId],
-        query: &Box<dyn tv::query::Query>,
+        query: &dyn tv::query::Query,
     ) -> Result<((usize, Vec<(f32, EventId)>), Vec<EventId>), tv::TantivyError> {
         let mut multicollector = MultiCollector::new();
         let count_handle = multicollector.add_collector(Count);
@@ -301,7 +308,7 @@ impl IndexSearcher {
                     limit + SEARCH_LIMIT_INCREMENT,
                     order_by_recency,
                     &previous_results,
-                    &query,
+                    query,
                 )
             }
         } else {

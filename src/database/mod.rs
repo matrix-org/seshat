@@ -24,21 +24,29 @@ use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::ToSql;
 #[cfg(feature = "encryption")]
 use rusqlite::NO_PARAMS;
-use std::fs;
-use std::path::{Path, PathBuf};
-use std::sync::mpsc::{channel, Receiver, Sender};
-use std::sync::{Arc, Mutex};
-use std::thread;
-use std::thread::JoinHandle;
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    sync::{
+        mpsc::{channel, Receiver, Sender},
+        Arc, Mutex,
+    },
+    thread,
+    thread::JoinHandle,
+};
 
-use crate::config::{Config, SearchConfig};
-pub use crate::database::connection::{Connection, DatabaseStats};
-pub use crate::database::recovery::{RecoveryDatabase, RecoveryInfo};
-pub use crate::database::searcher::{SearchBatch, SearchResult, Searcher};
-use crate::database::writer::Writer;
-use crate::error::{Error, Result};
-use crate::events::{CrawlerCheckpoint, Event, EventId, HistoricEventsT, Profile};
-use crate::index::{Index, Writer as IndexWriter};
+pub use crate::database::{
+    connection::{Connection, DatabaseStats},
+    recovery::{RecoveryDatabase, RecoveryInfo},
+    searcher::{SearchBatch, SearchResult, Searcher},
+};
+use crate::{
+    config::{Config, SearchConfig},
+    database::writer::Writer,
+    error::{Error, Result},
+    events::{CrawlerCheckpoint, Event, EventId, HistoricEventsT, Profile},
+    index::{Index, Writer as IndexWriter},
+};
 
 #[cfg(test)]
 use fake::{Fake, Faker};
@@ -135,7 +143,7 @@ impl Database {
         Database::unlock(&writer_connection, config)?;
         Database::set_pragmas(&writer_connection)?;
 
-        let (t_handle, tx) = Database::spawn_writer(writer_connection, writer)?;
+        let (t_handle, tx) = Database::spawn_writer(writer_connection, writer);
 
         Ok(Database {
             path: path.into(),
@@ -241,7 +249,7 @@ impl Database {
     fn spawn_writer(
         connection: PooledConnection<SqliteConnectionManager>,
         index_writer: IndexWriter,
-    ) -> Result<WriterRet> {
+    ) -> WriterRet {
         let (tx, rx): (_, Receiver<ThreadMessage>) = channel();
 
         let t_handle = thread::spawn(move || {
@@ -289,7 +297,7 @@ impl Database {
             }
         });
 
-        Ok((t_handle, tx))
+        (t_handle, tx)
     }
 
     /// Add an event with the given profile to the database.
@@ -1110,7 +1118,7 @@ fn is_room_indexed() {
     assert!(!connection.is_room_indexed("!test_room:localhost").unwrap());
 
     let profile = Profile::new("Alice", "");
-    db.add_event(EVENT.clone(), profile.clone());
+    db.add_event(EVENT.clone(), profile);
     db.force_commit().unwrap();
 
     assert!(connection.is_room_indexed("!test_room:localhost").unwrap());

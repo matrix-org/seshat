@@ -12,9 +12,7 @@ use seshat::Config;
 use std::path::Path;
 use tempfile::tempdir;
 
-use fake::faker::internet::raw::*;
-use fake::locales::*;
-use fake::Fake;
+use fake::{faker::internet::raw::*, locales::*, Fake};
 
 pub static EVENT_SOURCE: &str = "{
     content: {

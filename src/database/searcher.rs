@@ -12,20 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
-use std::thread::sleep;
-use std::time::Duration;
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+    thread::sleep,
+    time::Duration,
+};
 
 use r2d2::PooledConnection;
 use r2d2_sqlite::SqliteConnectionManager;
 use uuid::Uuid;
 
-use crate::config::SearchConfig;
-use crate::error::Result;
-use crate::events::{MxId, Profile, SerializedEvent};
-use crate::index::IndexSearcher;
-use crate::Database;
+use crate::{
+    config::SearchConfig,
+    error::Result,
+    events::{MxId, Profile, SerializedEvent},
+    index::IndexSearcher,
+    Database,
+};
 
 static BUSY_RETRY: usize = 10;
 static BUSY_SLEEP: Duration = Duration::from_millis(10);

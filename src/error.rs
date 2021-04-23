@@ -17,6 +17,7 @@ use thiserror::Error;
 /// Result type for seshat operations.
 pub type Result<T> = std::result::Result<T, Error>;
 
+#[allow(clippy::upper_case_acronyms)]
 #[derive(Error, Debug)]
 /// Seshat error types.
 pub enum Error {

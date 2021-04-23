@@ -12,8 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp::Ordering;
-use std::collections::HashMap;
+use std::{cmp::Ordering, collections::HashMap};
 
 use rusqlite::{ToSql, NO_PARAMS};
 
@@ -22,12 +21,14 @@ use r2d2::PooledConnection;
 #[cfg(test)]
 use r2d2_sqlite::SqliteConnectionManager;
 
-use crate::config::LoadDirection;
-use crate::database::{SearchResult, DATABASE_VERSION};
-use crate::error::Result;
-use crate::events::{CrawlerCheckpoint, Event, EventContext, EventId, Profile, SerializedEvent};
-use crate::index::Writer as IndexWriter;
-use crate::Database;
+use crate::{
+    config::LoadDirection,
+    database::{SearchResult, DATABASE_VERSION},
+    error::Result,
+    events::{CrawlerCheckpoint, Event, EventContext, EventId, Profile, SerializedEvent},
+    index::Writer as IndexWriter,
+    Database,
+};
 
 const FILE_EVENT_TYPES: &str = "'m.image', 'm.file', 'm.audio', 'm.video'";
 
@@ -482,7 +483,7 @@ impl Database {
         connection: &rusqlite::Connection,
     ) -> rusqlite::Result<Vec<EventId>> {
         let mut stmt = connection.prepare("SELECT event_id from pending_deletion_events")?;
-        let events = stmt.query_map(NO_PARAMS, |row| Ok(row.get(0)?))?;
+        let events = stmt.query_map(NO_PARAMS, |row| row.get(0))?;
 
         events.collect()
     }
@@ -655,7 +656,7 @@ impl Database {
                         &event.server_ts as &dyn ToSql,
                         &(limit as i64),
                     ],
-                    |row| Ok(row.get(0)?),
+                    |row| row.get(0),
                 )?;
                 events.collect()
             }
@@ -667,7 +668,7 @@ impl Database {
                      ",
                 )?;
 
-                let events = stmt.query_map(&vec![&(limit as i64)], |row| Ok(row.get(0)?))?;
+                let events = stmt.query_map(&vec![&(limit as i64)], |row| row.get(0))?;
                 events.collect()
             }
         }
@@ -986,11 +987,7 @@ impl Database {
         // Sqlite orders by recency for us, but if we score by rank sqlite will
         // mess up our order, re-sort our events here.
         if !order_by_recency {
-            events.sort_by(|a, b| {
-                a.score
-                    .partial_cmp(&b.score)
-                    .unwrap_or_else(|| Ordering::Equal)
-            });
+            events.sort_by(|a, b| a.score.partial_cmp(&b.score).unwrap_or(Ordering::Equal));
         }
 
         Ok(events)
