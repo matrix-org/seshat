@@ -173,11 +173,7 @@ impl Event {
         room_id: &str,
         source: &str,
     ) -> Event {
-        let msgtype = if let Some(m) = msgtype {
-            Some(m.to_string())
-        } else {
-            None
-        };
+        let msgtype = msgtype.map(|t| t.to_string());
 
         Event {
             event_type,

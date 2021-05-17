@@ -381,9 +381,9 @@ impl IndexSearcher {
         };
 
         Ok(SearchResult {
-            next_batch,
             count,
             results,
+            next_batch,
         })
     }
 }
