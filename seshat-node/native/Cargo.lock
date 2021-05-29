@@ -54,15 +54,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "739f4a8db6605981345c5654f3a85b056ce52f37a39d34da03f25bf2151ea16e"
 
 [[package]]
-name = "aho-corasick"
-version = "0.7.15"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7404febffaa47dac81aa44dba71523c9d069b1bdc50a77db41195149e17f68e5"
-dependencies = [
- "memchr",
-]
-
-[[package]]
 name = "atomicwrites"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -820,6 +811,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "89203f3fba0a3795506acaad8ebce3c80c0af93f994d5a1d7a0b1eeb23271929"
 
 [[package]]
+name = "libloading"
+version = "0.6.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "351a32417a12d5f7e82c368a66781e307834dae04c6ce0cd4456d52989229883"
+dependencies = [
+ "cfg-if 1.0.0",
+ "winapi 0.3.9",
+]
+
+[[package]]
 name = "libsqlite3-sys"
 version = "0.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -972,57 +973,54 @@ dependencies = [
 
 [[package]]
 name = "neon"
-version = "0.4.0"
+version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6cac4691701b686e6c07b2eb5b51a9f26f5c11179c5d7924b78100dd387fc99d"
+checksum = "7d33fe11bcc59e19cadfabd6a90ac07038eddc357f6effa25a731dd3ae7f40d6"
 dependencies = [
  "cslice",
  "neon-build",
+ "neon-macros",
  "neon-runtime",
  "semver",
+ "smallvec",
 ]
 
 [[package]]
 name = "neon-build"
-version = "0.4.0"
+version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f9ed332afd4711b84f4f83d334428a1fd9ce53620b62b87595934297c5ede2ed"
+checksum = "c6fe902d44ec11ccd34980b5de63b96a79ce96e231de976338166c34c43bd70b"
+
+[[package]]
+name = "neon-macros"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ec537080e06fef83443c16fcc354a2168888770705b8cd5bc54a31e9791b777f"
 dependencies = [
- "cfg-if 0.1.10",
- "neon-sys",
+ "quote",
+ "syn",
 ]
 
 [[package]]
 name = "neon-runtime"
-version = "0.4.0"
+version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2beea093a60c08463f65e1da4cda68149986f60d8d2177489b44589463c782a6"
+checksum = "120205ff046015597a47ab4fd81aa17f9681eae6e6ee5aa49aa3c020bb83ec99"
 dependencies = [
- "cfg-if 0.1.10",
- "neon-sys",
+ "cfg-if 1.0.0",
+ "libloading",
+ "smallvec",
 ]
 
 [[package]]
 name = "neon-serde"
 version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5f134307714cdd478581fd3cc990202ead78744d676d8437bdff64260395eb8e"
+source = "git+https://github.com/antonok-edm/neon-serde/?rev=ee44a7e465e8082f7d7e5a7fe2980188930a50cf#ee44a7e465e8082f7d7e5a7fe2980188930a50cf"
 dependencies = [
  "error-chain",
  "neon",
- "neon-runtime",
  "num",
  "serde",
-]
-
-[[package]]
-name = "neon-sys"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "69a6c1ba6b926746f4d3f596de18ce49d062d78fd9f35f636080232aa77a0e16"
-dependencies = [
- "cc",
- "regex",
 ]
 
 [[package]]
@@ -1545,10 +1543,7 @@ version = "1.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d9251239e129e16308e70d853559389de218ac275b515068abc96829d05b948a"
 dependencies = [
- "aho-corasick",
- "memchr",
  "regex-syntax 0.6.22",
- "thread_local",
 ]
 
 [[package]]
@@ -1682,8 +1677,6 @@ dependencies = [
 [[package]]
 name = "seshat"
 version = "2.2.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c6142bdd2bc11827960ab30b8400568633160129055963d9e7a49ae2f112c8e1"
 dependencies = [
  "aes-ctr",
  "byteorder",
@@ -1713,7 +1706,6 @@ version = "2.2.4"
 dependencies = [
  "fs_extra",
  "neon",
- "neon-build",
  "neon-serde",
  "serde_json",
  "seshat",
@@ -1896,15 +1888,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
-]
-
-[[package]]
-name = "thread_local"
-version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb9bc092d0d51e76b2b19d9d85534ffc9ec2db959a2523cdae0697e2972cd447"
-dependencies = [
- "lazy_static",
 ]
 
 [[package]]
