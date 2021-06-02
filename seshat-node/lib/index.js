@@ -139,7 +139,7 @@ class ReindexError extends Error {
  * search can be done on the database retrieving events that match a search
  * query.
  */
-class Seshat extends seshat.Seshat {
+class Seshat {
     /**
      * Open an existing or create a new Seshat database.
      *
@@ -168,7 +168,7 @@ class Seshat extends seshat.Seshat {
     constructor(path, config = undefined) {
         config = config || {};
         try {
-            super(path, config);
+            this.inner = seshat.seshat_new(path, config);
         } catch (e) {
             // The Rust side throws a RangeError, this is a bit silly so convert
             // it to a custom error.
@@ -193,7 +193,7 @@ class Seshat extends seshat.Seshat {
      * @return {Void}
      */
     addEvent(matrixEvent, profile = {}) {
-        return super.addEvent(matrixEvent, profile);
+        return seshat.seshat_addEvent(this.inner, matrixEvent, profile);
     };
 
     /**
@@ -210,7 +210,7 @@ class Seshat extends seshat.Seshat {
      */
     async deleteEvent(eventId) {
         return new Promise((resolve, reject) => {
-            super.deleteEvent(eventId, (err, res) => {
+            seshat.seshat_deleteEvent(this.inner, eventId, (err, res) => {
                 if (err) reject(err);
                 else resolve(res);
             });
@@ -233,7 +233,7 @@ class Seshat extends seshat.Seshat {
      */
     async commit(force = false) {
         return new Promise((resolve, reject) => {
-            super.commit(force, (err, res) => {
+            seshat.seshat_commit(this.inner, force, (err, res) => {
                 resolve(res);
             });
         });
@@ -253,7 +253,7 @@ class Seshat extends seshat.Seshat {
      * incrementing number that identifies the commit.
      */
     commitSync(wait = false, force = false) {
-        return super.commitSync(wait, force);
+        return seshat.seshat_commitSync(this.inner, wait, force);
     }
 
     /**
@@ -262,7 +262,7 @@ class Seshat extends seshat.Seshat {
      * for unit testing purposes to force a reload before a search.
      */
     reload() {
-        super.reload();
+        seshat.seshat_reload(this.inner);
     };
 
     /**
@@ -289,7 +289,7 @@ class Seshat extends seshat.Seshat {
      */
     async search(args) {
         return new Promise((resolve, reject) => {
-            super.search(args, (err, res) => {
+            seshat.seshat_search(this.inner, args, (err, res) => {
                 if (err) reject(err);
                 else resolve(res);
             });
@@ -314,7 +314,7 @@ class Seshat extends seshat.Seshat {
      */
     searchSync(term, limit = 10, before_limit = 0, after_limit = 0,
         order_by_recency = false) {
-        return super.searchSync(term, limit, before_limit, after_limit,
+        return seshat.seshat_searchSync(this.inner, term, limit, before_limit, after_limit,
             order_by_recency);
     }
 
@@ -330,7 +330,7 @@ class Seshat extends seshat.Seshat {
      * false otherwise.
      */
     addHistoricEventsSync(events, newCheckpoint = null, oldCheckPoint = null) {
-        return super.addHistoricEventsSync(events, newCheckpoint,
+        return seshat.seshat_addHistoricEventsSync(this.inner, events, newCheckpoint,
             oldCheckPoint);
     }
 
@@ -348,7 +348,8 @@ class Seshat extends seshat.Seshat {
     async addHistoricEvents(events, newCheckpoint = null,
         oldCheckPoint = null) {
         return new Promise((resolve, reject) => {
-            super.addHistoricEvents(
+            seshat.seshat_addHistoricEvents(
+                this.inner,
                 events,
                 newCheckpoint,
                 oldCheckPoint,
@@ -392,7 +393,7 @@ class Seshat extends seshat.Seshat {
      */
     async loadCheckpoints() {
         return new Promise((resolve, reject) => {
-            super.loadCheckpoints((err, res) => {
+            seshat.seshat_loadCheckpoints(this.inner, (err, res) => {
                 if (err) reject(err);
                 else resolve(res);
             });
@@ -408,7 +409,7 @@ class Seshat extends seshat.Seshat {
      */
     async getSize() {
         return new Promise((resolve, reject) => {
-            super.getSize((err, res) => {
+            seshat.seshat_getSize(this.inner, (err, res) => {
                 if (err) reject(err);
                 else resolve(res);
             });
@@ -423,7 +424,7 @@ class Seshat extends seshat.Seshat {
      */
     async getStats() {
         return new Promise((resolve, reject) => {
-            super.getStats((err, res) => {
+            seshat.seshat_getStats(this.inner, (err, res) => {
                 if (err) reject(err);
                 else resolve(res);
             });
@@ -438,7 +439,7 @@ class Seshat extends seshat.Seshat {
      */
     async delete() {
         return new Promise((resolve, reject) => {
-            super.delete((err, res) => {
+            seshat.seshat_delete(this.inner, (err, res) => {
                 if (err) reject(err);
                 else resolve(res);
             });
@@ -453,7 +454,7 @@ class Seshat extends seshat.Seshat {
      */
     async shutdown() {
         return new Promise((resolve, reject) => {
-            super.shutdown((err, res) => {
+            seshat.seshat_shutdown(this.inner, (err, res) => {
                 if (err) reject(err);
                 else resolve(res);
             });
@@ -473,7 +474,7 @@ class Seshat extends seshat.Seshat {
      */
     async changePassphrase(newPassphrase) {
         return new Promise((resolve, reject) => {
-            super.changePassphrase(newPassphrase, (err, res) => {
+            seshat.seshat_changePassphrase(this.inner, newPassphrase, (err, res) => {
                 if (err) reject(err);
                 else resolve(res);
             });
@@ -489,7 +490,7 @@ class Seshat extends seshat.Seshat {
      */
     async isEmpty() {
         return new Promise((resolve, reject) => {
-            super.isEmpty((err, res) => {
+            seshat.seshat_isEmpty(this.inner, (err, res) => {
                 if (err) reject(err);
                 else resolve(res);
             });
@@ -507,7 +508,7 @@ class Seshat extends seshat.Seshat {
      */
     async isRoomIndexed(roomId) {
         return new Promise((resolve, reject) => {
-            super.isRoomIndexed(roomId, (err, res) => {
+            seshat.seshat_isRoomIndexed(this.inner, roomId, (err, res) => {
                 if (err) reject(err);
                 else resolve(res);
             });
@@ -522,7 +523,7 @@ class Seshat extends seshat.Seshat {
      */
     async getUserVersion() {
         return new Promise((resolve, reject) => {
-            super.getUserVersion((err, res) => {
+            seshat.seshat_getUserVersion(this.inner, (err, res) => {
                 if (err) reject(err);
                 else resolve(res);
             });
@@ -540,7 +541,7 @@ class Seshat extends seshat.Seshat {
      */
     async setUserVersion(version) {
         return new Promise((resolve, reject) => {
-            super.setUserVersion(version, (err, res) => {
+            seshat.seshat_setUserVersion(this.inner, version, (err, res) => {
                 if (err) reject(err);
                 else resolve(res);
             });
@@ -566,7 +567,7 @@ class Seshat extends seshat.Seshat {
      */
     async loadFileEvents(args) {
         return new Promise((resolve, reject) => {
-            super.loadFileEvents(args, (err, res) => {
+            seshat.seshat_loadFileEvents(this.inner, args, (err, res) => {
                 if (err) reject(err);
                 else resolve(res);
             });
@@ -603,7 +604,11 @@ class Seshat extends seshat.Seshat {
  * // reindex the database
  * await recovery.reindex();
  */
-class SeshatRecovery extends seshat.SeshatRecovery {
+class SeshatRecovery {
+    constructor(path, config = undefined) {
+        this.inner = seshat.seshat_recovery_new(path, config);
+    }
+
     /**
      * Get info about the re-index status.
      *
@@ -611,7 +616,7 @@ class SeshatRecovery extends seshat.SeshatRecovery {
      * re-indexed events and the done percentage.
      */
     info() {
-        return super.info();
+        return seshat.seshat_recovery_info(this.inner);
     }
 
     /**
@@ -622,7 +627,7 @@ class SeshatRecovery extends seshat.SeshatRecovery {
      */
     async getUserVersion() {
         return new Promise((resolve, reject) => {
-            super.getUserVersion((err, res) => {
+            seshat.seshat_recovery_getUserVersion(this.inner, (err, res) => {
                 if (err) reject(err);
                 else resolve(res);
             });
@@ -637,7 +642,7 @@ class SeshatRecovery extends seshat.SeshatRecovery {
      */
     async shutdown() {
         return new Promise((resolve, reject) => {
-            super.shutdown((err, res) => {
+            seshat.seshat_recovery_shutdown(this.inner, (err, res) => {
                 if (err) reject(err);
                 else resolve(res);
             });
@@ -652,7 +657,7 @@ class SeshatRecovery extends seshat.SeshatRecovery {
      */
     async reindex() {
         return new Promise((resolve, reject) => {
-            super.reindex((err, res) => {
+            seshat.seshat_recovery_reindex(this.inner, (err, res) => {
                 if (err) reject(err);
                 else resolve(res);
             });
