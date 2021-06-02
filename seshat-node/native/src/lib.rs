@@ -40,8 +40,8 @@ impl Finalize for SeshatRecovery {}
 
 impl SeshatRecovery {
     fn new(mut cx: FunctionContext) -> JsResult<JsBox<RefCell<SeshatRecovery>>> {
-        let db_path: String = cx.argument::<JsString>(2)?.value(&mut cx);
-        let args =  cx.argument_opt(3);
+        let db_path: String = cx.argument::<JsString>(0)?.value(&mut cx);
+        let args =  cx.argument_opt(1);
         let config = parse_database_config(&mut cx, args)?;
         let database = RecoveryDatabase::new_with_config(db_path, &config)
             .expect("Can't open recovery database.");
@@ -64,8 +64,8 @@ impl SeshatRecovery {
     }
 
     fn reindex(mut cx: FunctionContext) -> JsResult<JsUndefined> {
-        let f = cx.argument::<JsFunction>(1)?.root(&mut cx);
         let this = cx.argument::<JsBox<RefCell<SeshatRecovery>>>(0)?;
+        let f = cx.argument::<JsFunction>(1)?.root(&mut cx);
 
         let database = {
             let db = &mut this.borrow_mut().database;
@@ -84,8 +84,8 @@ impl SeshatRecovery {
     }
 
     fn get_user_version(mut cx: FunctionContext) -> JsResult<JsUndefined> {
-        let f = cx.argument::<JsFunction>(1)?.root(&mut cx);
         let this = cx.argument::<JsBox<RefCell<SeshatRecovery>>>(0)?;
+        let f = cx.argument::<JsFunction>(1)?.root(&mut cx);
 
         let connection = {
             let db = &mut this.borrow_mut().database;
@@ -112,9 +112,8 @@ impl SeshatRecovery {
     }
 
     fn shutdown(mut cx: FunctionContext) -> JsResult<JsUndefined> {
-        let f = cx.argument::<JsFunction>(1)?.root(&mut cx);
-
         let this = cx.argument::<JsBox<RefCell<SeshatRecovery>>>(0)?;
+        let f = cx.argument::<JsFunction>(1)?.root(&mut cx);
 
         let database = {
             let db = &mut this.borrow_mut().database;
@@ -154,8 +153,8 @@ impl SeshatRecovery {
 
 impl Seshat {
     fn new(mut cx: FunctionContext) -> JsResult<JsBox<RefCell<Seshat>>> {
-        let db_path: String = cx.argument::<JsString>(1)?.value(&mut cx);
-        let args =  cx.argument_opt(2);
+        let db_path: String = cx.argument::<JsString>(0)?.value(&mut cx);
+        let args =  cx.argument_opt(1);
 
         let config = parse_database_config(&mut cx, args)?;
 
@@ -203,8 +202,8 @@ impl Seshat {
     }
 
     fn add_historic_events(mut cx: FunctionContext) -> JsResult<JsUndefined> {
-        let f = cx.argument::<JsFunction>(3)?.root(&mut cx);
         let this = cx.argument::<JsBox<RefCell<Seshat>>>(0)?;
+        let f = cx.argument::<JsFunction>(4)?.root(&mut cx);
         let receiver = add_historic_events_helper(&mut cx)?;
 
         let task = AddBacklogTask { receiver };
@@ -214,8 +213,8 @@ impl Seshat {
     }
 
     fn load_checkpoints(mut cx: FunctionContext) -> JsResult<JsUndefined> {
-        let f = cx.argument::<JsFunction>(1)?.root(&mut cx);
         let this = cx.argument::<JsBox<RefCell<Seshat>>>(0)?;
+        let f = cx.argument::<JsFunction>(1)?.root(&mut cx);
 
         let connection = {
             let db = &mut this.borrow_mut().database;
@@ -242,6 +241,7 @@ impl Seshat {
     }
 
     fn add_event(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+        let this = cx.argument::<JsBox<RefCell<Seshat>>>(0)?;
         let event = cx.argument::<JsObject>(1)?;
         let event = parse_event(&mut cx, *event)?;
 
@@ -254,7 +254,6 @@ impl Seshat {
         };
 
         let ret = {
-            let this = cx.argument::<JsBox<RefCell<Seshat>>>(0)?;
             let db = &this.borrow().database;
             db.as_ref().map_or_else(|| Err("Database has been closed or deleted"),
                                     |db| { db.add_event(event, profile); Ok(()) } )
@@ -267,9 +266,9 @@ impl Seshat {
     }
 
     fn delete_event(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+        let this = cx.argument::<JsBox<RefCell<Seshat>>>(0)?;
         let event_id = cx.argument::<JsString>(1)?.value(&mut cx);
         let f = cx.argument::<JsFunction>(2)?.root(&mut cx);
-        let this = cx.argument::<JsBox<RefCell<Seshat>>>(0)?;
 
         let receiver = {
             let db = &mut this.borrow_mut().database;
@@ -290,13 +289,12 @@ impl Seshat {
     }
 
     fn commit(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+        let this = cx.argument::<JsBox<RefCell<Seshat>>>(0)?;
         let force: bool = match cx.argument_opt(1) {
             Some(w) => w.downcast::<JsBoolean, _>(&mut cx).or_throw(&mut cx)?.value(&mut cx),
             None => false,
         };
-
         let f = cx.argument::<JsFunction>(2)?.root(&mut cx);
-        let this = cx.argument::<JsBox<RefCell<Seshat>>>(0)?;
 
         let receiver = {
             let db = &mut this.borrow_mut().database;
@@ -342,9 +340,8 @@ impl Seshat {
     }
 
     fn get_stats(mut cx: FunctionContext) -> JsResult<JsUndefined> {
-        let f = cx.argument::<JsFunction>(1)?.root(&mut cx);
-
         let this = cx.argument::<JsBox<RefCell<Seshat>>>(0)?;
+        let f = cx.argument::<JsFunction>(1)?.root(&mut cx);
 
         let connection = {
             let db = &mut this.borrow_mut().database;
@@ -371,9 +368,8 @@ impl Seshat {
     }
 
     fn get_size(mut cx: FunctionContext) -> JsResult<JsUndefined> {
-        let f = cx.argument::<JsFunction>(1)?.root(&mut cx);
-
         let this = cx.argument::<JsBox<RefCell<Seshat>>>(0)?;
+        let f = cx.argument::<JsFunction>(1)?.root(&mut cx);
 
         let path = {
             let db = &mut this.borrow_mut().database;
@@ -393,8 +389,8 @@ impl Seshat {
     }
 
     fn is_empty(mut cx: FunctionContext) -> JsResult<JsUndefined> {
-        let f = cx.argument::<JsFunction>(1)?.root(&mut cx);
         let this = cx.argument::<JsBox<RefCell<Seshat>>>(0)?;
+        let f = cx.argument::<JsFunction>(1)?.root(&mut cx);
 
         let connection = {
             let db = &mut this.borrow_mut().database;
@@ -421,9 +417,9 @@ impl Seshat {
     }
 
     fn is_room_indexed(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+        let this = cx.argument::<JsBox<RefCell<Seshat>>>(0)?;
         let room_id = cx.argument::<JsString>(1)?.value(&mut cx);
         let f = cx.argument::<JsFunction>(2)?.root(&mut cx);
-        let this = cx.argument::<JsBox<RefCell<Seshat>>>(0)?;
 
         let connection = {
             let db = &mut this.borrow_mut().database;
@@ -450,8 +446,8 @@ impl Seshat {
     }
 
     fn get_user_version(mut cx: FunctionContext) -> JsResult<JsUndefined> {
-        let f = cx.argument::<JsFunction>(1)?.root(&mut cx);
         let this = cx.argument::<JsBox<RefCell<Seshat>>>(0)?;
+        let f = cx.argument::<JsFunction>(1)?.root(&mut cx);
 
         let connection = {
             let db = &mut this.borrow_mut().database;
@@ -478,9 +474,9 @@ impl Seshat {
     }
 
     fn set_user_version(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+        let this = cx.argument::<JsBox<RefCell<Seshat>>>(0)?;
         let version = cx.argument::<JsNumber>(1)?;
         let f = cx.argument::<JsFunction>(2)?.root(&mut cx);
-        let this = cx.argument::<JsBox<RefCell<Seshat>>>(0)?;
 
         let connection = {
             let db = &mut this.borrow_mut().database;
@@ -507,6 +503,8 @@ impl Seshat {
     }
 
     fn commit_sync(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+        let this = cx.argument::<JsBox<RefCell<Seshat>>>(0)?;
+
         let wait: bool = match cx.argument_opt(1) {
             Some(w) => w.downcast::<JsBoolean, _>(&mut cx).or_throw(&mut cx)?.value(&mut cx),
             None => false,
@@ -516,8 +514,6 @@ impl Seshat {
             Some(w) => w.downcast::<JsBoolean, _>(&mut cx).or_throw(&mut cx)?.value(&mut cx),
             None => false,
         };
-
-        let this = cx.argument::<JsBox<RefCell<Seshat>>>(0)?;
 
         let ret = {
             let db = &mut this.borrow_mut().database;
@@ -549,9 +545,9 @@ impl Seshat {
     }
 
     fn search_sync(mut cx: FunctionContext) -> JsResult<JsObject> {
+        let this = cx.argument::<JsBox<RefCell<Seshat>>>(0)?;
         let args = cx.argument::<JsObject>(1)?;
         let (term, config) = parse_search_object(&mut cx, args)?;
-        let this = cx.argument::<JsBox<RefCell<Seshat>>>(0)?;
 
         let ret = {
             let db = &mut this.borrow_mut().database;
@@ -594,12 +590,11 @@ impl Seshat {
     }
 
     fn search(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+        let this = cx.argument::<JsBox<RefCell<Seshat>>>(0)?;
         let args = cx.argument::<JsObject>(1)?;
         let f = cx.argument::<JsFunction>(2)?.root(&mut cx);
 
         let (term, config) = parse_search_object(&mut cx, args)?;
-
-        let this = cx.argument::<JsBox<RefCell<Seshat>>>(0)?;
 
         let searcher = {
             let db = &mut this.borrow_mut().database;
@@ -623,9 +618,8 @@ impl Seshat {
     }
 
     fn delete(mut cx: FunctionContext) -> JsResult<JsUndefined> {
-        let f = cx.argument::<JsFunction>(1)?.root(&mut cx);
-
         let this = cx.argument::<JsBox<RefCell<Seshat>>>(0)?;
+        let f = cx.argument::<JsFunction>(1)?.root(&mut cx);
 
         let db = {
             let db = &mut this.borrow_mut().database;
@@ -650,10 +644,9 @@ impl Seshat {
     }
 
     fn change_passphrase(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+        let this = cx.argument::<JsBox<RefCell<Seshat>>>(0)?;
         let new_passphrase = cx.argument::<JsString>(1)?;
         let f = cx.argument::<JsFunction>(2)?.root(&mut cx);
-
-        let this = cx.argument::<JsBox<RefCell<Seshat>>>(0)?;
 
         let db = {
             let db = &mut this.borrow_mut().database;
@@ -676,9 +669,8 @@ impl Seshat {
     }
 
     fn shutdown(mut cx: FunctionContext) -> JsResult<JsUndefined> {
-        let f = cx.argument::<JsFunction>(1)?.root(&mut cx);
-
         let this = cx.argument::<JsBox<RefCell<Seshat>>>(0)?;
+        let f = cx.argument::<JsFunction>(1)?.root(&mut cx);
 
         let db = {
             let db = &mut this.borrow_mut().database;
@@ -701,6 +693,7 @@ impl Seshat {
     }
 
     fn load_file_events(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+        let this = cx.argument::<JsBox<RefCell<Seshat>>>(0)?;
         let args = cx.argument::<JsObject>(1)?;
         let f = cx.argument::<JsFunction>(2)?.root(&mut cx);
 
@@ -738,8 +731,6 @@ impl Seshat {
                 config = config.direction(direction);
             }
         }
-
-        let this = cx.argument::<JsBox<RefCell<Seshat>>>(0)?;
 
         let connection = {
             let db = &mut this.borrow_mut().database;
