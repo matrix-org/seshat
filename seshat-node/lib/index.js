@@ -554,6 +554,7 @@ class Seshat {
  */
 class SeshatRecovery {
     constructor(path, config = undefined) {
+        config = config || {};
         this.inner = seshat_recovery_new(path, config);
     }
 
