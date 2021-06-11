@@ -114,7 +114,7 @@ impl Task for SearchTask {
             Err(e) => return cx.throw_type_error(e.to_string()),
         };
 
-        let results = cx.array_buffer(ret.results.len() as u32)?;
+        let results = JsArray::new(&mut cx, ret.results.len() as u32);
         let count = cx.number(ret.count as f64);
 
         for (i, element) in ret.results.drain(..).enumerate() {
@@ -123,7 +123,7 @@ impl Task for SearchTask {
         }
 
         let search_result = cx.empty_object();
-        let highlights = cx.array_buffer(0)?;
+        let highlights = JsArray::new(&mut cx, 0);
 
         search_result.set(&mut cx, "count", count)?;
         search_result.set(&mut cx, "results", results)?;
@@ -170,7 +170,7 @@ pub(crate) struct LoadCheckPointsTask {
 impl Task for LoadCheckPointsTask {
     type Output = Vec<CrawlerCheckpoint>;
     type Error = seshat::Error;
-    type JsEvent = JsArrayBuffer;
+    type JsEvent = JsArray;
 
     fn perform(&self) -> Result<Self::Output, Self::Error> {
         self.connection.load_checkpoints()
@@ -186,7 +186,7 @@ impl Task for LoadCheckPointsTask {
             Err(e) => return cx.throw_type_error(e.to_string()),
         };
         let count = checkpoints.len();
-        let ret = cx.array_buffer(count as u32)?;
+        let ret = JsArray::new(&mut cx, count as u32);
 
         for (i, c) in checkpoints.drain(..).enumerate() {
             let js_checkpoint = cx.empty_object();
@@ -383,7 +383,7 @@ pub(crate) struct LoadFileEventsTask {
 impl Task for LoadFileEventsTask {
     type Output = Vec<(String, Profile)>;
     type Error = seshat::Error;
-    type JsEvent = JsArrayBuffer;
+    type JsEvent = JsArray;
 
     fn perform(&self) -> Result<Self::Output, Self::Error> {
         self.inner.load_file_events(&self.config)
@@ -399,7 +399,7 @@ impl Task for LoadFileEventsTask {
             Err(e) => return cx.throw_type_error(e.to_string()),
         };
 
-        let results = cx.array_buffer(ret.len() as u32)?;
+        let results = JsArray::new(&mut cx, ret.len() as u32);
 
         for (i, (source, profile)) in ret.drain(..).enumerate() {
             let result = cx.empty_object();

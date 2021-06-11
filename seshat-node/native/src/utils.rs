@@ -239,8 +239,8 @@ pub(crate) fn search_result_to_js<'a, C: Context<'a>>(
     let object = cx.empty_object();
     let context = cx.empty_object();
 
-    let before = cx.array_buffer(result.events_before.len() as u32)?;
-    let after = cx.array_buffer(result.events_after.len() as u32)?;
+    let before = JsArray::new(cx, result.events_before.len() as u32);
+    let after = JsArray::new(cx, result.events_after.len() as u32);
     let profile_info = cx.empty_object();
 
     for (i, event) in result.events_before.iter().enumerate() {

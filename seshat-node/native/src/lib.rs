@@ -566,7 +566,7 @@ impl Seshat {
         };
 
         let count = ret.count;
-        let results = cx.array_buffer(ret.results.len() as u32)?;
+        let results = JsArray::new(&mut cx, ret.results.len() as u32);
         let count = cx.number(count as f64);
 
         for (i, element) in ret.results.drain(..).enumerate() {
@@ -575,7 +575,7 @@ impl Seshat {
         }
 
         let search_result = cx.empty_object();
-        let highlights = cx.array_buffer(0)?;
+        let highlights = JsArray::new(&mut cx, 0);
 
         search_result.set(&mut cx, "count", count)?;
         search_result.set(&mut cx, "results", results)?;
