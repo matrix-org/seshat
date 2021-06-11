@@ -47,11 +47,13 @@ pub trait Task: Send + Sized + 'static {
         sender.send(Box::new(move |queue: &EventQueue| {
             let result = self.perform();
             queue.send(move |mut cx| {
-                let completed = cx.compute_scoped(move |cx| self.complete(cx, result));
+                let completed = cx.try_catch(|cx| {
+                    cx.compute_scoped(move |cx| self.complete(cx, result))
+                });
                 let callback = callback.into_inner(&mut cx);
                 let this = cx.undefined();
                 let args = match completed {
-                    Err(e) => vec![cx.error(e.to_string())?.upcast()],
+                    Err(e) => vec![e.upcast()],
                     Ok(v) => vec![cx.null().upcast(), v.as_value(&mut cx)],
                 };
                 callback.call(&mut cx, this, args)?;
