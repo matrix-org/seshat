@@ -748,31 +748,33 @@ impl Seshat {
 
 #[neon::main]
 fn main(mut cx: ModuleContext) -> NeonResult<()> {
-    cx.export_function("seshat_recovery_new", SeshatRecovery::new)?;
-    cx.export_function("seshat_recovery_reindex", SeshatRecovery::reindex)?;
-    cx.export_function("seshat_recovery_getUserVersion", SeshatRecovery::get_user_version)?;
-    cx.export_function("seshat_recovery_shutdown", SeshatRecovery::shutdown)?;
-    cx.export_function("seshat_recovery_info", SeshatRecovery::info)?;
-    cx.export_function("seshat_new", Seshat::new)?;
-    cx.export_function("seshat_addHistoricEventsSync", Seshat::add_historic_events_sync)?;
-    cx.export_function("seshat_addHistoricEvents", Seshat::add_historic_events)?;
-    cx.export_function("seshat_loadCheckpoints", Seshat::load_checkpoints)?;
-    cx.export_function("seshat_addEvent", Seshat::add_event)?;
-    cx.export_function("seshat_deleteEvent", Seshat::delete_event)?;
-    cx.export_function("seshat_commit", Seshat::commit)?;
-    cx.export_function("seshat_reload", Seshat::reload)?;
-    cx.export_function("seshat_getStats", Seshat::get_stats)?;
-    cx.export_function("seshat_getSize", Seshat::get_size)?;
-    cx.export_function("seshat_isEmpty", Seshat::is_empty)?;
-    cx.export_function("seshat_isRoomIndexed", Seshat::is_room_indexed)?;
-    cx.export_function("seshat_getUserVersion", Seshat::get_user_version)?;
-    cx.export_function("seshat_setUserVersion", Seshat::set_user_version)?;
-    cx.export_function("seshat_commitSync", Seshat::commit_sync)?;
-    cx.export_function("seshat_searchSync", Seshat::search_sync)?;
-    cx.export_function("seshat_search", Seshat::search)?;
-    cx.export_function("seshat_delete", Seshat::delete)?;
-    cx.export_function("seshat_changePassphrase", Seshat::change_passphrase)?;
-    cx.export_function("seshat_shutdown", Seshat::shutdown)?;
-    cx.export_function("seshat_loadFileEvents", Seshat::load_file_events)?;
+    cx.export_function("createRecoveryDb", SeshatRecovery::new)?;
+    cx.export_function("reindexRecoveryDb", SeshatRecovery::reindex)?;
+    cx.export_function("getUserVersionRecoveryDb", SeshatRecovery::get_user_version)?;
+    cx.export_function("shutdownRecoveryDb", SeshatRecovery::shutdown)?;
+    cx.export_function("getInfoRecoveryDb", SeshatRecovery::info)?;
+
+    cx.export_function("createDb", Seshat::new)?;
+    cx.export_function("addHistoricEventsSync", Seshat::add_historic_events_sync)?;
+    cx.export_function("addHistoricEvents", Seshat::add_historic_events)?;
+    cx.export_function("loadCheckpoints", Seshat::load_checkpoints)?;
+    cx.export_function("addEvent", Seshat::add_event)?;
+    cx.export_function("deleteEvent", Seshat::delete_event)?;
+    cx.export_function("commit", Seshat::commit)?;
+    cx.export_function("reload", Seshat::reload)?;
+    cx.export_function("getStats", Seshat::get_stats)?;
+    cx.export_function("getSize", Seshat::get_size)?;
+    cx.export_function("isEmpty", Seshat::is_empty)?;
+    cx.export_function("isRoomIndexed", Seshat::is_room_indexed)?;
+    cx.export_function("getUserVersion", Seshat::get_user_version)?;
+    cx.export_function("setUserVersion", Seshat::set_user_version)?;
+    cx.export_function("commitSync", Seshat::commit_sync)?;
+    cx.export_function("searchSync", Seshat::search_sync)?;
+    cx.export_function("search", Seshat::search)?;
+    cx.export_function("deleteDb", Seshat::delete)?;
+    cx.export_function("changePassphrase", Seshat::change_passphrase)?;
+    cx.export_function("shutdown", Seshat::shutdown)?;
+    cx.export_function("loadFileEvents", Seshat::load_file_events)?;
+
     Ok(())
 }

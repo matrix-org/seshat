@@ -13,36 +13,7 @@
 // limitations under the License.
 
 const { promisify } = require('util');
-const seshat_orig = require('../native');
-
-const seshat_recovery_new = seshat_orig.seshat_recovery_new;
-const seshat_recovery_info = seshat_orig.seshat_recovery_info;
-const seshat_new = seshat_orig.seshat_new;
-const seshat_addHistoricEventsSync = seshat_orig.seshat_addHistoricEventsSync;
-const seshat_searchSync = seshat_orig.seshat_searchSync;
-const seshat_commitSync = seshat_orig.seshat_commitSync;
-const seshat_addEvent = seshat_orig.seshat_addEvent;
-const seshat_reload = seshat_orig.seshat_reload;
-
-const seshat_recovery_reindex = promisify(seshat_orig.seshat_recovery_reindex);
-const seshat_recovery_getUserVersion = promisify(seshat_orig.seshat_recovery_getUserVersion);
-const seshat_recovery_shutdown = promisify(seshat_orig.seshat_recovery_shutdown);
-const seshat_addHistoricEvents = promisify(seshat_orig.seshat_addHistoricEvents);
-const seshat_loadCheckpoints = promisify(seshat_orig.seshat_loadCheckpoints);
-const seshat_deleteEvent = promisify(seshat_orig.seshat_deleteEvent);
-const seshat_commit = promisify(seshat_orig.seshat_commit);
-const seshat_getStats = promisify(seshat_orig.seshat_getStats);
-const seshat_getSize = promisify(seshat_orig.seshat_getSize);
-const seshat_isEmpty = promisify(seshat_orig.seshat_isEmpty);
-const seshat_isRoomIndexed = promisify(seshat_orig.seshat_isRoomIndexed);
-const seshat_getUserVersion = promisify(seshat_orig.seshat_getUserVersion);
-const seshat_setUserVersion = promisify(seshat_orig.seshat_setUserVersion);
-const seshat_search = promisify(seshat_orig.seshat_search);
-const seshat_delete = promisify(seshat_orig.seshat_delete);
-const seshat_changePassphrase = promisify(seshat_orig.seshat_changePassphrase);
-const seshat_shutdown = promisify(seshat_orig.seshat_shutdown);
-const seshat_loadFileEvents = promisify(seshat_orig.seshat_loadFileEvents);
-
+const seshatNative = require('../native');
 
 /**
  * @typedef searchResult
@@ -197,7 +168,7 @@ class Seshat {
     constructor(path, config = undefined) {
         config = config || {};
         try {
-            this.inner = seshat_new(path, config);
+            this.inner = seshatNative.createDb(path, config);
         } catch (e) {
             // The Rust side throws a RangeError, this is a bit silly so convert
             // it to a custom error.
@@ -222,7 +193,7 @@ class Seshat {
      * @return {Void}
      */
     addEvent(matrixEvent, profile = {}) {
-        return seshat_addEvent(this.inner, matrixEvent, profile);
+        return seshatNative.addEvent(this.inner, matrixEvent, profile);
     };
 
     /**
@@ -238,7 +209,8 @@ class Seshat {
      * from the index or if a commit later on will be needed.
      */
     async deleteEvent(eventId) {
-	return seshat_deleteEvent(this.inner, eventId);
+        const deleteEvent = promisify(seshatNative.deleteEvent);
+        return deleteEvent(this.inner, eventId);
     };
 
     /**
@@ -256,7 +228,8 @@ class Seshat {
      * a unique incrementing number that identifies the commit.
      */
     async commit(force = false) {
-	return seshat_commit(this.inner, force);
+        const commit = promisify(seshatNative.commit);
+        return commit(this.inner, force);
     }
 
     /**
@@ -273,7 +246,7 @@ class Seshat {
      * incrementing number that identifies the commit.
      */
     commitSync(wait = false, force = false) {
-        return seshat_commitSync(this.inner, wait, force);
+        return seshatNative.commitSync(this.inner, wait, force);
     }
 
     /**
@@ -282,7 +255,7 @@ class Seshat {
      * for unit testing purposes to force a reload before a search.
      */
     reload() {
-        seshat_reload(this.inner);
+        seshatNative.reload(this.inner);
     };
 
     /**
@@ -308,7 +281,8 @@ class Seshat {
      * the search term.
      */
     async search(args) {
-	return seshat_search(this.inner, args);
+        const search = promisify(seshatNative.search);
+        return search(this.inner, args);
     }
 
     /**
@@ -329,7 +303,7 @@ class Seshat {
      */
     searchSync(term, limit = 10, before_limit = 0, after_limit = 0,
         order_by_recency = false) {
-        return seshat_searchSync(this.inner, term, limit, before_limit, after_limit,
+        return seshatNative.searchSync(this.inner, term, limit, before_limit, after_limit,
             order_by_recency);
     }
 
@@ -345,7 +319,7 @@ class Seshat {
      * false otherwise.
      */
     addHistoricEventsSync(events, newCheckpoint = null, oldCheckPoint = null) {
-        return seshat_addHistoricEventsSync(this.inner, events, newCheckpoint,
+        return seshatNative.addHistoricEventsSync(this.inner, events, newCheckpoint,
             oldCheckPoint);
     }
 
@@ -361,7 +335,8 @@ class Seshat {
      * the events have already been added to the database, false otherwise.
      */
     async addHistoricEvents(events, newCheckpoint = null, oldCheckPoint = null) {
-	return seshat_addHistoricEvents(this.inner, events, newCheckpoint, oldCheckPoint);
+        const addHistoricEvents = promisify(seshatNative.addHistoricEvents);
+        return addHistoricEvents(this.inner, events, newCheckpoint, oldCheckPoint);
     }
 
     /**
@@ -395,7 +370,8 @@ class Seshat {
      * array of checkpoints when they are loaded from the database.
      */
     async loadCheckpoints() {
-	return seshat_loadCheckpoints(this.inner);
+        const loadCheckpoints = promisify(seshatNative.loadCheckpoints);
+        return loadCheckpoints(this.inner);
     }
 
     /**
@@ -406,7 +382,8 @@ class Seshat {
      * size in bytes.
      */
     async getSize() {
-        return seshat_getSize(this.inner);
+        const getSize = promisify(seshatNative.getSize);
+        return getSize(this.inner);
     }
 
     /**
@@ -416,7 +393,8 @@ class Seshat {
      * containing statistical information of the database.
      */
     async getStats() {
-        return seshat_getStats(this.inner);
+        const getStats = promisify(seshatNative.getStats);
+        return getStats(this.inner);
     }
 
     /**
@@ -426,7 +404,8 @@ class Seshat {
      * been deleted.
      */
     async delete() {
-        return seshat_delete(this.inner);
+        const deleteDb = promisify(seshatNative.deleteDb);
+        return deleteDb(this.inner);
     }
 
     /**
@@ -436,7 +415,8 @@ class Seshat {
      * been closed.
      */
     async shutdown() {
-	return seshat_shutdown(this.inner);
+        const shutdown = promisify(seshatNative.shutdown);
+        return shutdown(this.inner);
     }
 
     /**
@@ -451,7 +431,8 @@ class Seshat {
      * been changed.
      */
     async changePassphrase(newPassphrase) {
-	return seshat_changePassphrase(this.inner, newPassphrase);
+        const changePassphrase = promisify(seshatNative.changePassphrase);
+        return changePassphrase(this.inner, newPassphrase);
     }
 
     /**
@@ -462,7 +443,8 @@ class Seshat {
      * otherwise.
      */
     async isEmpty() {
-	return seshat_isEmpty(this.inner);
+        const isEmpty = promisify(seshatNative.isEmpty);
+        return isEmpty(this.inner);
     }
 
     /**
@@ -475,7 +457,8 @@ class Seshat {
      * database contains events for the given room, false otherwise.
      */
     async isRoomIndexed(roomId) {
-	return seshat_isRoomIndexed(this.inner, roomId);
+        const isRoomIndexed = promisify(seshatNative.isRoomIndexed);
+        return isRoomIndexed(this.inner, roomId);
     }
 
     /**
@@ -485,7 +468,8 @@ class Seshat {
      * represents the user version of the database.
      */
     async getUserVersion() {
-	return seshat_getUserVersion(this.inner);
+        const getUserVersion = promisify(seshatNative.getUserVersion);
+        return getUserVersion(this.inner);
     }
 
     /**
@@ -498,7 +482,8 @@ class Seshat {
      * has been stored in the database.
      */
     async setUserVersion(version) {
-	return seshat_setUserVersion(this.inner, version);
+        const setUserVersion = promisify(seshatNative.setUserVersion);
+        return setUserVersion(this.inner, version);
     }
 
     /**
@@ -519,7 +504,8 @@ class Seshat {
      * of Matrix events that contain mxc URLs.
      */
     async loadFileEvents(args) {
-	return seshat_loadFileEvents(this.inner, args);
+        const loadFileEvents = promisify(seshatNative.loadFileEvents);
+        return loadFileEvents(this.inner, args);
     }
 }
 
@@ -555,7 +541,7 @@ class Seshat {
 class SeshatRecovery {
     constructor(path, config = undefined) {
         config = config || {};
-        this.inner = seshat_recovery_new(path, config);
+        this.inner = seshatNative.createRecoveryDb(path, config);
     }
 
     /**
@@ -565,7 +551,7 @@ class SeshatRecovery {
      * re-indexed events and the done percentage.
      */
     info() {
-        return seshat_recovery_info(this.inner);
+        return seshatNative.getInfoRecoveryDb(this.inner);
     }
 
     /**
@@ -575,7 +561,8 @@ class SeshatRecovery {
      * represents the user version of the database.
      */
     async getUserVersion() {
-	return seshat_recovery_getUserVersion(this.inner);
+        const getUserVersion = promisify(seshatNative.getUserVersionRecoveryDb);
+        return getUserVersion(this.inner);
     }
 
     /**
@@ -585,7 +572,8 @@ class SeshatRecovery {
      * been closed.
      */
     async shutdown() {
-        return seshat_recovery_shutdown(this.inner);
+        const shutdown = promisify(seshatNative.shutdownRecoveryDb);
+        return shutdown(this.inner);
     }
 
     /**
@@ -595,7 +583,8 @@ class SeshatRecovery {
      * been re-indexed.
      */
     async reindex() {
-        return seshat_recovery_reindex(this.inner);
+        const reindex = promisify(seshatNative.reindexRecoveryDb);
+        return reindex(this.inner);
     }
 }
 
