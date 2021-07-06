@@ -458,7 +458,7 @@ pub(crate) mod test {
         let (version, reindex_needed) = Database::get_version(&mut connection).unwrap();
 
         assert_eq!(version, DATABASE_VERSION);
-        assert_eq!(reindex_needed, false);
+        assert!(!reindex_needed);
 
         let result = db.search("Hello", &SearchConfig::new()).unwrap().results;
         assert!(!result.is_empty())
