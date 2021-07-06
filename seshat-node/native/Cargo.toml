@@ -16,7 +16,7 @@ crate-type = ["cdylib"]
 [dependencies]
 fs_extra = "1.2.0"
 serde_json = "1.0.58"
-neon-serde = { git = "https://github.com/antonok-edm/neon-serde/", rev = "ee44a7e465e8082f7d7e5a7fe2980188930a50cf" }
+neon-serde = { git = "https://github.com/matrix-org/neon-serde", rev = "ee44a7e465e8082f7d7e5a7fe2980188930a50cf" }
 uuid = "0.8.1"
 seshat = { version = "2.2.4", path = "../../" }
 

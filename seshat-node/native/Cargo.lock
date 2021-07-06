@@ -1015,7 +1015,7 @@ dependencies = [
 [[package]]
 name = "neon-serde"
 version = "0.4.0"
-source = "git+https://github.com/antonok-edm/neon-serde/?rev=ee44a7e465e8082f7d7e5a7fe2980188930a50cf#ee44a7e465e8082f7d7e5a7fe2980188930a50cf"
+source = "git+https://github.com/matrix-org/neon-serde?rev=ee44a7e465e8082f7d7e5a7fe2980188930a50cf#ee44a7e465e8082f7d7e5a7fe2980188930a50cf"
 dependencies = [
  "error-chain",
  "neon",
