@@ -22,9 +22,6 @@ use seshat::{
     CheckpointDirection, Connection, CrawlerCheckpoint, DatabaseStats, LoadConfig, Profile,
     Receiver, RecoveryDatabase, SearchBatch, SearchConfig, Searcher,
 };
-use std::sync::mpsc;
-
-type Callback = Box<dyn FnOnce(&EventQueue) + Send + 'static>;
 
 pub trait Task: Send + Sized + 'static {
     type Output: Send + 'static;
@@ -39,28 +36,36 @@ pub trait Task: Send + Sized + 'static {
         result: Result<Self::Output, Self::Error>,
     ) -> JsResult<'a, Self::JsEvent>;
 
-    fn schedule(
-        self,
-        sender: mpsc::Sender<Callback>,
-        callback: Root<JsFunction>,
-    ) -> Result<(), mpsc::SendError<Callback>> {
-        sender.send(Box::new(move |queue: &EventQueue| {
+    /// Schedule the task to be executed on a background thread.
+    ///
+    /// The last argument of the `FucntionContext` needs to be a `JsFunction`.
+    fn schedule(self, mut cx: FunctionContext) -> JsResult<JsUndefined> {
+        let callback = cx
+            .argument::<JsFunction>(cx.len().saturating_sub(1))?
+            .root(&mut cx);
+        let queue = cx.queue();
+
+        std::thread::spawn(move || {
             let result = self.perform();
+
             queue.send(move |mut cx| {
-                let completed = cx.try_catch(|cx| {
-                    cx.compute_scoped(move |cx| self.complete(cx, result))
-                });
+                let result =
+                    cx.try_catch(|cx| cx.compute_scoped(move |cx| self.complete(cx, result)));
+
                 let callback = callback.into_inner(&mut cx);
                 let this = cx.undefined();
-                let args = match completed {
-                    Err(e) => vec![e.upcast()],
+
+                let args = match result {
                     Ok(v) => vec![cx.null().upcast(), v.as_value(&mut cx)],
+                    Err(e) => vec![e.upcast()],
                 };
+
                 callback.call(&mut cx, this, args)?;
                 Ok(())
             });
-        }))?;
-        Ok(())
+        });
+
+        Ok(cx.undefined())
     }
 }
 

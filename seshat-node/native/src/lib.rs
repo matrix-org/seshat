@@ -17,20 +17,17 @@ mod utils;
 
 use neon::prelude::*;
 use seshat::{Database, Error, LoadConfig, LoadDirection, Profile, RecoveryDatabase, RecoveryInfo};
+use std::cell::RefCell;
 use std::sync::atomic::Ordering;
 use std::sync::Mutex;
-use std::sync::mpsc;
-use std::cell::RefCell;
 
 use crate::tasks::*;
 use crate::utils::*;
 
 pub struct Seshat {
-    sender: mpsc::Sender<Box<dyn FnOnce(&EventQueue) + Send + 'static>>,
     database: Option<Database>,
 }
 pub struct SeshatRecovery {
-    sender: mpsc::Sender<Box<dyn FnOnce(&EventQueue) + Send + 'static>>,
     database: Option<RecoveryDatabase>,
     info: RecoveryInfo,
 }
@@ -38,34 +35,25 @@ pub struct SeshatRecovery {
 impl Finalize for Seshat {}
 impl Finalize for SeshatRecovery {}
 
+const CLOSED_ERROR: &str = "Database has been closed or deleted";
+
 impl SeshatRecovery {
     fn new(mut cx: FunctionContext) -> JsResult<JsBox<RefCell<SeshatRecovery>>> {
         let db_path: String = cx.argument::<JsString>(0)?.value(&mut cx);
-        let args =  cx.argument_opt(1);
+        let args = cx.argument_opt(1);
         let config = parse_database_config(&mut cx, args)?;
         let database = RecoveryDatabase::new_with_config(db_path, &config)
             .expect("Can't open recovery database.");
         let info = database.info().clone();
 
-        let (tx, rx) = mpsc::channel::<Box<dyn FnOnce(&EventQueue) + Send + 'static>>();
-        let queue = cx.queue();
-
-        std::thread::spawn(move || {
-            while let Ok(message) = rx.recv() {
-                message(&queue);
-            }
-        });
-
-        Ok(cx.boxed(RefCell::new(SeshatRecovery{
+        Ok(cx.boxed(RefCell::new(SeshatRecovery {
             database: Some(database),
             info,
-            sender: tx,
         })))
     }
 
     fn reindex(mut cx: FunctionContext) -> JsResult<JsUndefined> {
         let this = cx.argument::<JsBox<RefCell<SeshatRecovery>>>(0)?;
-        let f = cx.argument::<JsFunction>(1)?.root(&mut cx);
 
         let database = {
             let db = &mut this.borrow_mut().database;
@@ -77,43 +65,43 @@ impl SeshatRecovery {
             None => return cx.throw_type_error("A reindex has been already done"),
         };
 
-        let task = ReindexTask { inner: Mutex::new(Some(database)) };
-        task.schedule(this.borrow().sender.clone(), f).or_else(|err| cx.throw_error(err.to_string()))?;
-
-        Ok(cx.undefined())
+        let task = ReindexTask {
+            inner: Mutex::new(Some(database)),
+        };
+        task.schedule(cx)
     }
 
     fn get_user_version(mut cx: FunctionContext) -> JsResult<JsUndefined> {
         let this = cx.argument::<JsBox<RefCell<SeshatRecovery>>>(0)?;
-        let f = cx.argument::<JsFunction>(1)?.root(&mut cx);
 
         let connection = {
             let db = &mut this.borrow_mut().database;
 
-            db.as_mut().map_or_else(|| Err("Database has been closed or deleted"),
-                                    |db| Ok(db.get_connection()))
+            db.as_mut().map_or_else(
+                || Err(CLOSED_ERROR),
+                |db| Ok(db.get_connection()),
+            )
         };
 
         let connection = match connection {
             Ok(c) => match c {
                 Ok(c) => c,
-                Err(e) => return cx.throw_type_error(format!(
-                    "Unable to get a database connection {}",
-                    e.to_string()
-                )),
+                Err(e) => {
+                    return cx.throw_type_error(format!(
+                        "Unable to get a database connection {}",
+                        e.to_string()
+                    ))
+                }
             },
             Err(e) => return cx.throw_type_error(e),
         };
 
         let task = GetUserVersionTask { connection };
-        task.schedule(this.borrow().sender.clone(), f).or_else(|err| cx.throw_error(err.to_string()))?;
-
-        Ok(cx.undefined())
+        task.schedule(cx)
     }
 
     fn shutdown(mut cx: FunctionContext) -> JsResult<JsUndefined> {
         let this = cx.argument::<JsBox<RefCell<SeshatRecovery>>>(0)?;
-        let f = cx.argument::<JsFunction>(1)?.root(&mut cx);
 
         let database = {
             let db = &mut this.borrow_mut().database;
@@ -121,9 +109,7 @@ impl SeshatRecovery {
         };
 
         let task = ShutDownRecoveryDatabaseTask(Mutex::new(database));
-        task.schedule(this.borrow().sender.clone(), f).or_else(|err| cx.throw_error(err.to_string()))?;
-
-        Ok(cx.undefined())
+        task.schedule(cx)
     }
 
     fn info(mut cx: FunctionContext) -> JsResult<JsObject> {
@@ -154,7 +140,7 @@ impl SeshatRecovery {
 impl Seshat {
     fn new(mut cx: FunctionContext) -> JsResult<JsBox<RefCell<Seshat>>> {
         let db_path: String = cx.argument::<JsString>(0)?.value(&mut cx);
-        let args =  cx.argument_opt(1);
+        let args = cx.argument_opt(1);
 
         let config = parse_database_config(&mut cx, args)?;
 
@@ -167,28 +153,13 @@ impl Seshat {
                 // one here.
                 let error = match e {
                     Error::ReindexError => cx.throw_range_error("Database needs to be reindexed"),
-                    e => cx.throw_error(format!("Error opening the database: {:?}", e))
+                    e => cx.throw_error(format!("Error opening the database: {:?}", e)),
                 };
                 return error;
             }
         };
 
-        let (tx, rx) = mpsc::channel::<Box<dyn FnOnce(&EventQueue) + Send + 'static>>();
-        let queue = cx.queue();
-
-        std::thread::spawn(move || {
-            while let Ok(message) = rx.recv() {
-                message(&queue);
-            }
-        });
-
-
-        Ok(cx.boxed(RefCell::new(
-            Seshat {
-                database: Some(db),
-                sender: tx,
-            }
-        )))
+        Ok(cx.boxed(RefCell::new(Seshat { database: Some(db) })))
     }
 
     fn add_historic_events_sync(mut cx: FunctionContext) -> JsResult<JsBoolean> {
@@ -202,42 +173,39 @@ impl Seshat {
     }
 
     fn add_historic_events(mut cx: FunctionContext) -> JsResult<JsUndefined> {
-        let this = cx.argument::<JsBox<RefCell<Seshat>>>(0)?;
-        let f = cx.argument::<JsFunction>(4)?.root(&mut cx);
         let receiver = add_historic_events_helper(&mut cx)?;
 
         let task = AddBacklogTask { receiver };
-        task.schedule(this.borrow().sender.clone(), f).or_else(|err| cx.throw_error(err.to_string()))?;
-
-        Ok(cx.undefined())
+        task.schedule(cx)
     }
 
     fn load_checkpoints(mut cx: FunctionContext) -> JsResult<JsUndefined> {
         let this = cx.argument::<JsBox<RefCell<Seshat>>>(0)?;
-        let f = cx.argument::<JsFunction>(1)?.root(&mut cx);
 
         let connection = {
             let db = &mut this.borrow_mut().database;
 
-            db.as_mut().map_or_else(|| Err("Database has been closed or deleted"),
-                                    |db| Ok(db.get_connection()))
+            db.as_mut().map_or_else(
+                || Err(CLOSED_ERROR),
+                |db| Ok(db.get_connection()),
+            )
         };
 
         let connection = match connection {
             Ok(c) => match c {
                 Ok(c) => c,
-                Err(e) => return cx.throw_type_error(format!(
-                    "Unable to get a database connection {}",
-                    e.to_string()
-                )),
+                Err(e) => {
+                    return cx.throw_type_error(format!(
+                        "Unable to get a database connection {}",
+                        e.to_string()
+                    ))
+                }
             },
             Err(e) => return cx.throw_type_error(e),
         };
 
         let task = LoadCheckPointsTask { connection };
-        task.schedule(this.borrow().sender.clone(), f).or_else(|err| cx.throw_error(err.to_string()))?;
-
-        Ok(cx.undefined())
+        task.schedule(cx)
     }
 
     fn add_event(mut cx: FunctionContext) -> JsResult<JsUndefined> {
@@ -249,14 +217,22 @@ impl Seshat {
             Some(p) => {
                 let p = p.downcast::<JsObject, _>(&mut cx).or_throw(&mut cx)?;
                 parse_profile(&mut cx, *p)?
+            }
+            None => Profile {
+                displayname: None,
+                avatar_url: None,
             },
-            None => Profile { displayname: None, avatar_url: None },
         };
 
         let ret = {
             let db = &this.borrow().database;
-            db.as_ref().map_or_else(|| Err("Database has been closed or deleted"),
-                                    |db| { db.add_event(event, profile); Ok(()) } )
+            db.as_ref().map_or_else(
+                || Err(CLOSED_ERROR),
+                |db| {
+                    db.add_event(event, profile);
+                    Ok(())
+                },
+            )
         };
 
         match ret {
@@ -268,13 +244,13 @@ impl Seshat {
     fn delete_event(mut cx: FunctionContext) -> JsResult<JsUndefined> {
         let this = cx.argument::<JsBox<RefCell<Seshat>>>(0)?;
         let event_id = cx.argument::<JsString>(1)?.value(&mut cx);
-        let f = cx.argument::<JsFunction>(2)?.root(&mut cx);
 
         let receiver = {
             let db = &mut this.borrow_mut().database;
-            db.as_mut().map_or_else(|| Err("Database has been closed or deleted"), |db| {
-                Ok(db.delete_event(&event_id))
-            })
+            db.as_mut().map_or_else(
+                || Err(CLOSED_ERROR),
+                |db| Ok(db.delete_event(&event_id)),
+            )
         };
 
         let receiver = match receiver {
@@ -283,28 +259,31 @@ impl Seshat {
         };
 
         let task = DeleteEventTask { receiver };
-        task.schedule(this.borrow().sender.clone(), f).or_else(|err| cx.throw_error(err.to_string()))?;
-
-        Ok(cx.undefined())
+        task.schedule(cx)
     }
 
     fn commit(mut cx: FunctionContext) -> JsResult<JsUndefined> {
         let this = cx.argument::<JsBox<RefCell<Seshat>>>(0)?;
         let force: bool = match cx.argument_opt(1) {
-            Some(w) => w.downcast::<JsBoolean, _>(&mut cx).or_throw(&mut cx)?.value(&mut cx),
+            Some(w) => w
+                .downcast::<JsBoolean, _>(&mut cx)
+                .or_throw(&mut cx)?
+                .value(&mut cx),
             None => false,
         };
-        let f = cx.argument::<JsFunction>(2)?.root(&mut cx);
 
         let receiver = {
             let db = &mut this.borrow_mut().database;
-            db.as_mut().map_or_else(|| Err("Database has been closed or deleted"), |db| {
-                if force {
-                    Ok(db.force_commit_no_wait())
-                } else {
-                    Ok(db.commit_no_wait())
-                }
-            })
+            db.as_mut().map_or_else(
+                || Err(CLOSED_ERROR),
+                |db| {
+                    if force {
+                        Ok(db.force_commit_no_wait())
+                    } else {
+                        Ok(db.commit_no_wait())
+                    }
+                },
+            )
         };
 
         let receiver = match receiver {
@@ -313,9 +292,7 @@ impl Seshat {
         };
 
         let task = CommitTask { receiver };
-        task.schedule(this.borrow().sender.clone(), f).or_else(|err| cx.throw_error(err.to_string()))?;
-
-        Ok(cx.undefined())
+        task.schedule(cx)
     }
 
     fn reload(mut cx: FunctionContext) -> JsResult<JsUndefined> {
@@ -323,8 +300,10 @@ impl Seshat {
 
         let ret = {
             let db = &mut this.borrow_mut().database;
-            db.as_mut().map_or_else(|| Err("Database has been closed or deleted"),
-                                    |db| Ok(db.reload()))
+            db.as_mut().map_or_else(
+                || Err(CLOSED_ERROR),
+                |db| Ok(db.reload()),
+            )
         };
 
         match ret {
@@ -341,40 +320,42 @@ impl Seshat {
 
     fn get_stats(mut cx: FunctionContext) -> JsResult<JsUndefined> {
         let this = cx.argument::<JsBox<RefCell<Seshat>>>(0)?;
-        let f = cx.argument::<JsFunction>(1)?.root(&mut cx);
 
         let connection = {
             let db = &mut this.borrow_mut().database;
 
-            db.as_mut().map_or_else(|| Err("Database has been closed or deleted"),
-                                    |db| Ok(db.get_connection()))
+            db.as_mut().map_or_else(
+                || Err(CLOSED_ERROR),
+                |db| Ok(db.get_connection()),
+            )
         };
 
         let connection = match connection {
             Ok(c) => match c {
                 Ok(c) => c,
-                Err(e) => return cx.throw_type_error(format!(
-                    "Unable to get a database connection {}",
-                    e.to_string()
-                )),
+                Err(e) => {
+                    return cx.throw_type_error(format!(
+                        "Unable to get a database connection {}",
+                        e.to_string()
+                    ))
+                }
             },
             Err(e) => return cx.throw_type_error(e),
         };
 
         let task = StatsTask { connection };
-        task.schedule(this.borrow().sender.clone(), f).or_else(|err| cx.throw_error(err.to_string()))?;
-
-        Ok(cx.undefined())
+        task.schedule(cx)
     }
 
     fn get_size(mut cx: FunctionContext) -> JsResult<JsUndefined> {
         let this = cx.argument::<JsBox<RefCell<Seshat>>>(0)?;
-        let f = cx.argument::<JsFunction>(1)?.root(&mut cx);
 
         let path = {
             let db = &mut this.borrow_mut().database;
-            db.as_ref().map_or_else(|| Err("Database has been closed or deleted"),
-                                    |db| Ok(db.get_path().to_path_buf()))
+            db.as_ref().map_or_else(
+                || Err(CLOSED_ERROR),
+                |db| Ok(db.get_path().to_path_buf()),
+            )
         };
 
         let path = match path {
@@ -383,135 +364,149 @@ impl Seshat {
         };
 
         let task = GetSizeTask { path };
-        task.schedule(this.borrow().sender.clone(), f).or_else(|err| cx.throw_error(err.to_string()))?;
-
-        Ok(cx.undefined())
+        task.schedule(cx)
     }
 
     fn is_empty(mut cx: FunctionContext) -> JsResult<JsUndefined> {
         let this = cx.argument::<JsBox<RefCell<Seshat>>>(0)?;
-        let f = cx.argument::<JsFunction>(1)?.root(&mut cx);
 
         let connection = {
             let db = &mut this.borrow_mut().database;
 
-            db.as_mut().map_or_else(|| Err("Database has been closed or deleted"),
-                                    |db| Ok(db.get_connection()))
+            db.as_mut().map_or_else(
+                || Err(CLOSED_ERROR),
+                |db| Ok(db.get_connection()),
+            )
         };
 
         let connection = match connection {
             Ok(c) => match c {
                 Ok(c) => c,
-                Err(e) => return cx.throw_type_error(format!(
-                    "Unable to get a database connection {}",
-                    e.to_string()
-                )),
+                Err(e) => {
+                    return cx.throw_type_error(format!(
+                        "Unable to get a database connection {}",
+                        e.to_string()
+                    ))
+                }
             },
             Err(e) => return cx.throw_type_error(e),
         };
 
         let task = IsEmptyTask { connection };
-        task.schedule(this.borrow().sender.clone(), f).or_else(|err| cx.throw_error(err.to_string()))?;
-
-        Ok(cx.undefined())
+        task.schedule(cx)
     }
 
     fn is_room_indexed(mut cx: FunctionContext) -> JsResult<JsUndefined> {
         let this = cx.argument::<JsBox<RefCell<Seshat>>>(0)?;
         let room_id = cx.argument::<JsString>(1)?.value(&mut cx);
-        let f = cx.argument::<JsFunction>(2)?.root(&mut cx);
 
         let connection = {
             let db = &mut this.borrow_mut().database;
 
-            db.as_mut().map_or_else(|| Err("Database has been closed or deleted"),
-                                    |db| Ok(db.get_connection()))
+            db.as_mut().map_or_else(
+                || Err(CLOSED_ERROR),
+                |db| Ok(db.get_connection()),
+            )
         };
 
         let connection = match connection {
             Ok(c) => match c {
                 Ok(c) => c,
-                Err(e) => return cx.throw_type_error(format!(
-                    "Unable to get a database connection {}",
-                    e.to_string()
-                )),
+                Err(e) => {
+                    return cx.throw_type_error(format!(
+                        "Unable to get a database connection {}",
+                        e.to_string()
+                    ))
+                }
             },
             Err(e) => return cx.throw_type_error(e),
         };
 
-        let task = IsRoomIndexedTask { connection, room_id };
-        task.schedule(this.borrow().sender.clone(), f).or_else(|err| cx.throw_error(err.to_string()))?;
-
-        Ok(cx.undefined())
+        let task = IsRoomIndexedTask {
+            connection,
+            room_id,
+        };
+        task.schedule(cx)
     }
 
     fn get_user_version(mut cx: FunctionContext) -> JsResult<JsUndefined> {
         let this = cx.argument::<JsBox<RefCell<Seshat>>>(0)?;
-        let f = cx.argument::<JsFunction>(1)?.root(&mut cx);
 
         let connection = {
             let db = &mut this.borrow_mut().database;
 
-            db.as_mut().map_or_else(|| Err("Database has been closed or deleted"),
-                                    |db| Ok(db.get_connection()))
+            db.as_mut().map_or_else(
+                || Err(CLOSED_ERROR),
+                |db| Ok(db.get_connection()),
+            )
         };
 
         let connection = match connection {
             Ok(c) => match c {
                 Ok(c) => c,
-                Err(e) => return cx.throw_type_error(format!(
-                    "Unable to get a database connection {}",
-                    e.to_string()
-                )),
+                Err(e) => {
+                    return cx.throw_type_error(format!(
+                        "Unable to get a database connection {}",
+                        e.to_string()
+                    ))
+                }
             },
             Err(e) => return cx.throw_type_error(e),
         };
 
         let task = GetUserVersionTask { connection };
-        task.schedule(this.borrow().sender.clone(), f).or_else(|err| cx.throw_error(err.to_string()))?;
-
-        Ok(cx.undefined())
+        task.schedule(cx)
     }
 
     fn set_user_version(mut cx: FunctionContext) -> JsResult<JsUndefined> {
         let this = cx.argument::<JsBox<RefCell<Seshat>>>(0)?;
         let version = cx.argument::<JsNumber>(1)?;
-        let f = cx.argument::<JsFunction>(2)?.root(&mut cx);
 
         let connection = {
             let db = &mut this.borrow_mut().database;
 
-            db.as_mut().map_or_else(|| Err("Database has been closed or deleted"),
-                                    |db| Ok(db.get_connection()))
+            db.as_mut().map_or_else(
+                || Err(CLOSED_ERROR),
+                |db| Ok(db.get_connection()),
+            )
         };
 
         let connection = match connection {
             Ok(c) => match c {
                 Ok(c) => c,
-                Err(e) => return cx.throw_type_error(format!(
-                    "Unable to get a database connection {}",
-                    e.to_string()
-                )),
+                Err(e) => {
+                    return cx.throw_type_error(format!(
+                        "Unable to get a database connection {}",
+                        e.to_string()
+                    ))
+                }
             },
             Err(e) => return cx.throw_type_error(e),
         };
 
-        let task = SetUserVersionTask { connection, new_version: version.value(&mut cx) as i64 };
-        task.schedule(this.borrow().sender.clone(), f).or_else(|err| cx.throw_error(err.to_string()))?;
-
-        Ok(cx.undefined())
+        let task = SetUserVersionTask {
+            connection,
+            new_version: version.value(&mut cx) as i64,
+        };
+        task.schedule(cx)
     }
 
     fn commit_sync(mut cx: FunctionContext) -> JsResult<JsUndefined> {
         let this = cx.argument::<JsBox<RefCell<Seshat>>>(0)?;
 
         let wait: bool = match cx.argument_opt(1) {
-            Some(w) => w.downcast::<JsBoolean, _>(&mut cx).or_throw(&mut cx)?.value(&mut cx),
+            Some(w) => w
+                .downcast::<JsBoolean, _>(&mut cx)
+                .or_throw(&mut cx)?
+                .value(&mut cx),
             None => false,
         };
 
         let force: bool = match cx.argument_opt(2) {
-            Some(w) => w.downcast::<JsBoolean, _>(&mut cx).or_throw(&mut cx)?.value(&mut cx),
+            Some(w) => w
+                .downcast::<JsBoolean, _>(&mut cx)
+                .or_throw(&mut cx)?
+                .value(&mut cx),
             None => false,
         };
 
@@ -519,17 +514,24 @@ impl Seshat {
             let db = &mut this.borrow_mut().database;
 
             if wait {
-                db.as_mut().map_or_else(|| Err("Database has been closed or deleted"), |db| {
-                    if force {
-                        Ok(Some(db.force_commit()))
-                    } else {
-                        Ok(Some(db.commit()))
-                    }
-                }
-               )
+                db.as_mut().map_or_else(
+                    || Err(CLOSED_ERROR),
+                    |db| {
+                        if force {
+                            Ok(Some(db.force_commit()))
+                        } else {
+                            Ok(Some(db.commit()))
+                        }
+                    },
+                )
             } else {
-                db.as_mut().map_or_else(|| Err("Database has been closed or deleted"),
-                                        |db| { db.commit_no_wait(); Ok(None) } )
+                db.as_mut().map_or_else(
+                    || Err(CLOSED_ERROR),
+                    |db| {
+                        db.commit_no_wait();
+                        Ok(None)
+                    },
+                )
             }
         };
 
@@ -540,7 +542,7 @@ impl Seshat {
 
         match ret {
             Some(_) => Ok(cx.undefined()),
-            None => Ok(cx.undefined())
+            None => Ok(cx.undefined()),
         }
     }
 
@@ -551,8 +553,10 @@ impl Seshat {
 
         let ret = {
             let db = &mut this.borrow_mut().database;
-            db.as_ref().map_or_else(|| Err("Database has been closed or deleted"),
-                                    |db| Ok(db.search(&term, &config)))
+            db.as_ref().map_or_else(
+                || Err(CLOSED_ERROR),
+                |db| Ok(db.search(&term, &config)),
+            )
         };
 
         let ret = match ret {
@@ -592,14 +596,15 @@ impl Seshat {
     fn search(mut cx: FunctionContext) -> JsResult<JsUndefined> {
         let this = cx.argument::<JsBox<RefCell<Seshat>>>(0)?;
         let args = cx.argument::<JsObject>(1)?;
-        let f = cx.argument::<JsFunction>(2)?.root(&mut cx);
 
         let (term, config) = parse_search_object(&mut cx, args)?;
 
         let searcher = {
             let db = &mut this.borrow_mut().database;
-            db.as_ref().map_or_else(|| Err("Database has been closed or deleted"),
-                                    |db| Ok(db.get_searcher()))
+            db.as_ref().map_or_else(
+                || Err(CLOSED_ERROR),
+                |db| Ok(db.get_searcher()),
+            )
         };
 
         let searcher = match searcher {
@@ -610,25 +615,18 @@ impl Seshat {
         let task = SearchTask {
             inner: searcher,
             term,
-            config
+            config,
         };
-        task.schedule(this.borrow().sender.clone(), f).or_else(|err| cx.throw_error(err.to_string()))?;
-
-        Ok(cx.undefined())
+        task.schedule(cx)
     }
 
     fn delete(mut cx: FunctionContext) -> JsResult<JsUndefined> {
         let this = cx.argument::<JsBox<RefCell<Seshat>>>(0)?;
-        let f = cx.argument::<JsFunction>(1)?.root(&mut cx);
-
-        let db = {
-            let db = &mut this.borrow_mut().database;
-            db.take()
-        };
+        let db = this.borrow_mut().database.take();
 
         let db = match db {
             Some(db) => db,
-            None => return cx.throw_type_error("Database has been closed or deleted")
+            None => return cx.throw_type_error(CLOSED_ERROR),
         };
 
         let db_path = db.get_path().to_path_buf();
@@ -638,15 +636,12 @@ impl Seshat {
             db_path,
             shutdown_receiver: receiver,
         };
-        task.schedule(this.borrow().sender.clone(), f).or_else(|err| cx.throw_error(err.to_string()))?;
-
-        Ok(cx.undefined())
+        task.schedule(cx)
     }
 
     fn change_passphrase(mut cx: FunctionContext) -> JsResult<JsUndefined> {
         let this = cx.argument::<JsBox<RefCell<Seshat>>>(0)?;
         let new_passphrase = cx.argument::<JsString>(1)?;
-        let f = cx.argument::<JsFunction>(2)?.root(&mut cx);
 
         let db = {
             let db = &mut this.borrow_mut().database;
@@ -655,22 +650,19 @@ impl Seshat {
 
         let db = match db {
             Some(db) => db,
-            None => return cx.throw_type_error("Database has been closed or deleted")
+            None => return cx.throw_type_error(CLOSED_ERROR),
         };
 
         let task = ChangePassphraseTask {
             database: Mutex::new(Some(db)),
             new_passphrase: new_passphrase.value(&mut cx),
         };
-    
-        task.schedule(this.borrow().sender.clone(), f).or_else(|err| cx.throw_error(err.to_string()))?;
 
-        Ok(cx.undefined())
+        task.schedule(cx)
     }
 
     fn shutdown(mut cx: FunctionContext) -> JsResult<JsUndefined> {
         let this = cx.argument::<JsBox<RefCell<Seshat>>>(0)?;
-        let f = cx.argument::<JsFunction>(1)?.root(&mut cx);
 
         let db = {
             let db = &mut this.borrow_mut().database;
@@ -679,7 +671,7 @@ impl Seshat {
 
         let db = match db {
             Some(db) => db,
-            None => return cx.throw_type_error("Database has been closed or deleted")
+            None => return cx.throw_type_error(CLOSED_ERROR),
         };
 
         let receiver = db.shutdown();
@@ -687,29 +679,26 @@ impl Seshat {
         let task = ShutDownTask {
             shutdown_receiver: receiver,
         };
-        task.schedule(this.borrow().sender.clone(), f).or_else(|err| cx.throw_error(err.to_string()))?;
-
-        Ok(cx.undefined())
+        task.schedule(cx)
     }
 
     fn load_file_events(mut cx: FunctionContext) -> JsResult<JsUndefined> {
         let this = cx.argument::<JsBox<RefCell<Seshat>>>(0)?;
         let args = cx.argument::<JsObject>(1)?;
-        let f = cx.argument::<JsFunction>(2)?.root(&mut cx);
 
         let room_id = args
-                .get(&mut cx, "roomId")?
-                .downcast::<JsString, _>(&mut cx)
-                .or_throw(&mut cx)?
-                .value(&mut cx);
+            .get(&mut cx, "roomId")?
+            .downcast::<JsString, _>(&mut cx)
+            .or_throw(&mut cx)?
+            .value(&mut cx);
 
         let mut config = LoadConfig::new(room_id);
 
         let limit = args
-                .get(&mut cx, "limit")?
-                .downcast::<JsNumber, _>(&mut cx)
-                .or_throw(&mut cx)?
-                .value(&mut cx);
+            .get(&mut cx, "limit")?
+            .downcast::<JsNumber, _>(&mut cx)
+            .or_throw(&mut cx)?
+            .value(&mut cx);
 
         config = config.limit(limit as usize);
 
@@ -734,10 +723,10 @@ impl Seshat {
 
         let connection = {
             let db = &mut this.borrow_mut().database;
-            db
-                .as_ref()
-                .map_or_else(|| Err("Database has been closed or deleted"),
-                             |db| Ok(db.get_connection()))
+            db.as_ref().map_or_else(
+                || Err(CLOSED_ERROR),
+                |db| Ok(db.get_connection()),
+            )
         };
 
         let connection = match connection {
@@ -752,10 +741,8 @@ impl Seshat {
             inner: connection,
             config,
         };
-    
-        task.schedule(this.borrow().sender.clone(), f).or_else(|err| cx.throw_error(err.to_string()))?;
 
-        Ok(cx.undefined())
+        task.schedule(cx)
     }
 }
 

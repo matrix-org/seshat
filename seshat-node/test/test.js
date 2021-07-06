@@ -426,7 +426,7 @@ describe('Database', function() {
 
         expect(() => db
             .addEvent(matrixEvent, matrixProfileOnlyDisplayName))
-            .toThrow('Database has been closed or deleted');
+            .toThrow(TypeError('Database has been closed or deleted'));
     });
 
     it('should allow us to check if the db is empty', async function() {
@@ -598,23 +598,25 @@ describe('Database', function() {
 
     it('should throw an error when adding events with missing fields.', function() {
         delete matrixEvent.content;
-        expect(() => db.addEvent(matrixEvent, matrixProfile)).toThrow('Event doesn\'t contain any content');
+        expect(() => db.addEvent(matrixEvent, matrixProfile)).toThrow(TypeError('Event doesn\'t contain any content'));
 
         delete matrixEvent.room_id;
-        expect(() => db.addEvent(matrixEvent, matrixProfile)).toThrow('Event doesn\'t contain a valid room id');
+        expect(() => db.addEvent(matrixEvent, matrixProfile)).toThrow(TypeError('Event doesn\'t contain a valid room id'));
 
         delete matrixEvent.origin_server_ts;
-        expect(() => db.addEvent(matrixEvent, matrixProfile)).toThrow('Event doesn\'t contain a valid timestamp');
+        expect(() => db.addEvent(matrixEvent, matrixProfile)).toThrow(TypeError('Event doesn\'t contain a valid timestamp'));
 
         delete matrixEvent.event_id;
-        expect(() => db.addEvent(matrixEvent, matrixProfile)).toThrow('Event doesn\'t contain a valid event id');
+        expect(() => db.addEvent(matrixEvent, matrixProfile)).toThrow(TypeError('Event doesn\'t contain a valid event id'));
 
         delete matrixEvent.sender;
-        expect(() => db.addEvent(matrixEvent, matrixProfile)).toThrow('Event doesn\'t contain a valid sender');
+        expect(() => db.addEvent(matrixEvent, matrixProfile)).toThrow(TypeError('Event doesn\'t contain a valid sender'));
     });
 
     it('should throw an error when adding events with fields that don\'t typecheck.', function() {
-        expect(() => db.addEvent(badEvent, matrixProfile)).toThrow('Event doesn\'t contain a valid timestamp');
+        const db = createDb();
+
+        expect(() => db.addEvent(badEvent, matrixProfile)).toThrow(TypeError('Event doesn\'t contain a valid timestamp'));
     });
 
     it('should allow us to reindex a database', async function() {
