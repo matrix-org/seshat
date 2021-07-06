@@ -14,14 +14,12 @@
 
 use crate::Seshat;
 use neon::prelude::*;
-use neon_serde;
-use serde_json;
 use seshat::{
     CheckpointDirection, Config, CrawlerCheckpoint, Event, EventType, Language, Profile, Receiver,
     SearchConfig, SearchResult,
 };
-use uuid::Uuid;
 use std::cell::RefCell;
+use uuid::Uuid;
 
 pub(crate) fn parse_database_config(
     cx: &mut FunctionContext,
@@ -38,7 +36,7 @@ pub(crate) fn parse_database_config(
                 match language {
                     Language::Unknown => {
                         let value = l.value(cx);
-                        return cx.throw_type_error(format!("Unsuported language: {}", value))
+                        return cx.throw_type_error(format!("Unsuported language: {}", value));
                     }
                     _ => {
                         config = config.set_language(&language);
@@ -118,7 +116,10 @@ pub(crate) fn parse_search_object(
             let mut keys: Vec<Handle<JsValue>> = k.to_vec(&mut *cx)?;
 
             for key in keys.drain(..) {
-                let key = key.downcast::<JsString, _>(cx).or_throw(&mut *cx)?.value(cx);
+                let key = key
+                    .downcast::<JsString, _>(cx)
+                    .or_throw(&mut *cx)?
+                    .value(cx);
                 match key.as_ref() {
                     "content.body" => config.with_key(EventType::Message),
                     "content.topic" => config.with_key(EventType::Topic),
@@ -165,7 +166,10 @@ pub(crate) fn add_historic_events_helper(
     for obj in js_events.drain(..) {
         let obj = obj.downcast::<JsObject, _>(cx).or_throw(cx)?;
 
-        let event = obj.get(cx, "event")?.downcast::<JsObject, _>(cx).or_throw(cx)?;
+        let event = obj
+            .get(cx, "event")?
+            .downcast::<JsObject, _>(cx)
+            .or_throw(cx)?;
         let event = parse_event(cx, *event)?;
 
         let profile: Profile = match obj.get(cx, "profile") {
@@ -430,17 +434,21 @@ pub(crate) fn parse_profile(
     cx: &mut FunctionContext,
     profile: JsObject,
 ) -> Result<Profile, neon::result::Throw> {
-    let displayname: Option<String> =
-        match profile.get(&mut *cx, "displayname")?.downcast::<JsString, _>(cx) {
-            Ok(s) => Some(s.value(cx)),
-            Err(_e) => None,
-        };
+    let displayname: Option<String> = match profile
+        .get(&mut *cx, "displayname")?
+        .downcast::<JsString, _>(cx)
+    {
+        Ok(s) => Some(s.value(cx)),
+        Err(_e) => None,
+    };
 
-    let avatar_url: Option<String> =
-        match profile.get(&mut *cx, "avatar_url")?.downcast::<JsString, _>(cx) {
-            Ok(s) => Some(s.value(cx)),
-            Err(_e) => None,
-        };
+    let avatar_url: Option<String> = match profile
+        .get(&mut *cx, "avatar_url")?
+        .downcast::<JsString, _>(cx)
+    {
+        Ok(s) => Some(s.value(cx)),
+        Err(_e) => None,
+    };
 
     Ok(Profile {
         displayname,

@@ -77,10 +77,8 @@ impl SeshatRecovery {
         let connection = {
             let db = &mut this.borrow_mut().database;
 
-            db.as_mut().map_or_else(
-                || Err(CLOSED_ERROR),
-                |db| Ok(db.get_connection()),
-            )
+            db.as_mut()
+                .map_or_else(|| Err(CLOSED_ERROR), |db| Ok(db.get_connection()))
         };
 
         let connection = match connection {
@@ -185,10 +183,8 @@ impl Seshat {
         let connection = {
             let db = &mut this.borrow_mut().database;
 
-            db.as_mut().map_or_else(
-                || Err(CLOSED_ERROR),
-                |db| Ok(db.get_connection()),
-            )
+            db.as_mut()
+                .map_or_else(|| Err(CLOSED_ERROR), |db| Ok(db.get_connection()))
         };
 
         let connection = match connection {
@@ -247,10 +243,8 @@ impl Seshat {
 
         let receiver = {
             let db = &mut this.borrow_mut().database;
-            db.as_mut().map_or_else(
-                || Err(CLOSED_ERROR),
-                |db| Ok(db.delete_event(&event_id)),
-            )
+            db.as_mut()
+                .map_or_else(|| Err(CLOSED_ERROR), |db| Ok(db.delete_event(&event_id)))
         };
 
         let receiver = match receiver {
@@ -300,10 +294,8 @@ impl Seshat {
 
         let ret = {
             let db = &mut this.borrow_mut().database;
-            db.as_mut().map_or_else(
-                || Err(CLOSED_ERROR),
-                |db| Ok(db.reload()),
-            )
+            db.as_mut()
+                .map_or_else(|| Err(CLOSED_ERROR), |db| Ok(db.reload()))
         };
 
         match ret {
@@ -324,10 +316,8 @@ impl Seshat {
         let connection = {
             let db = &mut this.borrow_mut().database;
 
-            db.as_mut().map_or_else(
-                || Err(CLOSED_ERROR),
-                |db| Ok(db.get_connection()),
-            )
+            db.as_mut()
+                .map_or_else(|| Err(CLOSED_ERROR), |db| Ok(db.get_connection()))
         };
 
         let connection = match connection {
@@ -352,10 +342,8 @@ impl Seshat {
 
         let path = {
             let db = &mut this.borrow_mut().database;
-            db.as_ref().map_or_else(
-                || Err(CLOSED_ERROR),
-                |db| Ok(db.get_path().to_path_buf()),
-            )
+            db.as_ref()
+                .map_or_else(|| Err(CLOSED_ERROR), |db| Ok(db.get_path().to_path_buf()))
         };
 
         let path = match path {
@@ -373,10 +361,8 @@ impl Seshat {
         let connection = {
             let db = &mut this.borrow_mut().database;
 
-            db.as_mut().map_or_else(
-                || Err(CLOSED_ERROR),
-                |db| Ok(db.get_connection()),
-            )
+            db.as_mut()
+                .map_or_else(|| Err(CLOSED_ERROR), |db| Ok(db.get_connection()))
         };
 
         let connection = match connection {
@@ -403,10 +389,8 @@ impl Seshat {
         let connection = {
             let db = &mut this.borrow_mut().database;
 
-            db.as_mut().map_or_else(
-                || Err(CLOSED_ERROR),
-                |db| Ok(db.get_connection()),
-            )
+            db.as_mut()
+                .map_or_else(|| Err(CLOSED_ERROR), |db| Ok(db.get_connection()))
         };
 
         let connection = match connection {
@@ -435,10 +419,8 @@ impl Seshat {
         let connection = {
             let db = &mut this.borrow_mut().database;
 
-            db.as_mut().map_or_else(
-                || Err(CLOSED_ERROR),
-                |db| Ok(db.get_connection()),
-            )
+            db.as_mut()
+                .map_or_else(|| Err(CLOSED_ERROR), |db| Ok(db.get_connection()))
         };
 
         let connection = match connection {
@@ -465,10 +447,8 @@ impl Seshat {
         let connection = {
             let db = &mut this.borrow_mut().database;
 
-            db.as_mut().map_or_else(
-                || Err(CLOSED_ERROR),
-                |db| Ok(db.get_connection()),
-            )
+            db.as_mut()
+                .map_or_else(|| Err(CLOSED_ERROR), |db| Ok(db.get_connection()))
         };
 
         let connection = match connection {
@@ -553,10 +533,8 @@ impl Seshat {
 
         let ret = {
             let db = &mut this.borrow_mut().database;
-            db.as_ref().map_or_else(
-                || Err(CLOSED_ERROR),
-                |db| Ok(db.search(&term, &config)),
-            )
+            db.as_ref()
+                .map_or_else(|| Err(CLOSED_ERROR), |db| Ok(db.search(&term, &config)))
         };
 
         let ret = match ret {
@@ -601,10 +579,8 @@ impl Seshat {
 
         let searcher = {
             let db = &mut this.borrow_mut().database;
-            db.as_ref().map_or_else(
-                || Err(CLOSED_ERROR),
-                |db| Ok(db.get_searcher()),
-            )
+            db.as_ref()
+                .map_or_else(|| Err(CLOSED_ERROR), |db| Ok(db.get_searcher()))
         };
 
         let searcher = match searcher {
@@ -723,10 +699,8 @@ impl Seshat {
 
         let connection = {
             let db = &mut this.borrow_mut().database;
-            db.as_ref().map_or_else(
-                || Err(CLOSED_ERROR),
-                |db| Ok(db.get_connection()),
-            )
+            db.as_ref()
+                .map_or_else(|| Err(CLOSED_ERROR), |db| Ok(db.get_connection()))
         };
 
         let connection = match connection {
