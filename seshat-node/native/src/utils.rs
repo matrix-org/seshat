@@ -224,7 +224,7 @@ pub(crate) fn deserialize_event<'a, C: Context<'a>>(
         }
     };
 
-    let ret = match neon_serde::to_value(&mut *cx, &source) {
+    let ret = match neon_serde2::to_value(&mut *cx, &source) {
         Ok(v) => v,
         Err(e) => return cx.throw_error::<_, _>(e.to_string()),
     };
@@ -253,7 +253,7 @@ pub(crate) fn search_result_to_js<'a, C: Context<'a>>(
             Ok(e) => e,
             Err(_) => continue,
         };
-        let js_event = match neon_serde::to_value(&mut *cx, &js_event) {
+        let js_event = match neon_serde2::to_value(&mut *cx, &js_event) {
             Ok(v) => v,
             Err(e) => return cx.throw_error::<_, _>(e.to_string()),
         };
@@ -266,7 +266,7 @@ pub(crate) fn search_result_to_js<'a, C: Context<'a>>(
             Ok(e) => e,
             Err(_) => continue,
         };
-        let js_event = match neon_serde::to_value(&mut *cx, &js_event) {
+        let js_event = match neon_serde2::to_value(&mut *cx, &js_event) {
             Ok(v) => v,
             Err(e) => return cx.throw_error::<_, _>(e.to_string()),
         };
@@ -411,7 +411,7 @@ pub(crate) fn parse_event(
     };
 
     let event_value = event.as_value(&mut *cx);
-    let event_source: serde_json::Value = match neon_serde::from_value(&mut *cx, event_value) {
+    let event_source: serde_json::Value = match neon_serde2::from_value(&mut *cx, event_value) {
         Ok(v) => v,
         Err(e) => return cx.throw_error::<_, _>(e.to_string()),
     };
