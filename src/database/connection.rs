@@ -21,7 +21,6 @@ use std::path::PathBuf;
 use fs_extra::dir;
 use r2d2::PooledConnection;
 use r2d2_sqlite::SqliteConnectionManager;
-use rusqlite::NO_PARAMS;
 
 use crate::{
     config::LoadConfig,
@@ -57,7 +56,7 @@ impl Connection {
                                     FROM crawlercheckpoints",
         )?;
 
-        let rows = stmt.query_map(NO_PARAMS, |row| {
+        let rows = stmt.query_map([], |row| {
             Ok(CrawlerCheckpoint {
                 room_id: row.get(0)?,
                 token: row.get(1)?,
@@ -79,11 +78,10 @@ impl Connection {
     /// Returns true if the database is empty, false otherwise.
     pub fn is_empty(&self) -> Result<bool> {
         let event_count: i64 = Database::get_event_count(&self.inner)?;
-        let checkpoint_count: i64 = self.query_row(
-            "SELECT COUNT(*) FROM crawlercheckpoints",
-            NO_PARAMS,
-            |row| row.get(0),
-        )?;
+        let checkpoint_count: i64 =
+            self.query_row("SELECT COUNT(*) FROM crawlercheckpoints", [], |row| {
+                row.get(0)
+            })?;
 
         Ok(event_count == 0 && checkpoint_count == 0)
     }

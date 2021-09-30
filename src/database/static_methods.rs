@@ -14,7 +14,7 @@
 
 use std::{cmp::Ordering, collections::HashMap};
 
-use rusqlite::{ToSql, NO_PARAMS};
+use rusqlite::{params, params_from_iter, ToSql};
 
 #[cfg(test)]
 use r2d2::PooledConnection;
@@ -101,13 +101,14 @@ impl Database {
 
         for chunk in events.chunks(50) {
             let parameter_str = ", ?".repeat(chunk.len() - 1);
+
             let mut stmt = transaction.prepare(&format!(
                 "DELETE from pending_deletion_events
                      WHERE event_id IN (?{})",
                 &parameter_str
             ))?;
 
-            stmt.execute(chunk)?;
+            stmt.execute(params_from_iter(chunk))?;
         }
 
         transaction.commit()?;
@@ -128,13 +129,14 @@ impl Database {
 
         for chunk in events.chunks(50) {
             let parameter_str = ", ?".repeat(chunk.len() - 1);
+
             let mut stmt = transaction.prepare(&format!(
                 "DELETE from uncommitted_events
                      WHERE id IN (?{})",
                 &parameter_str
             ))?;
 
-            stmt.execute(chunk)?;
+            stmt.execute(params_from_iter(chunk))?;
         }
 
         transaction.commit()?;
@@ -183,15 +185,11 @@ impl Database {
     }
 
     pub(crate) fn get_user_version(connection: &rusqlite::Connection) -> Result<i64> {
-        Ok(
-            connection.query_row("SELECT version FROM user_version", NO_PARAMS, |row| {
-                row.get(0)
-            })?,
-        )
+        Ok(connection.query_row("SELECT version FROM user_version", [], |row| row.get(0))?)
     }
 
     pub(crate) fn set_user_version(connection: &rusqlite::Connection, version: i64) -> Result<()> {
-        connection.execute("UPDATE user_version SET version = ?", &[version])?;
+        connection.execute("UPDATE user_version SET version = ?", [version])?;
         Ok(())
     }
 
@@ -201,7 +199,7 @@ impl Database {
                 id INTEGER NOT NULL PRIMARY KEY CHECK (id = 1),
                 version INTEGER NOT NULL
             )",
-            NO_PARAMS,
+            [],
         )?;
 
         connection.execute(
@@ -209,27 +207,26 @@ impl Database {
                 id INTEGER NOT NULL PRIMARY KEY CHECK (id = 1),
                 reindex_needed BOOL NOT NULL
             )",
-            NO_PARAMS,
+            [],
         )?;
 
         connection.execute(
             "INSERT OR IGNORE INTO reindex_needed ( reindex_needed ) VALUES(?1)",
-            &[false],
+            [false],
         )?;
 
         connection.execute(
             "INSERT OR IGNORE INTO version ( version ) VALUES(?1)",
-            &[DATABASE_VERSION],
+            [DATABASE_VERSION],
         )?;
 
         let mut version: i64 =
-            connection.query_row("SELECT version FROM version", NO_PARAMS, |row| row.get(0))?;
+            connection.query_row("SELECT version FROM version", [], |row| row.get(0))?;
 
-        let mut reindex_needed: bool = connection.query_row(
-            "SELECT reindex_needed FROM reindex_needed",
-            NO_PARAMS,
-            |row| row.get(0),
-        )?;
+        let mut reindex_needed: bool =
+            connection.query_row("SELECT reindex_needed FROM reindex_needed", [], |row| {
+                row.get(0)
+            })?;
 
         // Do database migrations here before bumping the database version.
 
@@ -238,7 +235,7 @@ impl Database {
             // it does not, running it using query() fails as well. We catch the
             // error and check if it's the ExecuteReturnedResults error, if it
             // is we safely ignore it.
-            let result = connection.execute("ALTER TABLE profiles RENAME TO profile", NO_PARAMS);
+            let result = connection.execute("ALTER TABLE profiles RENAME TO profile", []);
             match result {
                 Ok(_) => (),
                 Err(e) => match e {
@@ -246,7 +243,7 @@ impl Database {
                     _ => return Err(e.into()),
                 },
             }
-            connection.execute("UPDATE version SET version = '2'", NO_PARAMS)?;
+            connection.execute("UPDATE version SET version = '2'", [])?;
 
             version = 2;
         }
@@ -254,8 +251,8 @@ impl Database {
         if version == 2 {
             let transaction = connection.transaction()?;
 
-            transaction.execute("UPDATE reindex_needed SET reindex_needed = ?1", &[true])?;
-            transaction.execute("UPDATE version SET version = '3'", NO_PARAMS)?;
+            transaction.execute("UPDATE reindex_needed SET reindex_needed = ?1", [true])?;
+            transaction.execute("UPDATE version SET version = '3'", [])?;
             transaction.commit()?;
 
             reindex_needed = true;
@@ -265,8 +262,8 @@ impl Database {
         if version == 3 {
             let transaction = connection.transaction()?;
 
-            transaction.execute("UPDATE reindex_needed SET reindex_needed = ?1", &[true])?;
-            transaction.execute("UPDATE version SET version = '4'", NO_PARAMS)?;
+            transaction.execute("UPDATE reindex_needed SET reindex_needed = ?1", [true])?;
+            transaction.execute("UPDATE version SET version = '4'", [])?;
             transaction.commit()?;
 
             reindex_needed = true;
@@ -285,7 +282,7 @@ impl Database {
                 avatar_url TEXT NOT NULL,
                 UNIQUE(user_id,displayname,avatar_url)
             )",
-            NO_PARAMS,
+            [],
         )?;
 
         conn.execute(
@@ -294,7 +291,7 @@ impl Database {
                 room_id TEXT NOT NULL,
                 UNIQUE(room_id)
             )",
-            NO_PARAMS,
+            [],
         )?;
 
         conn.execute(
@@ -312,7 +309,7 @@ impl Database {
                 FOREIGN KEY (room_id) REFERENCES rooms (id),
                 UNIQUE(event_id, room_id)
             )",
-            NO_PARAMS,
+            [],
         )?;
 
         conn.execute(
@@ -323,7 +320,7 @@ impl Database {
                 FOREIGN KEY (event_id) REFERENCES events (id),
                 UNIQUE(event_id)
             )",
-            NO_PARAMS,
+            [],
         )?;
 
         conn.execute(
@@ -332,7 +329,7 @@ impl Database {
                 event_id TEXT NOT NULL,
                 UNIQUE(event_id)
             )",
-            NO_PARAMS,
+            [],
         )?;
 
         conn.execute(
@@ -344,27 +341,27 @@ impl Database {
                 direction TEXT NOT NULL,
                 UNIQUE(room_id,token,full_crawl,direction)
             )",
-            NO_PARAMS,
+            [],
         )?;
 
         conn.execute(
             "CREATE INDEX IF NOT EXISTS event_profile_id ON events (profile_id)",
-            NO_PARAMS,
+            [],
         )?;
 
         conn.execute(
             "CREATE INDEX IF NOT EXISTS room_events_by_timestamp ON events (room_id, server_ts DESC, event_id)",
-            NO_PARAMS,
+            [],
         )?;
 
         conn.execute(
             "CREATE INDEX IF NOT EXISTS event_id ON events (event_id)",
-            NO_PARAMS,
+            [],
         )?;
 
         conn.execute(
             "CREATE INDEX IF NOT EXISTS room_events ON events (room_id, type, msgtype)",
-            NO_PARAMS,
+            [],
         )?;
 
         conn.execute(
@@ -372,19 +369,19 @@ impl Database {
                 id INTEGER NOT NULL PRIMARY KEY CHECK (id = 1),
                 version INTEGER NOT NULL
             )",
-            NO_PARAMS,
+            [],
         )?;
 
         conn.execute(
             "INSERT OR IGNORE INTO user_version ( version ) VALUES(?1)",
-            &[0],
+            [0],
         )?;
 
         Ok(())
     }
 
     pub(crate) fn get_event_count(connection: &rusqlite::Connection) -> rusqlite::Result<i64> {
-        connection.query_row("SELECT COUNT(*) FROM events", NO_PARAMS, |row| row.get(0))
+        connection.query_row("SELECT COUNT(*) FROM events", [], |row| row.get(0))
     }
 
     pub(crate) fn get_event_count_for_room(
@@ -394,7 +391,7 @@ impl Database {
         let room_id = Database::get_room_id(connection, room_id)?;
         connection.query_row(
             "SELECT COUNT(*) FROM events WHERE room_id=?1",
-            &[room_id],
+            [room_id],
             |row| row.get(0),
         )
     }
@@ -402,7 +399,7 @@ impl Database {
     pub(crate) fn get_room_count(connection: &rusqlite::Connection) -> rusqlite::Result<i64> {
         // TODO once we support upgraded rooms we should return only leaf rooms
         // here, rooms that are not ancestors to another one.
-        connection.query_row("SELECT COUNT(*) FROM rooms", NO_PARAMS, |row| row.get(0))
+        connection.query_row("SELECT COUNT(*) FROM rooms", [], |row| row.get(0))
     }
 
     pub(crate) fn save_profile(
@@ -446,7 +443,7 @@ impl Database {
     ) -> Result<Profile> {
         let profile = connection.query_row(
             "SELECT displayname, avatar_url FROM profile WHERE id=?1",
-            &[profile_id],
+            [profile_id],
             |row| {
                 Ok(Profile {
                     displayname: row.get(0)?,
@@ -476,7 +473,7 @@ impl Database {
         connection: &rusqlite::Connection,
     ) -> rusqlite::Result<Vec<EventId>> {
         let mut stmt = connection.prepare("SELECT event_id from pending_deletion_events")?;
-        let events = stmt.query_map(NO_PARAMS, |row| row.get(0))?;
+        let events = stmt.query_map([], |row| row.get(0))?;
 
         events.collect()
     }
@@ -492,7 +489,7 @@ impl Database {
                  INNER JOIN rooms on rooms.id = events.room_id
                  ")?;
 
-        let events = stmt.query_map(NO_PARAMS, |row| {
+        let events = stmt.query_map([], |row| {
             Ok((
                 row.get(0)?,
                 Event {
@@ -643,14 +640,10 @@ impl Database {
                      ",
                 )?;
 
-                let events = stmt.query_map(
-                    &vec![
-                        &event.event_id as &dyn ToSql,
-                        &event.server_ts as &dyn ToSql,
-                        &(limit as i64),
-                    ],
-                    |row| row.get(0),
-                )?;
+                let events = stmt
+                    .query_map(params![&event.event_id, &event.server_ts, &limit,], |row| {
+                        row.get(0)
+                    })?;
                 events.collect()
             }
             None => {
@@ -661,7 +654,7 @@ impl Database {
                      ",
                 )?;
 
-                let events = stmt.query_map(&vec![&(limit as i64)], |row| row.get(0))?;
+                let events = stmt.query_map([limit], |row| row.get(0))?;
                 events.collect()
             }
         }
@@ -700,12 +693,7 @@ impl Database {
 
                 let room_id = Database::get_room_id(connection, room_id)?;
                 let events = stmt.query_map(
-                    &vec![
-                        &room_id as &dyn ToSql,
-                        &event.event_id as &dyn ToSql,
-                        &event.server_ts as &dyn ToSql,
-                        &(limit as i64),
-                    ],
+                    params![&room_id, &event.event_id, &event.server_ts, &limit,],
                     |row| {
                         Ok((
                             row.get(0)?,
@@ -733,16 +721,15 @@ impl Database {
                 ))?;
 
                 let room_id = Database::get_room_id(connection, room_id)?;
-                let events =
-                    stmt.query_map(&vec![&room_id as &dyn ToSql, &(limit as i64)], |row| {
-                        Ok((
-                            row.get(0)?,
-                            Profile {
-                                displayname: row.get(1)?,
-                                avatar_url: row.get(2)?,
-                            },
-                        ))
-                    })?;
+                let events = stmt.query_map(params![room_id, limit], |row| {
+                    Ok((
+                        row.get(0)?,
+                        Profile {
+                            displayname: row.get(1)?,
+                            avatar_url: row.get(2)?,
+                        },
+                    ))
+                })?;
                 events.collect()
             }
         }
@@ -778,12 +765,7 @@ impl Database {
                 ",
             )?;
             let context = stmt.query_map(
-                &vec![
-                    &event.event_id as &dyn ToSql,
-                    &room_id,
-                    &event.server_ts,
-                    &(after_limit as i64),
-                ],
+                params![&event.event_id, &room_id, &event.server_ts, &after_limit,],
                 |row| {
                     Ok((
                         row.get(0),
@@ -826,12 +808,7 @@ impl Database {
                 ",
             )?;
             let context = stmt.query_map(
-                &vec![
-                    &event.event_id as &dyn ToSql,
-                    &room_id,
-                    &event.server_ts,
-                    &(after_limit as i64),
-                ],
+                params![&event.event_id, &room_id, &event.server_ts, &after_limit,],
                 |row| {
                     Ok((
                         row.get(0),
@@ -937,7 +914,7 @@ impl Database {
             (s, e)
         };
 
-        let db_events = stmt.query_map(event_ids, |row| {
+        let db_events = stmt.query_map(params_from_iter(event_ids), |row| {
             Ok((
                 Event {
                     event_type: row.get(0)?,

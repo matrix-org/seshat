@@ -22,8 +22,6 @@ use fs_extra::dir;
 use r2d2::PooledConnection;
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::ToSql;
-#[cfg(feature = "encryption")]
-use rusqlite::NO_PARAMS;
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -205,7 +203,7 @@ impl Database {
         };
 
         let mut statement = connection.prepare("PRAGMA cipher_version")?;
-        let results = statement.query_map(NO_PARAMS, |row| row.get::<usize, String>(0))?;
+        let results = statement.query_map([], |row| row.get::<usize, String>(0))?;
 
         if results.count() != 1 {
             return Err(Error::SqlCipherError(
@@ -216,9 +214,7 @@ impl Database {
         connection.pragma_update(None, "key", passphrase as &dyn ToSql)?;
 
         let count: std::result::Result<i64, rusqlite::Error> =
-            connection.query_row("SELECT COUNT(*) FROM sqlite_master", NO_PARAMS, |row| {
-                row.get(0)
-            });
+            connection.query_row("SELECT COUNT(*) FROM sqlite_master", [], |row| row.get(0));
 
         match count {
             Ok(_) => Ok(()),

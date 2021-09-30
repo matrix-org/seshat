@@ -10,28 +10,28 @@ repository="https://github.com/matrix-org/seshat/"
 
 [features]
 default = ["encryption"]
-encryption = ["rusqlite/sqlcipher", "aes-ctr", "crypto-mac", "hmac", "sha2",
+encryption = ["rusqlite/sqlcipher", "aes", "crypto-mac", "hmac", "sha2",
               "hkdf", "pbkdf2", "rand", "zeroize", "byteorder"]
 
 [dependencies]
 tantivy = "0.12.0"
 tinysegmenter = "0.1.1"
-rusqlite = "0.24.2"
+rusqlite = "0.26.3"
 fs_extra = "1.2.0"
-r2d2_sqlite = "0.17.0"
+r2d2_sqlite = "0.19.0"
 r2d2 = "0.8.9"
 lru-cache = "0.1.2"
 uuid = { version = "0.8.2", features = ["v4"] }
 
-aes-ctr = { version = "0.6.0", optional = true }
-crypto-mac = { version = "0.10.0", optional = true }
-hmac = { version = "0.10.1", optional = true }
-sha2 = { version = "0.9.2", optional = true }
-hkdf = { version = "0.10.0", optional = true }
-pbkdf2 = { version = "0.6.0", optional = true }
-rand = { version = "0.8.1", optional = true }
-zeroize = { version = "1.2.0", optional = true }
-byteorder = { version = "1.4.2", optional = true }
+aes = { version = "0.7.5", optional = true, features = ["ctr"] }
+crypto-mac = { version = "0.11.1", optional = true }
+hmac = { version = "0.11.0", optional = true }
+sha2 = { version = "0.9.5", optional = true }
+hkdf = { version = "0.11.0", optional = true }
+pbkdf2 = { version = "0.8.0", optional = true }
+rand = { version = "0.8.4", optional = true }
+zeroize = { version = "1.4.3", optional = true }
+byteorder = { version = "1.4.3", optional = true }
 
 serde_json = "=1.0.61"
 
@@ -41,9 +41,9 @@ serde_json = "=1.0.61"
 # Relevant serde commit https://github.com/serde-rs/serde/commit/dd1f4b483ee204d58465064f6e5bf5a457543b54
 # Tantivy patch that fixes this issue https://github.com/tantivy-search/tantivy/pull/975
 serde = { version = "=1.0.118", default-features = false, features = ["derive"] }
-thiserror = "1.0.23"
+thiserror = "1.0.26"
 
 [dev-dependencies]
-tempfile = "3.1.0"
+tempfile = "3.2.0"
 lazy_static = "1.4.0"
-fake = "2.4.0"
+fake = "2.4.3"

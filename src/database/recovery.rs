@@ -347,7 +347,7 @@ impl RecoveryDatabase {
             Some(writer) => {
                 writer.force_commit()?;
                 self.connection
-                    .execute("UPDATE reindex_needed SET reindex_needed = ?1", &[false])?;
+                    .execute("UPDATE reindex_needed SET reindex_needed = ?1", [false])?;
                 Ok(())
             }
             None => Err(Error::ReindexError),

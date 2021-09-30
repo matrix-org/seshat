@@ -21,8 +21,8 @@ use std::{
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 
-use aes_ctr::{
-    cipher::{NewStreamCipher, SyncStreamCipher},
+use aes::{
+    cipher::{NewCipher, StreamCipher},
     Aes256Ctr,
 };
 use hkdf::Hkdf;
@@ -364,10 +364,10 @@ impl EncryptedMmapDirectory {
             return Err(IoError::new(ErrorKind::Other, "invalid MAC of the store key").into());
         }
 
-        let mut decryptor = Aes256Ctr::new_var(&key, &iv).map_err(|e| {
+        let mut decryptor = Aes256Ctr::new_from_slices(&key, &iv).map_err(|e| {
             IoError::new(
                 ErrorKind::Other,
-                format!("error creating decryptor: {:?}", e),
+                format!("error initializing cipher {:?}", e),
             )
         })?;
 
@@ -390,7 +390,7 @@ impl EncryptedMmapDirectory {
         encrypted_data: &[u8],
         hmac_key: &[u8],
     ) -> std::io::Result<Hmac<Sha256>> {
-        let mut hmac = Hmac::<Sha256>::new_varkey(hmac_key)
+        let mut hmac = Hmac::<Sha256>::new_from_slice(hmac_key)
             .map_err(|e| IoError::new(ErrorKind::Other, format!("error creating hmac: {:?}", e)))?;
         hmac.update(&[version]);
         hmac.update(iv);
@@ -438,10 +438,10 @@ impl EncryptedMmapDirectory {
     ) -> Result<(), OpenDirectoryError> {
         // Generate a random initialization vector for our AES encryptor.
         let iv = EncryptedMmapDirectory::generate_iv()?;
-        let mut encryptor = Aes256Ctr::new_var(key, &iv).map_err(|e| {
+        let mut encryptor = Aes256Ctr::new_from_slices(key, &iv).map_err(|e| {
             IoError::new(
                 ErrorKind::Other,
-                format!("error creating encryptor: {:?}", e),
+                format!("error initializing cipher: {:?}", e),
             )
         })?;
 
@@ -482,8 +482,8 @@ impl EncryptedMmapDirectory {
     }
 
     /// Generate a random IV.
-    fn generate_iv() -> Result<Vec<u8>, OpenDirectoryError> {
-        let mut iv = vec![0u8; IV_SIZE];
+    fn generate_iv() -> Result<[u8; IV_SIZE], OpenDirectoryError> {
+        let mut iv = [0u8; IV_SIZE];
         let mut rng = thread_rng();
         rng.try_fill(&mut iv[..])
             .map_err(|e| IoError::new(ErrorKind::Other, format!("error generating iv: {:?}", e)))?;
@@ -627,7 +627,7 @@ impl Directory for EncryptedMmapDirectory {
 
 // This Tantivy trait is used to indicate when no more writes are expected to be
 // done on a writer.
-impl<E: NewStreamCipher + SyncStreamCipher, M: Mac + NewMac, W: Write> TerminatingWrite
+impl<E: NewCipher + StreamCipher, M: Mac + NewMac, W: Write> TerminatingWrite
     for AesWriter<E, M, W>
 {
     fn terminate_ref(&mut self, _: AntiCallToken) -> std::io::Result<()> {
