@@ -188,6 +188,21 @@ fn save_and_search() {
 }
 
 #[test]
+fn search_quoted_with_room() {
+    let tmpdir = tempdir().unwrap();
+    let mut db = Database::new(tmpdir.path()).unwrap();
+    let profile = Profile::new("Alice", "");
+
+    db.add_event(EVENT.clone(), profile);
+    db.force_commit().unwrap();
+    db.reload().unwrap();
+
+    let result = db.search("\"Test message\"", &SearchConfig::new().for_room("!test_room:localhost")).unwrap().results;
+    assert!(!result.is_empty());
+    assert_eq!(result[0].event_source, EVENT.source);
+}
+
+#[test]
 fn duplicate_events() {
     let tmpdir = tempdir().unwrap();
     let mut db = Database::new(tmpdir.path()).unwrap();
