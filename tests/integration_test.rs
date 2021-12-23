@@ -197,7 +197,13 @@ fn search_quoted_with_room() {
     db.force_commit().unwrap();
     db.reload().unwrap();
 
-    let result = db.search("\"Test message\"", &SearchConfig::new().for_room("!test_room:localhost")).unwrap().results;
+    let result = db
+        .search(
+            "\"Test message\"",
+            &SearchConfig::new().for_room("!test_room:localhost"),
+        )
+        .unwrap()
+        .results;
     assert!(!result.is_empty());
     assert_eq!(result[0].event_source, EVENT.source);
 }
