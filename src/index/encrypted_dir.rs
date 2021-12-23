@@ -16,7 +16,7 @@ use rand::{thread_rng, Rng};
 use std::{
     fs::File,
     io::{BufWriter, Cursor, Error as IoError, ErrorKind, Read, Write},
-    path::{Path}
+    path::Path,
 };
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
@@ -151,7 +151,7 @@ pub(crate) const PBKDF_COUNT: u32 = 10_000;
 /// [pbkdf]: https://en.wikipedia.org/wiki/PBKDF2
 /// [hkdf]: https://en.wikipedia.org/wiki/HKDF
 /// [hmac]: https://en.wikipedia.org/wiki/HMAC
-pub struct EncryptedMmapDirectory {    
+pub struct EncryptedMmapDirectory {
     mmap_dir: tantivy::directory::MmapDirectory,
     encryption_key: KeyBuffer,
     mac_key: KeyBuffer,
@@ -165,7 +165,7 @@ impl EncryptedMmapDirectory {
         // Open our underlying bare Tantivy mmap based directory.
         let mmap_dir = tantivy::directory::MmapDirectory::open(&path)?;
 
-        Ok(EncryptedMmapDirectory {            
+        Ok(EncryptedMmapDirectory {
             mmap_dir,
             encryption_key,
             mac_key,
@@ -504,12 +504,7 @@ impl EncryptedMmapDirectory {
     fn rederive_key(passphrase: &str, salt: &[u8], pbkdf_count: u32) -> KeyDerivationResult {
         let mut pbkdf_result = Zeroizing::new([0u8; KEY_SIZE * 2]);
 
-        pbkdf2::<Hmac<Sha512>>(
-            passphrase.as_bytes(),
-            salt,
-            pbkdf_count,
-            &mut *pbkdf_result,
-        );
+        pbkdf2::<Hmac<Sha512>>(passphrase.as_bytes(), salt, pbkdf_count, &mut *pbkdf_result);
         let (key, hmac_key) = pbkdf_result.split_at(KEY_SIZE);
         (
             Zeroizing::new(Vec::from(key)),

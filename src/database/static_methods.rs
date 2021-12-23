@@ -157,8 +157,7 @@ impl Database {
         let (new_checkpoint, old_checkpoint, events) = message;
         let transaction = connection.transaction()?;
 
-        let (ret, event_ids) =
-            Database::write_events_helper(&transaction, index_writer, events)?;
+        let (ret, event_ids) = Database::write_events_helper(&transaction, index_writer, events)?;
         Database::replace_crawler_checkpoint(
             &transaction,
             new_checkpoint.as_ref(),
@@ -900,7 +899,7 @@ impl Database {
         }
 
         let event_num = search_result.len();
-        let parameter_str = ", ?".repeat(event_num - 1);            
+        let parameter_str = ", ?".repeat(event_num - 1);
 
         let mut stmt = if order_by_recency {
             connection.prepare(&format!(
