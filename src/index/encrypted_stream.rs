@@ -353,7 +353,7 @@ fn encrypt(data: &[u8]) -> Vec<u8> {
     {
         let mut aes =
             AesWriter::<Aes128Ctr, Hmac<Sha256>, _>::new(&mut enc, &key, &hmac_key, 16).unwrap();
-        aes.write_all(&data).unwrap();
+        aes.write_all(data).unwrap();
     }
     enc
 }
