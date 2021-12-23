@@ -579,7 +579,7 @@ fn add_events_to_differing_rooms() {
 
     let searcher = index.get_searcher();
     let result = searcher
-        .search("Test", &SearchConfig::new().for_room(&EVENT.room_id))
+        .search("Test", SearchConfig::new().for_room(&EVENT.room_id))
         .unwrap()
         .results;
 
