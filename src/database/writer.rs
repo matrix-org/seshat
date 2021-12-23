@@ -117,7 +117,7 @@ impl Writer {
         let ret = Database::load_pending_deletion_events(&self.connection)?;
 
         for event_id in &ret {
-            self.inner.delete_event(&event_id);
+            self.inner.delete_event(event_id);
         }
 
         self.pending_deletion_events.extend(ret);

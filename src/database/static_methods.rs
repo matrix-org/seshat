@@ -46,7 +46,7 @@ impl Database {
         let mut event_ids = Vec::new();
 
         for (mut e, mut p) in events.drain(..) {
-            let event_id = Database::save_event(&connection, &mut e, &mut p)?;
+            let event_id = Database::save_event(connection, &mut e, &mut p)?;
             match event_id {
                 Some(id) => {
                     index_writer.add_event(&e);
@@ -100,10 +100,7 @@ impl Database {
         let transaction = connection.transaction()?;
 
         for chunk in events.chunks(50) {
-            let parameter_str = std::iter::repeat(", ?")
-                .take(chunk.len() - 1)
-                .collect::<String>();
-
+            let parameter_str = ", ?".repeat(chunk.len() - 1);
             let mut stmt = transaction.prepare(&format!(
                 "DELETE from pending_deletion_events
                      WHERE event_id IN (?{})",
@@ -130,10 +127,7 @@ impl Database {
         let transaction = connection.transaction()?;
 
         for chunk in events.chunks(50) {
-            let parameter_str = std::iter::repeat(", ?")
-                .take(chunk.len() - 1)
-                .collect::<String>();
-
+            let parameter_str = ", ?".repeat(chunk.len() - 1);
             let mut stmt = transaction.prepare(&format!(
                 "DELETE from uncommitted_events
                      WHERE id IN (?{})",
@@ -160,11 +154,11 @@ impl Database {
         force_commit: bool,
         uncommitted_events: &mut Vec<i64>,
     ) -> Result<(bool, bool)> {
-        let (new_checkpoint, old_checkpoint, mut events) = message;
+        let (new_checkpoint, old_checkpoint, events) = message;
         let transaction = connection.transaction()?;
 
         let (ret, event_ids) =
-            Database::write_events_helper(&transaction, index_writer, &mut events)?;
+            Database::write_events_helper(&transaction, index_writer, events)?;
         Database::replace_crawler_checkpoint(
             &transaction,
             new_checkpoint.as_ref(),
@@ -398,7 +392,7 @@ impl Database {
         connection: &rusqlite::Connection,
         room_id: &str,
     ) -> rusqlite::Result<i64> {
-        let room_id = Database::get_room_id(connection, &room_id)?;
+        let room_id = Database::get_room_id(connection, room_id)?;
         connection.query_row(
             "SELECT COUNT(*) FROM events WHERE room_id=?1",
             &[room_id],
@@ -705,7 +699,7 @@ impl Database {
                     FILE_EVENT_TYPES, direction, sort
                 ))?;
 
-                let room_id = Database::get_room_id(connection, &room_id)?;
+                let room_id = Database::get_room_id(connection, room_id)?;
                 let events = stmt.query_map(
                     &vec![
                         &room_id as &dyn ToSql,
@@ -739,7 +733,7 @@ impl Database {
                     FILE_EVENT_TYPES
                 ))?;
 
-                let room_id = Database::get_room_id(connection, &room_id)?;
+                let room_id = Database::get_room_id(connection, room_id)?;
                 let events =
                     stmt.query_map(&vec![&room_id as &dyn ToSql, &(limit as i64)], |row| {
                         Ok((
@@ -870,7 +864,7 @@ impl Database {
         room_id: &str,
         event_id: &str,
     ) -> rusqlite::Result<Event> {
-        let room_id = Database::get_room_id(connection, &room_id)?;
+        let room_id = Database::get_room_id(connection, room_id)?;
 
         connection.query_row(
             "SELECT type, msgtype, event_id, sender,
@@ -906,9 +900,7 @@ impl Database {
         }
 
         let event_num = search_result.len();
-        let parameter_str = std::iter::repeat(", ?")
-            .take(event_num - 1)
-            .collect::<String>();
+        let parameter_str = ", ?".repeat(event_num - 1);            
 
         let mut stmt = if order_by_recency {
             connection.prepare(&format!(

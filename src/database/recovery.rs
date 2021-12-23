@@ -223,7 +223,7 @@ impl RecoveryDatabase {
                 IoError::new(ErrorKind::Other, "Server timestamp out of valid range")
             })?,
             room_id,
-            &event_source,
+            event_source,
         ))
     }
 

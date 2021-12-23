@@ -16,7 +16,7 @@ use rand::{thread_rng, Rng};
 use std::{
     fs::File,
     io::{BufWriter, Cursor, Error as IoError, ErrorKind, Read, Write},
-    path::{Path, PathBuf},
+    path::{Path}
 };
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
@@ -151,8 +151,7 @@ pub(crate) const PBKDF_COUNT: u32 = 10_000;
 /// [pbkdf]: https://en.wikipedia.org/wiki/PBKDF2
 /// [hkdf]: https://en.wikipedia.org/wiki/HKDF
 /// [hmac]: https://en.wikipedia.org/wiki/HMAC
-pub struct EncryptedMmapDirectory {
-    path: PathBuf,
+pub struct EncryptedMmapDirectory {    
     mmap_dir: tantivy::directory::MmapDirectory,
     encryption_key: KeyBuffer,
     mac_key: KeyBuffer,
@@ -166,8 +165,7 @@ impl EncryptedMmapDirectory {
         // Open our underlying bare Tantivy mmap based directory.
         let mmap_dir = tantivy::directory::MmapDirectory::open(&path)?;
 
-        Ok(EncryptedMmapDirectory {
-            path: PathBuf::from(&path),
+        Ok(EncryptedMmapDirectory {            
             mmap_dir,
             encryption_key,
             mac_key,
@@ -305,7 +303,7 @@ impl EncryptedMmapDirectory {
     fn expand_store_key(store_key: &[u8]) -> std::io::Result<KeyDerivationResult> {
         let mut hkdf_result = Zeroizing::new([0u8; KEY_SIZE * 2]);
 
-        let hkdf = Hkdf::<Sha512>::new(None, &store_key);
+        let hkdf = Hkdf::<Sha512>::new(None, store_key);
         hkdf.expand(&[], &mut *hkdf_result).map_err(|e| {
             IoError::new(
                 ErrorKind::Other,
@@ -395,9 +393,9 @@ impl EncryptedMmapDirectory {
         let mut hmac = Hmac::<Sha256>::new_varkey(hmac_key)
             .map_err(|e| IoError::new(ErrorKind::Other, format!("error creating hmac: {:?}", e)))?;
         hmac.update(&[version]);
-        hmac.update(&iv);
-        hmac.update(&salt);
-        hmac.update(&encrypted_data);
+        hmac.update(iv);
+        hmac.update(salt);
+        hmac.update(encrypted_data);
         Ok(hmac)
     }
 
@@ -440,7 +438,7 @@ impl EncryptedMmapDirectory {
     ) -> Result<(), OpenDirectoryError> {
         // Generate a random initialization vector for our AES encryptor.
         let iv = EncryptedMmapDirectory::generate_iv()?;
-        let mut encryptor = Aes256Ctr::new_var(&key, &iv).map_err(|e| {
+        let mut encryptor = Aes256Ctr::new_var(key, &iv).map_err(|e| {
             IoError::new(
                 ErrorKind::Other,
                 format!("error creating encryptor: {:?}", e),
@@ -448,7 +446,7 @@ impl EncryptedMmapDirectory {
         })?;
 
         let mut encrypted_key = [0u8; KEY_SIZE];
-        encrypted_key.copy_from_slice(&store_key);
+        encrypted_key.copy_from_slice(store_key);
 
         let mut key_file = File::create(key_path)?;
 
@@ -456,7 +454,7 @@ impl EncryptedMmapDirectory {
         // decrypt the key again.
         key_file.write_all(&[VERSION])?;
         key_file.write_all(&iv)?;
-        key_file.write_all(&salt)?;
+        key_file.write_all(salt)?;
         key_file.write_u32::<BigEndian>(pbkdf_count)?;
 
         // Encrypt our key.
@@ -472,7 +470,7 @@ impl EncryptedMmapDirectory {
         // Calculate a MAC for our encrypted key and store it in the file before
         // the key.
         let mac =
-            EncryptedMmapDirectory::calculate_hmac(VERSION, &iv, &salt, &encrypted_key, &hmac_key)?;
+            EncryptedMmapDirectory::calculate_hmac(VERSION, &iv, salt, &encrypted_key, hmac_key)?;
         let mac = mac.finalize();
         let mac = mac.into_bytes();
         key_file.write_all(mac.as_slice())?;
@@ -507,8 +505,8 @@ impl EncryptedMmapDirectory {
         let mut pbkdf_result = Zeroizing::new([0u8; KEY_SIZE * 2]);
 
         pbkdf2::<Hmac<Sha512>>(
-            &passphrase.as_bytes(),
-            &salt,
+            passphrase.as_bytes(),
+            salt,
             pbkdf_count,
             &mut *pbkdf_result,
         );

@@ -171,7 +171,7 @@ impl Writer {
 
     /// Delete the event with the given event id from the index.
     pub fn delete_event(&mut self, event_id: &str) {
-        let term = Term::from_field_text(self.event_id_field, &event_id);
+        let term = Term::from_field_text(self.event_id_field, event_id);
         self.inner.delete_term(term);
         self.inner.commit().unwrap();
     }
@@ -307,7 +307,7 @@ impl IndexSearcher {
                     og_limit,
                     limit + SEARCH_LIMIT_INCREMENT,
                     order_by_recency,
-                    &previous_results,
+                    previous_results,
                     query,
                 )
             }
@@ -323,7 +323,7 @@ impl IndexSearcher {
     ) -> Result<SearchResult, tv::TantivyError> {
         let past_search = if let Some(token) = &config.next_batch {
             let mut search_cache = self.search_cache.write().unwrap();
-            search_cache.get_mut(&token).cloned()
+            search_cache.get_mut(token).cloned()
         } else {
             None
         };
@@ -451,7 +451,7 @@ impl Index {
     ) -> tv::Result<tv::Index> {
         match &config.passphrase {
             Some(p) => {
-                let dir = EncryptedMmapDirectory::open_or_create(path, &p, PBKDF_COUNT)?;
+                let dir = EncryptedMmapDirectory::open_or_create(path, p, PBKDF_COUNT)?;
                 tv::Index::open_or_create(dir, schema)
             }
             None => {

@@ -132,7 +132,7 @@ impl Database {
             return Err(Error::ReindexError);
         }
 
-        let index = Database::create_index(&path, &config)?;
+        let index = Database::create_index(&path, config)?;
         let writer = index.get_writer()?;
 
         // Warning: Do not open a new db connection before we write the tables
@@ -180,7 +180,7 @@ impl Database {
     pub fn change_passphrase(self, new_passphrase: &str) -> Result<()> {
         match &self.config.passphrase {
             Some(p) => {
-                Index::change_passphrase(&self.path, &p, new_passphrase)?;
+                Index::change_passphrase(&self.path, p, new_passphrase)?;
                 self.connection.lock().unwrap().pragma_update(
                     None,
                     "rekey",
@@ -243,7 +243,7 @@ impl Database {
     }
 
     fn create_index<P: AsRef<Path>>(path: &P, config: &Config) -> Result<Index> {
-        Ok(Index::new(path, &config)?)
+        Ok(Index::new(path, config)?)
     }
 
     fn spawn_writer(

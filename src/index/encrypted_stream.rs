@@ -258,7 +258,7 @@ impl<D: NewStreamCipher + SyncStreamCipher + SyncStreamCipherSeek, R: Read + See
 
         reader.seek(SeekFrom::Start(u_iv_length))?;
 
-        let dec = D::new_var(&key, &iv).map_err(|e| {
+        let dec = D::new_var(key, &iv).map_err(|e| {
             Error::new(
                 ErrorKind::Other,
                 format!("Invalid key or iv length: {}", e.to_string()),
@@ -378,7 +378,7 @@ fn enc_unaligned() {
         let mut aes =
             AesWriter::<Aes128Ctr, Hmac<Sha256>, _>::new(&mut enc, &key, &hmac_key, 16).unwrap();
         for chunk in orig.chunks(3) {
-            aes.write_all(&chunk).unwrap();
+            aes.write_all(chunk).unwrap();
         }
     }
     let dec = decrypt(Cursor::new(&enc));
