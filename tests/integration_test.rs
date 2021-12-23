@@ -200,7 +200,7 @@ fn search_quoted_with_room() {
     let result = db
         .search(
             "\"Test message\"",
-            &SearchConfig::new().for_room("!test_room:localhost"),
+            SearchConfig::new().for_room("!test_room:localhost"),
         )
         .unwrap()
         .results;
@@ -316,7 +316,7 @@ fn search_with_specific_key() {
     db.reload().unwrap();
 
     let result = searcher
-        .search("Test", &SearchConfig::new().with_key(EventType::Topic))
+        .search("Test", SearchConfig::new().with_key(EventType::Topic))
         .unwrap()
         .results;
     assert!(result.is_empty());
@@ -327,7 +327,7 @@ fn search_with_specific_key() {
 
     let searcher = db.get_searcher();
     let result = searcher
-        .search("Test", &SearchConfig::new().with_key(EventType::Topic))
+        .search("Test", SearchConfig::new().with_key(EventType::Topic))
         .unwrap()
         .results;
     assert_eq!(result.len(), 1);
