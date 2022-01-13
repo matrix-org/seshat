@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.3.1 - 2022-01-13
+
+- [[#104]] Fix quote search when passing a room_id
+- [[#103]] Upgrade our deps
+
+[#104]: https://github.com/matrix-org/seshat/pull/104
+[#103]: https://github.com/matrix-org/seshat/pull/103
+
 ## 2.3.0 - 2021-07-21
 
 - [[#99]] Switch to a fork of neon-serde
