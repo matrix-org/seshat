@@ -890,7 +890,7 @@ fn resume_committing() {
         if counter > 10 {
             break;
         }
-        thread::sleep(time::Duration::from_millis(10));
+        thread::sleep(time::Duration::from_millis(100));
         db = Database::new(tmpdir.path())
     }
 
