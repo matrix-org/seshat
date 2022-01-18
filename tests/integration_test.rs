@@ -205,19 +205,20 @@ fn search_with_room() {
         ("Test", true),
         ("message", true),
         ("massage", false),
-        ("\"Test massage\"", false)
+        ("\"Test massage\"", false),
     ];
 
     for (phrase, should_match) in cases.iter() {
         let result = db
-            .search(
-                phrase,
-                SearchConfig::new().for_room("!test_room:localhost"),
-            )
+            .search(phrase, SearchConfig::new().for_room("!test_room:localhost"))
             .unwrap()
-            .results;        
-        assert!(should_match == &!result.is_empty(), 
-            "searching for '{}' should not return a result, but found {}", phrase, result[0].event_source);
+            .results;
+        assert!(
+            should_match == &!result.is_empty(),
+            "searching for '{}' should not return a result, but found {}",
+            phrase,
+            result[0].event_source
+        );
         if *should_match {
             assert_eq!(result[0].event_source, EVENT.source);
         }
