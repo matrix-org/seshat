@@ -188,7 +188,7 @@ fn save_and_search() {
 }
 
 #[test]
-fn search_quoted_with_room() {
+fn search_with_room() {
     let tmpdir = tempdir().unwrap();
     let mut db = Database::new(tmpdir.path()).unwrap();
     let profile = Profile::new("Alice", "");
@@ -197,15 +197,31 @@ fn search_quoted_with_room() {
     db.force_commit().unwrap();
     db.reload().unwrap();
 
-    let result = db
-        .search(
-            "\"Test message\"",
-            SearchConfig::new().for_room("!test_room:localhost"),
-        )
-        .unwrap()
-        .results;
-    assert!(!result.is_empty());
-    assert_eq!(result[0].event_source, EVENT.source);
+    let cases = vec![
+        ("\"Test message\"", true),
+        ("Test message", true),
+        ("Test anything", true),
+        ("anything message", true),
+        ("Test", true),
+        ("message", true),
+        ("massage", false),
+        ("\"Test massage\"", false)
+    ];
+
+    for (phrase, should_match) in cases.iter() {
+        let result = db
+            .search(
+                phrase,
+                SearchConfig::new().for_room("!test_room:localhost"),
+            )
+            .unwrap()
+            .results;        
+        assert!(should_match == &!result.is_empty(), 
+            "searching for '{}' should not return a result, but found {}", phrase, result[0].event_source);
+        if *should_match {
+            assert_eq!(result[0].event_source, EVENT.source);
+        }
+    }
 }
 
 #[test]
