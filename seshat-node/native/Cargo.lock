@@ -1607,9 +1607,9 @@ dependencies = [
 
 [[package]]
 name = "seshat"
-version = "2.3.2"
+version = "2.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "059290a44dbaa809f4837ad5e7ad269c8d6225f1bef6a024fb040b310efe1af0"
+checksum = "76f2da7ce4d4fbb87d889c6013dbae592a34b0e9060a890f2ab6e14cc63287d6"
 dependencies = [
  "aes",
  "byteorder",
@@ -1635,7 +1635,7 @@ dependencies = [
 
 [[package]]
 name = "seshat-node"
-version = "2.3.2"
+version = "2.3.3"
 dependencies = [
  "fs_extra",
  "neon",
