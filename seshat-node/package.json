@@ -9,8 +9,8 @@
     "neon-cli": "^0.8.2"
   },
   "devDependencies": {
-    "eslint": "^6.2.2",
-    "eslint-config-google": "^0.13.0",
+    "eslint": "^8.7.0",
+    "eslint-config-google": "^0.14.0",
     "jest": "^27.4.0",
     "jsdoc": "^3.6.3"
   },

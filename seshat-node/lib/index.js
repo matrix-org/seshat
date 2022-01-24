@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-const { promisify } = require('util');
+const {promisify} = require('util');
 const seshatNative = require('../native');
 
 /**
@@ -303,8 +303,8 @@ class Seshat {
      */
     searchSync(term, limit = 10, before_limit = 0, after_limit = 0,
         order_by_recency = false) {
-        return seshatNative.searchSync(this.inner, term, limit, before_limit, after_limit,
-            order_by_recency);
+        return seshatNative.searchSync(this.inner, term, limit, before_limit,
+            after_limit, order_by_recency);
     }
 
     /**
@@ -319,8 +319,8 @@ class Seshat {
      * false otherwise.
      */
     addHistoricEventsSync(events, newCheckpoint = null, oldCheckPoint = null) {
-        return seshatNative.addHistoricEventsSync(this.inner, events, newCheckpoint,
-            oldCheckPoint);
+        return seshatNative.addHistoricEventsSync(this.inner, events,
+            newCheckpoint, oldCheckPoint);
     }
 
     /**
@@ -336,7 +336,13 @@ class Seshat {
      */
     async addHistoricEvents(events, newCheckpoint = null, oldCheckPoint = null) {
         const addHistoricEvents = promisify(seshatNative.addHistoricEvents);
-        return addHistoricEvents(this.inner, events, newCheckpoint, oldCheckPoint);
+
+        return addHistoricEvents(
+            this.inner,
+            events,
+            newCheckpoint,
+            oldCheckPoint,
+        );
     }
 
     /**
@@ -547,7 +553,7 @@ class SeshatRecovery {
     /**
      * Get info about the re-index status.
      *
-     * @return {RecoveryInfo} A object that holds the number of total events,
+     * @return {recoveryInfo} A object that holds the number of total events,
      * re-indexed events and the done percentage.
      */
     info() {
