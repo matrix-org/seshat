@@ -11,7 +11,7 @@
   "devDependencies": {
     "eslint": "^6.2.2",
     "eslint-config-google": "^0.13.0",
-    "jest": "^24.9.0",
+    "jest": "^27.4.0",
     "jsdoc": "^3.6.3"
   },
   "scripts": {
