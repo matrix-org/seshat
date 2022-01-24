@@ -50,3 +50,10 @@ Once events have been added a search can be done:
 ```
 let result = database.search("test", &SearchConfig::new()).unwrap();
 ```
+
+## Development
+
+Seshat uses standard cargo commands `build` and `test`.
+
+You can install [pre-commit](https://pre-commit.com/) and then `pre-commit install` 
+to ensure your work is linted on commit.
