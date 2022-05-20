@@ -274,8 +274,8 @@ class Seshat {
      * followed the event that matched the search term.
      * @param  {boolean} args.order_by_recency Should the search results be
      * ordered by event recency.
-     * @param  {string} args.next_batch Should the search results be
-     * ordered by event recency.
+     * @param  {string} args.next_batch The token to request the next page of
+     * results.
      *
      * @return {Promise<searchResult>} The array of events that matched
      * the search term.
@@ -470,7 +470,7 @@ class Seshat {
     /**
      * Get the custom user specific version from the database.
      *
-     * @return {Promise<boolean>} A promise that will resolve to a number that
+     * @return {Promise<number>} A promise that will resolve to a number that
      * represents the user version of the database.
      */
     async getUserVersion() {
@@ -563,7 +563,7 @@ class SeshatRecovery {
     /**
      * Get the custom user specific version from the database.
      *
-     * @return {Promise<boolean>} A promise that will resolve to a number that
+     * @return {Promise<number>} A promise that will resolve to a number that
      * represents the user version of the database.
      */
     async getUserVersion() {
