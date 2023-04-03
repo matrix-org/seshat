@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.3.4 - 2023-04-03
+
+- [[#117]] Add a feature to build with static sqlcipher and openssl
+
+[#117]: https://github.com/matrix-org/seshat/pull/117
+
 ## 2.3.3 - 2022-01-24
 
 - [[#106]] Bracket search terms so multiple words in a search term don't cause a syntax error

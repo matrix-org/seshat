@@ -74,7 +74,7 @@ impl Database {
         Database::delete_event_by_id(&transaction, &event_id)?;
         transaction.execute(
             "INSERT OR IGNORE INTO pending_deletion_events (event_id) VALUES (?1)",
-            &[&event_id],
+            [&event_id],
         )?;
         transaction.commit().unwrap();
 
@@ -420,7 +420,7 @@ impl Database {
             INSERT OR IGNORE INTO profile (
                 user_id, displayname, avatar_url
             ) VALUES(?1, ?2, ?3)",
-            &[user_id, displayname, avatar_url],
+            [user_id, displayname, avatar_url],
         )?;
 
         let profile_id: i64 = connection.query_row(
@@ -429,7 +429,7 @@ impl Database {
                 user_id=?1
                 and displayname=?2
                 and avatar_url=?3)",
-            &[user_id, displayname, avatar_url],
+            [user_id, displayname, avatar_url],
             |row| row.get(0),
         )?;
 
@@ -459,10 +459,10 @@ impl Database {
         connection: &rusqlite::Connection,
         room: &str,
     ) -> rusqlite::Result<i64> {
-        connection.execute("INSERT OR IGNORE INTO rooms (room_id) VALUES(?1)", &[room])?;
+        connection.execute("INSERT OR IGNORE INTO rooms (room_id) VALUES(?1)", [room])?;
 
         let room_id: i64 =
-            connection.query_row("SELECT id FROM rooms WHERE (room_id=?1)", &[room], |row| {
+            connection.query_row("SELECT id FROM rooms WHERE (room_id=?1)", [room], |row| {
                 row.get(0)
             })?;
 
@@ -523,7 +523,7 @@ impl Database {
             ) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
         )?;
 
-        let event_id = statement.insert(&[
+        let event_id = statement.insert([
             &event.event_id,
             &event.sender,
             &event.server_ts as &dyn ToSql,
@@ -541,7 +541,7 @@ impl Database {
             ) VALUES (?1, ?2)",
         )?;
 
-        let id = stmt.insert(&[&event_id as &dyn ToSql, &event.content_value])?;
+        let id = stmt.insert([&event_id as &dyn ToSql, &event.content_value])?;
 
         Ok(id)
     }
@@ -564,8 +564,8 @@ impl Database {
                     // bytes and converting it to a C string isn't possible this
                     // way. This is likely some string containing malicious nul
                     // bytes so we filter them out.
-                    profile.displayname = profile.displayname.as_mut().map(|d| d.replace("\0", ""));
-                    profile.avatar_url = profile.avatar_url.as_mut().map(|u| u.replace("\0", ""));
+                    profile.displayname = profile.displayname.as_mut().map(|d| d.replace('\0', ""));
+                    profile.avatar_url = profile.avatar_url.as_mut().map(|u| u.replace('\0', ""));
                     Database::save_profile(connection, &event.sender, profile)?
                 }
                 _ => return Err(e.into()),
@@ -582,8 +582,8 @@ impl Database {
                     // complain about the unique constraint that we have for
                     // the event id.
                     Database::delete_event_by_id(connection, &event.event_id)?;
-                    event.content_value = event.content_value.replace("\0", "");
-                    event.msgtype = event.msgtype.as_mut().map(|m| m.replace("\0", ""));
+                    event.content_value = event.content_value.replace('\0', "");
+                    event.msgtype = event.msgtype.as_mut().map(|m| m.replace('\0', ""));
                     Database::save_event_helper(connection, event, profile_id)?
                 }
                 _ => return Err(e.into()),
@@ -597,7 +597,7 @@ impl Database {
         connection: &rusqlite::Connection,
         event_id: &str,
     ) -> rusqlite::Result<usize> {
-        connection.execute("DELETE from events WHERE event_id == ?1", &[event_id])
+        connection.execute("DELETE from events WHERE event_id == ?1", [event_id])
     }
 
     pub(crate) fn event_in_store(
@@ -610,7 +610,7 @@ impl Database {
             SELECT COUNT(*) FROM events WHERE (
                 event_id=?1
                 and room_id=?2)",
-            &[&event.event_id, &room_id as &dyn ToSql],
+            [&event.event_id, &room_id as &dyn ToSql],
             |row| row.get(0),
         )?;
 
@@ -848,7 +848,7 @@ impl Database {
              FROM events
              INNER JOIN rooms on rooms.id = events.room_id
              WHERE (events.room_id == ?1) & (event_id == ?2)",
-            &[&room_id as &dyn ToSql, &event_id],
+            [&room_id as &dyn ToSql, &event_id],
             |row| {
                 Ok(Event {
                     event_type: row.get(0)?,
@@ -970,7 +970,7 @@ impl Database {
             connection.execute(
                 "INSERT OR IGNORE INTO crawlercheckpoints
                 (room_id, token, full_crawl, direction) VALUES(?1, ?2, ?3, ?4)",
-                &[
+                [
                     &checkpoint.room_id,
                     &checkpoint.token,
                     &checkpoint.full_crawl as &dyn ToSql,
@@ -983,7 +983,7 @@ impl Database {
             connection.execute(
                 "DELETE FROM crawlercheckpoints
                 WHERE (room_id=?1 AND token=?2 AND full_crawl=?3 AND direction=?4)",
-                &[
+                [
                     &checkpoint.room_id,
                     &checkpoint.token,
                     &checkpoint.full_crawl as &dyn ToSql,

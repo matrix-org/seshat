@@ -94,7 +94,7 @@ impl Searcher {
 
         let events = loop {
             match Database::load_events(
-                &*self.database.lock().unwrap(),
+                &self.database.lock().unwrap(),
                 &search_result.results,
                 config.before_limit,
                 config.after_limit,
