@@ -135,7 +135,7 @@ impl Task for SearchTask {
         search_result.set(&mut cx, "highlights", highlights)?;
 
         if let Some(next_batch) = ret.next_batch {
-            let next_batch = cx.string(next_batch.to_hyphenated().to_string());
+            let next_batch = cx.string(next_batch.hyphenated().to_string());
             search_result.set(&mut cx, "next_batch", next_batch)?;
         }
 
