@@ -734,7 +734,7 @@ fn duplicate_empty_profiles() {
         .prepare("SELECT id FROM profile WHERE user_id=?1")
         .unwrap();
 
-    let profile_ids = stmt.query_map(&[user_id], |row| row.get(0)).unwrap();
+    let profile_ids = stmt.query_map([user_id], |row| row.get(0)).unwrap();
 
     let mut id_count = 0;
 
