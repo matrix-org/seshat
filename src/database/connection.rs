@@ -94,7 +94,7 @@ impl Connection {
         let event_count: i64 = Database::get_event_count_for_room(&self.inner, room_id)?;
         let checkpoint_count: i64 = self.query_row(
             "SELECT COUNT(*) FROM crawlercheckpoints WHERE room_id=?1",
-            &[room_id],
+            [room_id],
             |row| row.get(0),
         )?;
 

@@ -95,7 +95,7 @@ impl RecoveryDatabase {
         PathBuf: std::convert::From<P>,
     {
         let db_path = path.as_ref().join(EVENTS_DB_NAME);
-        let manager = SqliteConnectionManager::file(&db_path);
+        let manager = SqliteConnectionManager::file(db_path);
         let pool = r2d2::Pool::new(manager)?;
 
         let mut connection = pool.get()?;

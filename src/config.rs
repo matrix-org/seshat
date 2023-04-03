@@ -263,19 +263,14 @@ impl Default for Config {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 #[allow(missing_docs)]
 pub enum LoadDirection {
+    #[default]
     #[serde(rename = "b", alias = "backwards", alias = "backward")]
     Backwards,
     #[serde(rename = "f", alias = "forwards", alias = "forward")]
     Forwards,
-}
-
-impl Default for LoadDirection {
-    fn default() -> LoadDirection {
-        LoadDirection::Backwards
-    }
 }
 
 /// Configuration for the event loading methods.

@@ -107,7 +107,7 @@ impl Database {
         PathBuf: std::convert::From<P>,
     {
         let db_path = path.as_ref().join(EVENTS_DB_NAME);
-        let manager = SqliteConnectionManager::file(&db_path);
+        let manager = SqliteConnectionManager::file(db_path);
         let pool = r2d2::Pool::new(manager)?;
 
         let mut connection = pool.get()?;
@@ -156,8 +156,8 @@ impl Database {
 
     fn set_pragmas(connection: &rusqlite::Connection) -> Result<()> {
         connection.pragma_update(None, "foreign_keys", &1 as &dyn ToSql)?;
-        connection.pragma_update(None, "journal_mode", &"WAL")?;
-        connection.pragma_update(None, "synchronous", &"NORMAL")?;
+        connection.pragma_update(None, "journal_mode", "WAL")?;
+        connection.pragma_update(None, "synchronous", "NORMAL")?;
         connection.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);")?;
         Ok(())
     }

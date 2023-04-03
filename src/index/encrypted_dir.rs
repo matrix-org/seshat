@@ -163,7 +163,7 @@ impl EncryptedMmapDirectory {
         let (encryption_key, mac_key) = EncryptedMmapDirectory::expand_store_key(&store_key)?;
 
         // Open our underlying bare Tantivy mmap based directory.
-        let mmap_dir = tantivy::directory::MmapDirectory::open(&path)?;
+        let mmap_dir = tantivy::directory::MmapDirectory::open(path)?;
 
         Ok(EncryptedMmapDirectory {
             mmap_dir,
@@ -248,7 +248,7 @@ impl EncryptedMmapDirectory {
         }
 
         let key_path = path.as_ref().join(KEYFILE);
-        let key_file = File::open(&key_path)?;
+        let key_file = File::open(key_path)?;
 
         // Expand the store key into a encryption and MAC key.
         let (_, store_key) = EncryptedMmapDirectory::load_store_key(key_file, passphrase)?;

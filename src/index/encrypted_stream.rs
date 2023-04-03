@@ -281,7 +281,7 @@ impl<D: NewCipher + StreamCipher, R: Read + Seek + Clone> AesReader<D, R> {
         total_length: u64,
         mac_length: u64,
     ) -> Result<usize> {
-        let current_pos = reader.seek(SeekFrom::Current(0))?;
+        let current_pos = reader.stream_position()?;
         let mac_start = total_length - mac_length;
 
         if current_pos >= mac_start {
