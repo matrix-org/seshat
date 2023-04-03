@@ -17,9 +17,9 @@ bundled-sqlcipher = ["encryption", "rusqlite/bundled-sqlcipher-vendored-openssl"
 [dependencies]
 tantivy = "0.12.0"
 tinysegmenter = "0.1.1"
-rusqlite = "0.26.3"
+rusqlite = "0.28.0"
 fs_extra = "1.2.0"
-r2d2_sqlite = "0.19.0"
+r2d2_sqlite = "0.21.0"
 r2d2 = "0.8.9"
 lru-cache = "0.1.2"
 uuid = { version = "0.8.2", features = ["v4"] }
