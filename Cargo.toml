@@ -12,6 +12,7 @@ repository="https://github.com/matrix-org/seshat/"
 default = ["encryption"]
 encryption = ["rusqlite/sqlcipher", "aes", "crypto-mac", "hmac", "sha2",
               "hkdf", "pbkdf2", "rand", "zeroize", "byteorder"]
+encryption-bundled = ["encryption", "rusqlite/bundled-sqlcipher-vendored-openssl"]
 
 [dependencies]
 tantivy = "0.12.0"
