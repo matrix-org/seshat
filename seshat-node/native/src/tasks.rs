@@ -38,12 +38,12 @@ pub trait Task: Send + Sized + 'static {
 
     /// Schedule the task to be executed on a background thread.
     ///
-    /// The last argument of the `FucntionContext` needs to be a `JsFunction`.
+    /// The last argument of the `FunctionContext` needs to be a `JsFunction`.
     fn schedule(self, mut cx: FunctionContext) -> JsResult<JsUndefined> {
         let callback = cx
             .argument::<JsFunction>(cx.len().saturating_sub(1))?
             .root(&mut cx);
-        let queue = cx.queue();
+        let queue = cx.channel();
 
         std::thread::spawn(move || {
             let result = self.perform();
