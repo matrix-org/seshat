@@ -15,7 +15,7 @@ jobs:
 
     steps:
     - name: Checkout the repo
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
 
     - name: Install rust
       uses: actions-rs/toolchain@v1
@@ -38,7 +38,7 @@ jobs:
 
     steps:
     - name: Checkout the repo
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
 
     - name: Install rust
       uses: actions-rs/toolchain@v1
@@ -54,7 +54,7 @@ jobs:
         command: clippy
         args: --all-targets -- -D warnings
 
-  test:
+  build-test:
     name: ${{ matrix.name }}
     needs: [clippy]
 
@@ -77,7 +77,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v1
+        uses: actions/checkout@v3
 
       - name: Install rust
         uses: actions-rs/toolchain@v1
@@ -87,28 +87,32 @@ jobs:
           profile: minimal
           override: true
 
-      - name: Install node
-        uses: actions/setup-node@v2
-        with:
-            node-version: '12'
-
-      - name: Install sqlcipher for macOS
-        if: startsWith(matrix.os, 'macOS')
-        run: |
-            HOMEBREW_NO_AUTO_UPDATE=1 brew install sqlcipher
-
-      - name: Install sqlcipher for Linux
-        if: ${{ !startsWith(matrix.os, 'macOS') }}
-        run: |
-            sudo apt-get update -q
-            sudo apt-get install libsqlcipher-dev -y
-
-      - name: Build
+      - name: Build Rust
         uses: actions-rs/cargo@v1
         with:
           command: build
+          args: --features=bundled-sqlcipher
 
-      - name: Test
+      - name: Test Rust
         uses: actions-rs/cargo@v1
         with:
           command: test
+          args: --features=bundled-sqlcipher
+
+      # Checkout again to reset the test DB state
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Install node
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install node build dependencies
+        run: cd seshat-node && yarn install
+
+      - name: Build node module
+        run: cd seshat-node && yarn run build-bundled
+
+      - name: Test node module
+        run: cd seshat-node && yarn run test
