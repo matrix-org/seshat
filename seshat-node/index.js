@@ -13,7 +13,7 @@
 // limitations under the License.
 
 const {promisify} = require('util');
-const seshatNative = require('../native');
+const seshatNative = require('./index.node');
 
 /**
  * @typedef searchResult
