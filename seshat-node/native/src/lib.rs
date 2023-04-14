@@ -207,12 +207,12 @@ impl Seshat {
     fn add_event(mut cx: FunctionContext) -> JsResult<JsUndefined> {
         let this = cx.argument::<JsBox<RefCell<Seshat>>>(0)?;
         let event = cx.argument::<JsObject>(1)?;
-        let event = parse_event(&mut cx, *event)?;
+        let event = parse_event(&mut cx, event)?;
 
         let profile = match cx.argument_opt(2) {
             Some(p) => {
                 let p = p.downcast::<JsObject, _>(&mut cx).or_throw(&mut cx)?;
-                parse_profile(&mut cx, *p)?
+                parse_profile(&mut cx, p)?
             }
             None => Profile {
                 displayname: None,
@@ -663,38 +663,27 @@ impl Seshat {
         let args = cx.argument::<JsObject>(1)?;
 
         let room_id = args
-            .get(&mut cx, "roomId")?
-            .downcast::<JsString, _>(&mut cx)
-            .or_throw(&mut cx)?
+            .get::<JsString, _, _>(&mut cx, "roomId")?
             .value(&mut cx);
 
         let mut config = LoadConfig::new(room_id);
-
-        let limit = args
-            .get(&mut cx, "limit")?
-            .downcast::<JsNumber, _>(&mut cx)
-            .or_throw(&mut cx)?
-            .value(&mut cx);
+        let limit = args.get::<JsNumber, _, _>(&mut cx, "limit")?.value(&mut cx);
 
         config = config.limit(limit as usize);
 
-        if let Ok(e) = args.get(&mut cx, "fromEvent") {
-            if let Ok(e) = e.downcast::<JsString, _>(&mut cx) {
-                config = config.from_event(e.value(&mut cx));
-            }
+        if let Some(e) = args.get_opt::<JsString, _, _>(&mut cx, "fromEvent")? {
+            config = config.from_event(e.value(&mut cx));
         };
 
-        if let Ok(d) = args.get(&mut cx, "direction") {
-            if let Ok(e) = d.downcast::<JsString, _>(&mut cx) {
-                let direction = match e.value(&mut cx).to_lowercase().as_ref() {
-                    "backwards" | "backward" | "b" => LoadDirection::Backwards,
-                    "forwards" | "forward" | "f" => LoadDirection::Forwards,
-                    "" => LoadDirection::Backwards,
-                    d => return cx.throw_error(format!("Unknown load direction {}", d)),
-                };
+        if let Some(d) = args.get_opt::<JsString, _, _>(&mut cx, "direction")? {
+            let direction = match d.value(&mut cx).to_lowercase().as_ref() {
+                "backwards" | "backward" | "b" => LoadDirection::Backwards,
+                "forwards" | "forward" | "f" => LoadDirection::Forwards,
+                "" => LoadDirection::Backwards,
+                d => return cx.throw_error(format!("Unknown load direction {}", d)),
+            };
 
-                config = config.direction(direction);
-            }
+            config = config.direction(direction);
         }
 
         let connection = {

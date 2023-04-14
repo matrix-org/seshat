@@ -400,7 +400,7 @@ describe('Database', function() {
 
     it('should allow us to create a db with a specific language', async function() {
         const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'seshat-'));
-        expect(() => new Seshat(tempDir, {language: "unknown"})).toThrow('Unsuported language: unknown');
+        expect(() => new Seshat(tempDir, {language: "unknown"})).toThrow('Unsupported language: unknown');
 
         const db = new Seshat(tempDir, {language: "german"});
 

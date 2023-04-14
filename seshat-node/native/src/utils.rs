@@ -30,26 +30,23 @@ pub(crate) fn parse_database_config(
     if let Some(c) = argument {
         let c = c.downcast::<JsObject, _>(cx).or_throw(&mut *cx)?;
 
-        if let Ok(l) = c.get(&mut *cx, "language") {
-            if let Ok(l) = l.downcast::<JsString, _>(cx) {
-                let language = Language::from(l.value(cx).as_ref());
-                match language {
-                    Language::Unknown => {
-                        let value = l.value(cx);
-                        return cx.throw_type_error(format!("Unsuported language: {}", value));
-                    }
-                    _ => {
-                        config = config.set_language(&language);
-                    }
+        if let Some(l) = c.get_opt::<JsString, _, _>(&mut *cx, "language")? {
+            let language = Language::from(l.value(cx).as_ref());
+
+            match language {
+                Language::Unknown => {
+                    let value = l.value(cx);
+                    return cx.throw_type_error(format!("Unsupported language: {}", value));
+                }
+                _ => {
+                    config = config.set_language(&language);
                 }
             }
         }
 
-        if let Ok(p) = c.get(&mut *cx, "passphrase") {
-            if let Ok(p) = p.downcast::<JsString, _>(cx) {
-                let passphrase: String = p.value(cx);
-                config = config.set_passphrase(passphrase);
-            }
+        if let Some(p) = c.get_opt::<JsString, _, _>(&mut *cx, "passphrase")? {
+            let passphrase: String = p.value(cx);
+            config = config.set_passphrase(passphrase);
         }
     }
 
@@ -61,72 +58,56 @@ pub(crate) fn parse_search_object(
     argument: Handle<JsObject>,
 ) -> Result<(String, SearchConfig), neon::result::Throw> {
     let term = argument
-        .get(&mut *cx, "search_term")?
-        .downcast::<JsString, _>(cx)
-        .or_throw(&mut *cx)?
+        .get::<JsString, _, _>(&mut *cx, "search_term")?
         .value(cx);
 
     let mut config = SearchConfig::new();
 
-    if let Ok(v) = argument.get(&mut *cx, "limit") {
-        if let Ok(v) = v.downcast::<JsNumber, _>(cx) {
-            config.limit(v.value(cx) as usize);
-        }
+    if let Some(v) = argument.get_opt::<JsNumber, _, _>(&mut *cx, "limit")? {
+        config.limit(v.value(cx) as usize);
     }
 
-    if let Ok(v) = argument.get(&mut *cx, "before_limit") {
-        if let Ok(v) = v.downcast::<JsNumber, _>(cx) {
-            config.before_limit(v.value(cx) as usize);
-        }
+    if let Some(v) = argument.get_opt::<JsNumber, _, _>(&mut *cx, "before_limit")? {
+        config.before_limit(v.value(cx) as usize);
     }
 
-    if let Ok(v) = argument.get(&mut *cx, "after_limit") {
-        if let Ok(v) = v.downcast::<JsNumber, _>(cx) {
-            config.after_limit(v.value(cx) as usize);
-        }
+    if let Some(v) = argument.get_opt::<JsNumber, _, _>(&mut *cx, "after_limit")? {
+        config.after_limit(v.value(cx) as usize);
     }
 
-    if let Ok(v) = argument.get(&mut *cx, "order_by_recency") {
-        if let Ok(v) = v.downcast::<JsBoolean, _>(cx) {
-            config.order_by_recency(v.value(cx));
-        }
+    if let Some(v) = argument.get_opt::<JsBoolean, _, _>(&mut *cx, "order_by_recency")? {
+        config.order_by_recency(v.value(cx));
     }
 
-    if let Ok(r) = argument.get(&mut *cx, "room_id") {
-        if let Ok(r) = r.downcast::<JsString, _>(cx) {
-            config.for_room(&r.value(cx));
-        }
+    if let Some(r) = argument.get_opt::<JsString, _, _>(&mut *cx, "room_id")? {
+        config.for_room(&r.value(cx));
     }
 
-    if let Ok(t) = argument.get(&mut *cx, "next_batch") {
-        if let Ok(t) = t.downcast::<JsString, _>(cx) {
-            let token = if let Ok(t) = Uuid::parse_str(&t.value(cx)) {
-                t
-            } else {
-                let value = t.value(cx);
-                return cx.throw_type_error(format!("Invalid next_batch token {}", value));
+    if let Some(t) = argument.get_opt::<JsString, _, _>(&mut *cx, "next_batch")? {
+        let token = if let Ok(t) = Uuid::parse_str(&t.value(cx)) {
+            t
+        } else {
+            let value = t.value(cx);
+            return cx.throw_type_error(format!("Invalid next_batch token {}", value));
+        };
+
+        config.next_batch(token);
+    }
+
+    if let Some(k) = argument.get_opt::<JsArray, _, _>(&mut *cx, "keys")? {
+        let mut keys: Vec<Handle<JsValue>> = k.to_vec(&mut *cx)?;
+
+        for key in keys.drain(..) {
+            let key = key
+                .downcast::<JsString, _>(cx)
+                .or_throw(&mut *cx)?
+                .value(cx);
+            match key.as_ref() {
+                "content.body" => config.with_key(EventType::Message),
+                "content.topic" => config.with_key(EventType::Topic),
+                "content.name" => config.with_key(EventType::Name),
+                _ => return cx.throw_type_error(format!("Invalid search key {}", key)),
             };
-
-            config.next_batch(token);
-        }
-    }
-
-    if let Ok(k) = argument.get(&mut *cx, "keys") {
-        if let Ok(k) = k.downcast::<JsArray, _>(cx) {
-            let mut keys: Vec<Handle<JsValue>> = k.to_vec(&mut *cx)?;
-
-            for key in keys.drain(..) {
-                let key = key
-                    .downcast::<JsString, _>(cx)
-                    .or_throw(&mut *cx)?
-                    .value(cx);
-                match key.as_ref() {
-                    "content.body" => config.with_key(EventType::Message),
-                    "content.topic" => config.with_key(EventType::Topic),
-                    "content.name" => config.with_key(EventType::Name),
-                    _ => return cx.throw_type_error(format!("Invalid search key {}", key)),
-                };
-            }
         }
     }
 
@@ -139,7 +120,7 @@ pub(crate) fn parse_checkpoint(
 ) -> Result<Option<CrawlerCheckpoint>, neon::result::Throw> {
     match argument {
         Some(c) => match c.downcast::<JsObject, _>(cx) {
-            Ok(object) => Ok(Some(js_checkpoint_to_rust(cx, *object)?)),
+            Ok(object) => Ok(Some(js_checkpoint_to_rust(cx, object)?)),
             Err(_e) => {
                 let _o = c.downcast::<JsNull, _>(cx).or_throw(cx)?;
                 Ok(None)
@@ -166,24 +147,12 @@ pub(crate) fn add_historic_events_helper(
     for obj in js_events.drain(..) {
         let obj = obj.downcast::<JsObject, _>(cx).or_throw(cx)?;
 
-        let event = obj
-            .get(cx, "event")?
-            .downcast::<JsObject, _>(cx)
-            .or_throw(cx)?;
-        let event = parse_event(cx, *event)?;
+        let event = obj.get::<JsObject, _, _>(cx, "event")?;
+        let event = parse_event(cx, event)?;
 
-        let profile: Profile = match obj.get(cx, "profile") {
-            Ok(p) => {
-                if let Ok(p) = p.downcast::<JsObject, _>(cx) {
-                    parse_profile(cx, *p)?
-                } else {
-                    Profile {
-                        displayname: None,
-                        avatar_url: None,
-                    }
-                }
-            }
-            Err(_e) => Profile {
+        let profile: Profile = match obj.get_opt::<JsObject, _, _>(cx, "profile")? {
+            Some(p) => parse_profile(cx, p)?,
+            None => Profile {
                 displayname: None,
                 avatar_url: None,
             },
@@ -224,7 +193,7 @@ pub(crate) fn deserialize_event<'a, C: Context<'a>>(
         }
     };
 
-    let ret = match neon_serde2::to_value(&mut *cx, &source) {
+    let ret = match neon_serde3::to_value(&mut *cx, &source) {
         Ok(v) => v,
         Err(e) => return cx.throw_error::<_, _>(e.to_string()),
     };
@@ -253,7 +222,7 @@ pub(crate) fn search_result_to_js<'a, C: Context<'a>>(
             Ok(e) => e,
             Err(_) => continue,
         };
-        let js_event = match neon_serde2::to_value(&mut *cx, &js_event) {
+        let js_event = match neon_serde3::to_value(&mut *cx, &js_event) {
             Ok(v) => v,
             Err(e) => return cx.throw_error::<_, _>(e.to_string()),
         };
@@ -266,7 +235,7 @@ pub(crate) fn search_result_to_js<'a, C: Context<'a>>(
             Ok(e) => e,
             Err(_) => continue,
         };
-        let js_event = match neon_serde2::to_value(&mut *cx, &js_event) {
+        let js_event = match neon_serde3::to_value(&mut *cx, &js_event) {
             Ok(v) => v,
             Err(e) => return cx.throw_error::<_, _>(e.to_string()),
         };
@@ -333,85 +302,78 @@ pub(crate) fn sender_and_profile_to_js<'a, C: Context<'a>>(
 
 pub(crate) fn parse_event(
     cx: &mut FunctionContext,
-    event: JsObject,
+    event: Handle<JsObject>,
 ) -> Result<Event, neon::result::Throw> {
-    let sender: String = event
-        .get(&mut *cx, "sender")?
-        .downcast::<JsString, _>(cx)
-        .or_else(|_| cx.throw_type_error("Event doesn't contain a valid sender"))?
-        .value(cx);
+    let get_string = |cx: &mut FunctionContext, event: Handle<JsObject>, key: &str, error: &str| {
+        Ok(event
+            .get_value(&mut *cx, key)
+            .and_then(|v| {
+                v.downcast::<JsString, _>(cx)
+                    .or_else(|_| cx.throw_type_error(error))
+            })?
+            .value(cx))
+    };
 
-    let event_id: String = event
-        .get(&mut *cx, "event_id")?
-        .downcast::<JsString, _>(cx)
-        .or_else(|_| cx.throw_type_error("Event doesn't contain a valid event id"))?
-        .value(cx);
-
-    let server_timestamp: i64 = event
-        .get(&mut *cx, "origin_server_ts")?
-        .downcast::<JsNumber, _>(cx)
-        .or_else(|_| cx.throw_type_error("Event doesn't contain a valid timestamp"))?
+    let sender = get_string(cx, event, "sender", "Event doesn't contain a valid sender")?;
+    let event_id = get_string(
+        cx,
+        event,
+        "event_id",
+        "Event doesn't contain a valid event id",
+    )?;
+    let server_timestamp = event
+        .get_value(&mut *cx, "origin_server_ts")
+        .and_then(|v| {
+            v.downcast::<JsNumber, _>(cx)
+                .or_else(|_| cx.throw_type_error("Event doesn't contain a valid timestamp"))
+        })?
         .value(cx) as i64;
 
-    let room_id: String = event
-        .get(&mut *cx, "room_id")?
-        .downcast::<JsString, _>(cx)
-        .or_else(|_| cx.throw_type_error("Event doesn't contain a valid room id"))?
-        .value(cx);
+    let room_id = get_string(
+        cx,
+        event,
+        "room_id",
+        "Event doesn't contain a valid room id",
+    )?;
 
-    let content = event
-        .get(&mut *cx, "content")?
-        .downcast::<JsObject, _>(cx)
-        .or_else(|_| cx.throw_type_error("Event doesn't contain any content"))?;
-
-    let event_type = event
-        .get(&mut *cx, "type")?
-        .downcast::<JsString, _>(cx)
-        .or_else(|_| cx.throw_type_error("Event doesn't contain a valid type"))?
-        .value(cx);
+    let content = event.get_value(&mut *cx, "content").and_then(|v| {
+        v.downcast::<JsObject, _>(cx)
+            .or_else(|_| cx.throw_type_error("Event doesn't contain any content"))
+    })?;
+    let event_type = get_string(cx, event, "type", "Event doesn't contain a valid type")?;
 
     let event_type: EventType = match event_type.as_ref() {
         "m.room.message" => EventType::Message,
         "m.room.name" => EventType::Name,
         "m.room.topic" => EventType::Topic,
-        _ => return cx.throw_type_error("Unsuported event type"),
+        e => return cx.throw_type_error(format!("Unsupported event type {e}")),
     };
 
-    let content_value = match event_type {
-        EventType::Message => content
-            .get(&mut *cx, "body")?
-            .downcast::<JsString, _>(cx)
-            .or_else(|_| cx.throw_type_error("Event doesn't contain a valid body"))?
-            .value(cx),
-
-        EventType::Topic => content
-            .get(&mut *cx, "topic")?
-            .downcast::<JsString, _>(cx)
-            .or_else(|_| cx.throw_type_error("Event doesn't contain a valid topic"))?
-            .value(cx),
-
-        EventType::Name => content
-            .get(&mut *cx, "name")?
-            .downcast::<JsString, _>(cx)
-            .or_else(|_| cx.throw_type_error("Event doesn't contain a valid name"))?
-            .value(cx),
+    let key = match event_type {
+        EventType::Message => "body",
+        EventType::Topic => "topic",
+        EventType::Name => "name",
     };
+
+    let content_value = get_string(
+        cx,
+        content,
+        key,
+        &format!("Event deosn't contain a valid {key}"),
+    )?;
 
     let msgtype = match event_type {
-        EventType::Message => Some(
-            content
-                .get(&mut *cx, "msgtype")?
-                .downcast::<JsString, _>(cx)
-                .or_else(|_| {
-                    cx.throw_type_error("m.room.message event doesn't contain a valid msgtype")
-                })?
-                .value(cx),
-        ),
+        EventType::Message => Some(get_string(
+            cx,
+            content,
+            "msgtype",
+            "m.room.message event doesn't contain a valid msgtype",
+        )?),
         _ => None,
     };
 
     let event_value = event.as_value(&mut *cx);
-    let event_source: serde_json::Value = match neon_serde2::from_value(&mut *cx, event_value) {
+    let event_source: serde_json::Value = match neon_serde3::from_value(&mut *cx, event_value) {
         Ok(v) => v,
         Err(e) => return cx.throw_error::<_, _>(e.to_string()),
     };
@@ -432,23 +394,29 @@ pub(crate) fn parse_event(
 
 pub(crate) fn parse_profile(
     cx: &mut FunctionContext,
-    profile: JsObject,
+    profile: Handle<JsObject>,
 ) -> Result<Profile, neon::result::Throw> {
-    let displayname: Option<String> = match profile
-        .get(&mut *cx, "displayname")?
-        .downcast::<JsString, _>(cx)
-    {
-        Ok(s) => Some(s.value(cx)),
-        Err(_e) => None,
-    };
+    let get_optional_string =
+        |cx: &mut FunctionContext, value: Handle<'_, JsValue>, error: &str| {
+            if value.is_a::<JsUndefined, _>(cx) {
+                Ok(None)
+            } else {
+                Ok(Some(
+                    value
+                        .downcast::<JsString, _>(cx)
+                        .or_else(|_| cx.throw_type_error(error))?
+                        .value(cx),
+                ))
+            }
+        };
 
-    let avatar_url: Option<String> = match profile
-        .get(&mut *cx, "avatar_url")?
-        .downcast::<JsString, _>(cx)
-    {
-        Ok(s) => Some(s.value(cx)),
-        Err(_e) => None,
-    };
+    let displayname: Option<String> = profile
+        .get_value(cx, "displayname")
+        .and_then(|v| get_optional_string(cx, v, "Event has an invalid display name"))?;
+
+    let avatar_url: Option<String> = profile
+        .get_value(&mut *cx, "avatar_url")
+        .and_then(|v| get_optional_string(cx, v, "Event has an invalid avatar URL"))?;
 
     Ok(Profile {
         displayname,
@@ -458,27 +426,17 @@ pub(crate) fn parse_profile(
 
 pub(crate) fn js_checkpoint_to_rust(
     cx: &mut FunctionContext,
-    object: JsObject,
+    object: Handle<JsObject>,
 ) -> Result<CrawlerCheckpoint, neon::result::Throw> {
-    let room_id = object
-        .get(&mut *cx, "roomId")?
-        .downcast::<JsString, _>(cx)
-        .or_throw(&mut *cx)?
-        .value(cx);
-    let token = object
-        .get(&mut *cx, "token")?
-        .downcast::<JsString, _>(cx)
-        .or_throw(&mut *cx)?
-        .value(cx);
+    let room_id = object.get::<JsString, _, _>(&mut *cx, "roomId")?.value(cx);
+    let token = object.get::<JsString, _, _>(&mut *cx, "token")?.value(cx);
     let full_crawl: bool = object
-        .get(&mut *cx, "fullCrawl")?
-        .downcast::<JsBoolean, _>(cx)
-        .unwrap_or_else(|_| cx.boolean(false))
+        .get_opt::<JsBoolean, _, _>(&mut *cx, "fullCrawl")?
+        .unwrap_or_else(|| cx.boolean(false))
         .value(cx);
     let direction = object
-        .get(&mut *cx, "direction")?
-        .downcast::<JsString, _>(cx)
-        .unwrap_or_else(|_| cx.string(""))
+        .get_opt::<JsString, _, _>(&mut *cx, "direction")?
+        .unwrap_or_else(|| cx.string(""))
         .value(cx);
 
     let direction = match direction.to_lowercase().as_ref() {
