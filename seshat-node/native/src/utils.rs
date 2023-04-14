@@ -304,60 +304,71 @@ pub(crate) fn parse_event(
     cx: &mut FunctionContext,
     event: Handle<JsObject>,
 ) -> Result<Event, neon::result::Throw> {
-    let sender: String = event
-        .get::<JsString, _, _>(&mut *cx, "sender")
-        .or_else(|_| cx.throw_type_error("Event doesn't contain a valid sender"))?
-        .value(cx);
-    let event_id: String = event
-        .get::<JsString, _, _>(&mut *cx, "event_id")
-        .or_else(|_| cx.throw_type_error("Event doesn't contain a valid event id"))?
-        .value(cx);
-    let room_id: String = event
-        .get::<JsString, _, _>(&mut *cx, "room_id")
-        .or_else(|_| cx.throw_type_error("Event doesn't contain a valid room id"))?
-        .value(cx);
-    let server_timestamp: i64 = event
-        .get::<JsNumber, _, _>(&mut *cx, "origin_server_ts")
-        .or_else(|_| cx.throw_type_error("Event doesn't contain a valid timestamp"))?
+    let get_string = |cx: &mut FunctionContext, event: Handle<JsObject>, key: &str, error: &str| {
+        Ok(event
+            .get_value(&mut *cx, key)
+            .and_then(|v| {
+                v.downcast::<JsString, _>(cx)
+                    .or_else(|_| cx.throw_type_error(error))
+            })?
+            .value(cx))
+    };
+
+    let sender = get_string(cx, event, "sender", "Event doesn't contain a valid sender")?;
+    let event_id = get_string(
+        cx,
+        event,
+        "event_id",
+        "Event doesn't contain a valid event id",
+    )?;
+    let server_timestamp = event
+        .get_value(&mut *cx, "origin_server_ts")
+        .and_then(|v| {
+            v.downcast::<JsNumber, _>(cx)
+                .or_else(|_| cx.throw_type_error("Event doesn't contain a valid timestamp"))
+        })?
         .value(cx) as i64;
 
-    let content = event
-        .get::<JsObject, _, _>(&mut *cx, "content")
-        .or_else(|_| cx.throw_type_error("Event doesn't contain any content"))?;
-    let event_type = event
-        .get::<JsString, _, _>(&mut *cx, "type")
-        .or_else(|_| cx.throw_type_error("Event doesn't contain a valid type"))?
-        .value(cx);
+    let room_id = get_string(
+        cx,
+        event,
+        "room_id",
+        "Event doesn't contain a valid room id",
+    )?;
+
+    let content = event.get_value(&mut *cx, "content").and_then(|v| {
+        v.downcast::<JsObject, _>(cx)
+            .or_else(|_| cx.throw_type_error("Event doesn't contain any content"))
+    })?;
+    let event_type = get_string(cx, event, "type", "Event doesn't contain a valid type")?;
 
     let event_type: EventType = match event_type.as_ref() {
         "m.room.message" => EventType::Message,
         "m.room.name" => EventType::Name,
         "m.room.topic" => EventType::Topic,
-        _ => return cx.throw_type_error("Unsupported event type"),
+        e => return cx.throw_type_error(format!("Unsupported event type {e}")),
     };
 
-    let content_value = match event_type {
-        EventType::Message => content
-            .get::<JsString, _, _>(&mut *cx, "body")
-            .or_else(|_| cx.throw_type_error("Event doesn't contain a valid body"))?,
-        EventType::Topic => content
-            .get::<JsString, _, _>(&mut *cx, "topic")
-            .or_else(|_| cx.throw_type_error("Event doesn't contain a valid topic"))?,
-        EventType::Name => content
-            .get::<JsString, _, _>(&mut *cx, "name")
-            .or_else(|_| cx.throw_type_error("Event doesn't contain a valid name"))?,
-    }
-    .value(cx);
+    let key = match event_type {
+        EventType::Message => "body",
+        EventType::Topic => "topic",
+        EventType::Name => "name",
+    };
+
+    let content_value = get_string(
+        cx,
+        content,
+        key,
+        &format!("Event deosn't contain a valid {key}"),
+    )?;
 
     let msgtype = match event_type {
-        EventType::Message => Some(
-            content
-                .get::<JsString, _, _>(&mut *cx, "msgtype")
-                .or_else(|_| {
-                    cx.throw_type_error("m.room.message event doesn't contain a valid msgtype")
-                })?
-                .value(cx),
-        ),
+        EventType::Message => Some(get_string(
+            cx,
+            content,
+            "msgtype",
+            "m.room.message event doesn't contain a valid msgtype",
+        )?),
         _ => None,
     };
 
@@ -385,13 +396,27 @@ pub(crate) fn parse_profile(
     cx: &mut FunctionContext,
     profile: Handle<JsObject>,
 ) -> Result<Profile, neon::result::Throw> {
+    let get_optional_string =
+        |cx: &mut FunctionContext, value: Handle<'_, JsValue>, error: &str| {
+            if value.is_a::<JsUndefined, _>(cx) {
+                Ok(None)
+            } else {
+                Ok(Some(
+                    value
+                        .downcast::<JsString, _>(cx)
+                        .or_else(|_| cx.throw_type_error(error))?
+                        .value(cx),
+                ))
+            }
+        };
+
     let displayname: Option<String> = profile
-        .get_opt::<JsString, _, _>(&mut *cx, "displayname")?
-        .map(|d| d.value(cx));
+        .get_value(cx, "displayname")
+        .and_then(|v| get_optional_string(cx, v, "Event has an invalid display name"))?;
 
     let avatar_url: Option<String> = profile
-        .get_opt::<JsString, _, _>(&mut *cx, "avatar_url")?
-        .map(|a| a.value(cx));
+        .get_value(&mut *cx, "avatar_url")
+        .and_then(|v| get_optional_string(cx, v, "Event has an invalid avatar URL"))?;
 
     Ok(Profile {
         displayname,
