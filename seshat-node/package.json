@@ -1,6 +1,6 @@
 {
   "name": "matrix-seshat",
-  "version": "2.3.3",
+  "version": "2.4.0",
   "description": "A matrix message logger with full text search support",
   "main": "index.js",
   "author": "Damir Jelić <poljar@termina.org.uk>",
