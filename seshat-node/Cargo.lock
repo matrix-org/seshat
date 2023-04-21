@@ -999,7 +999,7 @@ checksum = "3e2e65a1a2e43cfcb47a895c4c8b10d1f4a61097f9f254f183aee60cad9c651d"
 
 [[package]]
 name = "matrix-seshat"
-version = "2.3.3"
+version = "3.0.0"
 dependencies = [
  "fs_extra",
  "neon",
@@ -1804,7 +1804,9 @@ dependencies = [
 
 [[package]]
 name = "seshat"
-version = "2.3.4"
+version = "3.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4d6d1fe567f1c7a188c94b6f8dd25d7f67eccdacae0e63b382e4c0ceded37b25"
 dependencies = [
  "aes",
  "byteorder",
