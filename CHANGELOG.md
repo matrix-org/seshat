@@ -5,9 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 3.0.0 - 2023-04-21
+
+No notable changes were included in this release, the build system for the
+Node JS bindigns has changed which requires a major version bump.
+
 ## 2.4.0 - 2023-04-17
 
-- [[#117]] Add a feature to build with static sqlcipher and openssl
+- [[#117]] Add a feature to build with static SQLCipher and OpenSSL
 
 [#117]: https://github.com/matrix-org/seshat/pull/117
 
