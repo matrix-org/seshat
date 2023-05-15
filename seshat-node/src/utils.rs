@@ -398,7 +398,7 @@ pub(crate) fn parse_profile(
 ) -> Result<Profile, neon::result::Throw> {
     let get_optional_string =
         |cx: &mut FunctionContext, value: Handle<'_, JsValue>, error: &str| {
-            if value.is_a::<JsUndefined, _>(cx) {
+            if value.is_a::<JsUndefined, _>(cx) || value.is_a::<JsNull, _>(cx) {
                 Ok(None)
             } else {
                 Ok(Some(
