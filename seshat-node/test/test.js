@@ -164,7 +164,7 @@ const checkPoint = {
 }
 
 describe('Database', function() {
-    it('should be created succesfully.', function() {
+    it('should be created successfully.', function() {
         const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'seshat-'));
         const db = new Seshat(tempDir);
     });
@@ -183,7 +183,7 @@ describe('Database', function() {
         db.addEvent(matrixEvent, matrixProfileOnlyDisplayName);
     });
 
-    it('should allow events to be commited', function() {
+    it('should allow events to be committed', function() {
         const db = createDb();
         db.commitSync(true, true);
 
@@ -194,7 +194,7 @@ describe('Database', function() {
         expect(ret).toBeUndefined();
     });
 
-    it('should allow events to be commited using a promise', async function() {
+    it('should allow events to be committed using a promise', async function() {
         const db = createDb();
         await db.commit(true);
     });
@@ -594,6 +594,15 @@ describe('Database', function() {
         results = await db.search({search_term: 'Test'});
         expect(results.count).toBe(1);
         expect(results.results[0].result).toEqual(fileEvent);
+    });
+
+    it('should accept events if the avatar URL is null.', function() {
+        const badProfile = {
+            displayname: 'Alice (from wonderland)',
+            avatar_url: null,
+        };
+
+        db.addEvent(matrixEvent, badProfile);
     });
 
     it('should throw an error when adding events with missing fields.', function() {
