@@ -156,7 +156,6 @@ pub enum Language {
     Swedish,
     Tamil,
     Turkish,
-    Japanese,
     Unknown,
 }
 
@@ -187,7 +186,7 @@ impl Language {
             Language::Swedish => tantivy::tokenizer::Language::Swedish,
             Language::Tamil => tantivy::tokenizer::Language::Tamil,
             Language::Turkish => tantivy::tokenizer::Language::Turkish,
-            _ => panic!("Unsuported language by tantivy"),
+            _ => panic!("Unsupported language by tantivy"),
         }
     }
 }
@@ -205,7 +204,6 @@ impl From<&str> for Language {
             "greek" => Language::Greek,
             "hungarian" => Language::Hungarian,
             "italian" => Language::Italian,
-            "japanese" => Language::Japanese,
             "portuguese" => Language::Portuguese,
             "romanian" => Language::Romanian,
             "russian" => Language::Russian,

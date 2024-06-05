@@ -22,8 +22,8 @@ use std::{
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 
 use aes::{
-    cipher::{NewCipher, StreamCipher},
-    Aes256Ctr,
+    cipher::{KeyIvInit, StreamCipher},
+    Aes256,
 };
 use hkdf::Hkdf;
 use hmac::{Hmac, Mac, NewMac};
@@ -40,6 +40,8 @@ use tantivy::directory::{
 };
 
 use zeroize::Zeroizing;
+
+type Aes256Ctr = ctr::Ctr128BE<Aes256>;
 
 use crate::index::encrypted_stream::{AesReader, AesWriter};
 
@@ -627,7 +629,7 @@ impl Directory for EncryptedMmapDirectory {
 
 // This Tantivy trait is used to indicate when no more writes are expected to be
 // done on a writer.
-impl<E: NewCipher + StreamCipher, M: Mac + NewMac, W: Write> TerminatingWrite
+impl<E: StreamCipher + KeyIvInit, M: Mac + NewMac, W: Write> TerminatingWrite
     for AesWriter<E, M, W>
 {
     fn terminate_ref(&mut self, _: AntiCallToken) -> std::io::Result<()> {
