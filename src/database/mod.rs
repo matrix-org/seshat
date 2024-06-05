@@ -19,7 +19,7 @@ mod static_methods;
 mod writer;
 
 use fs_extra::dir;
-use r2d2::PooledConnection;
+use r2d2::{Pool, PooledConnection};
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::ToSql;
 use std::{
@@ -107,8 +107,7 @@ impl Database {
         PathBuf: std::convert::From<P>,
     {
         let db_path = path.as_ref().join(EVENTS_DB_NAME);
-        let manager = SqliteConnectionManager::file(db_path);
-        let pool = r2d2::Pool::new(manager)?;
+        let pool = Self::get_pool(&db_path, config)?;
 
         let mut connection = pool.get()?;
 
@@ -152,6 +151,49 @@ impl Database {
             index,
             config: config.clone(),
         })
+    }
+
+    fn get_pool(db_path: &PathBuf, config: &Config) -> Result<Pool<SqliteConnectionManager>> {
+        let manager = SqliteConnectionManager::file(db_path);
+        let pool = r2d2::Pool::new(manager)?;
+        let connection = pool.get()?;
+
+        // Try to unlock a single connection.
+        match Database::unlock(&connection, config) {
+            // We're fine, the connection was returned successfully, we can return the pool.
+            Ok(_) => Ok(pool),
+            Err(_) => {
+                let Some(passphrase) = &config.passphrase else {
+                    // No passphrase was provided, and we failed to unlock a connection, return an
+                    // error.
+                    return Err(Error::DatabaseUnlockError("Invalid passphrase".to_owned()));
+                };
+
+                // Ok, let's see if the unlock of the connection failed because of new default
+                // settings for the cipher settings, let's see if we can migrate the cipher settings.
+                // Take a look at the documentation of cipher_migrate[1] for more info.
+                //
+                // [1]: https://www.zetetic.net/sqlcipher/sqlcipher-api/#cipher_migrate
+                let connection = pool.get()?;
+                connection.pragma_update(None, "key", &passphrase.as_str() as &dyn ToSql)?;
+
+                let mut statement = connection.prepare("PRAGMA cipher_migrate")?;
+                let result = statement.query_row([], |row| row.get::<usize, String>(0))?;
+
+                // The cipher_migrate pragma returns a single row/column with the value set to `0`
+                // if we succeeded.
+                if result == "0" {
+                    // In this case the migration was successful and we can now recreate the pool
+                    // so the new settings come into play.
+                    let manager = SqliteConnectionManager::file(db_path);
+                    let pool = r2d2::Pool::new(manager)?;
+
+                    Ok(pool)
+                } else {
+                    Err(Error::DatabaseUnlockError("Invalid passphrase".to_owned()))
+                }
+            }
+        }
     }
 
     fn set_pragmas(connection: &rusqlite::Connection) -> Result<()> {
@@ -1130,4 +1172,18 @@ fn user_version() {
     assert_eq!(connection.get_user_version().unwrap(), 0);
     connection.set_user_version(10).unwrap();
     assert_eq!(connection.get_user_version().unwrap(), 10);
+}
+
+#[test]
+#[cfg(feature = "encryption")]
+fn sqlcipher_cipher_settings_update() {
+    let mut path = PathBuf::from(file!());
+    path.pop();
+    path.pop();
+    path.pop();
+    path.push("data/database/sqlcipher-v3");
+
+    let config = Config::new().set_passphrase("qR17RdpWurSh2pQRSc/EnsaO9V041kOwsZk0iSdUY/g");
+    let _db =
+        Database::new_with_config(&path, &config).expect("We should be able to open the database");
 }
