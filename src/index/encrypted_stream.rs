@@ -28,7 +28,7 @@ use std::{
 
 use hmac::{Mac, NewMac};
 
-use aes::cipher::{NewCipher, StreamCipher};
+use aes::cipher::{KeyIvInit, StreamCipher};
 
 use rand::{thread_rng, Rng};
 
@@ -40,7 +40,7 @@ const BUFFER_SIZE: usize = 8192;
 ///
 /// [be]: https://docs.rs/stream-cipher/0.3.2/stream_cipher/trait.SyncStreamCipher.html
 /// [mac]: https://docs.rs/crypto-mac/0.7.0/crypto_mac/trait.Mac.html
-pub struct AesWriter<E: NewCipher + StreamCipher, M: Mac + NewMac, W: Write> {
+pub struct AesWriter<E: StreamCipher + KeyIvInit, M: Mac + NewMac, W: Write> {
     /// Writer to write encrypted data to
     writer: W,
     /// Encryptor to encrypt data with
@@ -49,7 +49,7 @@ pub struct AesWriter<E: NewCipher + StreamCipher, M: Mac + NewMac, W: Write> {
     finalized: bool,
 }
 
-impl<E: NewCipher + StreamCipher, M: Mac + NewMac, W: Write> AesWriter<E, M, W> {
+impl<E: StreamCipher + KeyIvInit, M: Mac + NewMac, W: Write> AesWriter<E, M, W> {
     /// Creates a new AesWriter with a random IV.
     ///
     /// The IV will be written as first block of the file.
@@ -135,7 +135,7 @@ impl<E: NewCipher + StreamCipher, M: Mac + NewMac, W: Write> AesWriter<E, M, W> 
     }
 }
 
-impl<E: NewCipher + StreamCipher, M: Mac + NewMac, W: Write> Write for AesWriter<E, M, W> {
+impl<E: StreamCipher + KeyIvInit, M: Mac + NewMac, W: Write> Write for AesWriter<E, M, W> {
     /// Encrypts the passed buffer and writes the result to the underlying writer.
     fn write(&mut self, buf: &[u8]) -> Result<usize> {
         let mut buf = buf.to_owned();
@@ -150,7 +150,7 @@ impl<E: NewCipher + StreamCipher, M: Mac + NewMac, W: Write> Write for AesWriter
     }
 }
 
-impl<E: NewCipher + StreamCipher, M: Mac + NewMac, W: Write> Drop for AesWriter<E, M, W> {
+impl<E: StreamCipher + KeyIvInit, M: Mac + NewMac, W: Write> Drop for AesWriter<E, M, W> {
     /// Drop our AesWriter adding the MAC at the end of the file and flushing
     /// our buffers.
     fn drop(&mut self) {
@@ -169,7 +169,7 @@ impl<E: NewCipher + StreamCipher, M: Mac + NewMac, W: Write> Drop for AesWriter<
 /// Wraps a [`Read`](https://doc.rust-lang.org/std/io/trait.Read.html) implementation
 /// with a [`SyncStreamCipher`][ci]
 /// [ci]: https://docs.rs/stream-cipher/0.3.2/stream_cipher/trait.SyncStreamCipher.html
-pub struct AesReader<D: NewCipher + StreamCipher, R: Read + Seek + Clone> {
+pub struct AesReader<D: StreamCipher + KeyIvInit, R: Read + Seek + Clone> {
     /// Reader to read encrypted data from
     reader: R,
     /// Decryptor to decrypt data with
@@ -180,7 +180,7 @@ pub struct AesReader<D: NewCipher + StreamCipher, R: Read + Seek + Clone> {
     pub(crate) mac_length: u64,
 }
 
-impl<D: NewCipher + StreamCipher, R: Read + Seek + Clone> AesReader<D, R> {
+impl<D: StreamCipher + KeyIvInit, R: Read + Seek + Clone> AesReader<D, R> {
     /// Creates a new AesReader.
     ///
     /// Assumes that the first block of given reader is the IV.
@@ -313,7 +313,7 @@ impl<D: NewCipher + StreamCipher, R: Read + Seek + Clone> AesReader<D, R> {
     }
 }
 
-impl<D: NewCipher + StreamCipher, R: Read + Seek + Clone> Read for AesReader<D, R> {
+impl<D: StreamCipher + KeyIvInit, R: Read + Seek + Clone> Read for AesReader<D, R> {
     /// Reads encrypted data from the underlying reader, decrypts it and writes the
     /// result into the passed buffer.
     fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
@@ -324,12 +324,14 @@ impl<D: NewCipher + StreamCipher, R: Read + Seek + Clone> Read for AesReader<D, 
 
 #[cfg(test)]
 mod test {
-    use aes::Aes128Ctr;
+    use aes::Aes128;
     use hmac::Hmac;
     use sha2::Sha256;
     use std::io::{Cursor, Read, Seek, Write};
 
     use super::{AesReader, AesWriter};
+
+    type Aes128Ctr = ctr::Ctr128BE<Aes128>;
 
     fn encrypt(data: &[u8]) -> Vec<u8> {
         let key = [0u8; 16];

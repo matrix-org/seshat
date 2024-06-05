@@ -16,7 +16,6 @@
 mod encrypted_dir;
 #[cfg(feature = "encryption")]
 mod encrypted_stream;
-mod japanese_tokenizer;
 
 use std::{
     path::Path,
@@ -37,7 +36,6 @@ use crate::index::encrypted_dir::{EncryptedMmapDirectory, PBKDF_COUNT};
 use crate::{
     config::{Config, Language, SearchConfig},
     events::{Event, EventId, EventType},
-    index::japanese_tokenizer::TinySegmenterTokenizer,
 };
 
 // Tantivy requires at least 3MB per writer thread and will panic if we
@@ -84,7 +82,7 @@ const SEARCH_LIMIT_INCREMENT: usize = 50;
 use tempfile::TempDir;
 
 #[cfg(test)]
-use crate::events::{EVENT, JAPANESE_EVENTS, TOPIC_EVENT};
+use crate::events::{EVENT, TOPIC_EVENT};
 
 pub(crate) struct Index {
     index: tv::Index,
@@ -415,11 +413,6 @@ impl Index {
 
         match config.language {
             Language::Unknown => (),
-            Language::Japanese => {
-                index
-                    .tokenizers()
-                    .register(&tokenizer_name, TinySegmenterTokenizer::new());
-            }
             _ => {
                 let tokenizer = tv::tokenizer::TextAnalyzer::from(tv::tokenizer::SimpleTokenizer)
                     .filter(tv::tokenizer::RemoveLongFilter::limit(40))
@@ -622,33 +615,6 @@ fn switch_languages() {
     let index = Index::new(&tmpdir, &config);
 
     assert!(index.is_err())
-}
-
-#[test]
-fn japanese_tokenizer() {
-    let tmpdir = TempDir::new().unwrap();
-    let config = Config::new().set_language(&Language::Japanese);
-    let index = Index::new(&tmpdir, &config).unwrap();
-
-    let mut writer = index.get_writer().unwrap();
-
-    for event in JAPANESE_EVENTS.iter() {
-        writer.add_event(event);
-    }
-
-    writer.force_commit().unwrap();
-    index.reload().unwrap();
-
-    let searcher = index.get_searcher();
-    let result = searcher
-        .search("伝説", &Default::default())
-        .unwrap()
-        .results;
-
-    let event_id = JAPANESE_EVENTS[1].event_id.to_string();
-
-    assert_eq!(result.len(), 1);
-    assert_eq!(result[0].1, event_id);
 }
 
 #[test]
