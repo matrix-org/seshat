@@ -95,13 +95,11 @@ impl RecoveryDatabase {
         PathBuf: std::convert::From<P>,
     {
         let db_path = path.as_ref().join(EVENTS_DB_NAME);
-        let manager = SqliteConnectionManager::file(db_path);
-        let pool = r2d2::Pool::new(manager)?;
+        let pool = Database::get_pool(&db_path, config)?;
 
         let mut connection = pool.get()?;
-        connection.pragma_update(None, "foreign_keys", &1 as &dyn ToSql)?;
-
         Database::unlock(&connection, config)?;
+        connection.pragma_update(None, "foreign_keys", &1 as &dyn ToSql)?;
 
         let (version, _) = match Database::get_version(&mut connection) {
             Ok(ret) => ret,
