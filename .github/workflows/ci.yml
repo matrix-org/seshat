@@ -15,21 +15,17 @@ jobs:
 
     steps:
     - name: Checkout the repo
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Install rust
-      uses: actions-rs/toolchain@v1
+      uses: dtolnay/rust-toolchain@stable
       with:
         toolchain: stable
         components: rustfmt
-        profile: minimal
-        override: true
 
     - name: Cargo fmt
-      uses: actions-rs/cargo@v1
-      with:
-        command: fmt
-        args: --all -- --check
+      run: |
+        cargo fmt -- --check
 
   clippy:
     name: Run clippy
@@ -38,21 +34,17 @@ jobs:
 
     steps:
     - name: Checkout the repo
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Install rust
-      uses: actions-rs/toolchain@v1
+      uses: dtolnay/rust-toolchain@stable
       with:
         toolchain: stable
         components: clippy
-        profile: minimal
-        override: true
 
     - name: Clippy
-      uses: actions-rs/cargo@v1
-      with:
-        command: clippy
-        args: --all-targets -- -D warnings
+      run: |
+        cargo clippy --all-targets -- -D warnings
 
   build-test:
     name: ${{ matrix.name }}
@@ -77,34 +69,28 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install rust
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: ${{ matrix.rust || 'stable' }}
           target: ${{ matrix.target }}
-          profile: minimal
-          override: true
 
       - name: Build Rust
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --features=bundled-sqlcipher
+        run: |
+          cargo build --features=bundled-sqlcipher
 
       - name: Test Rust
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --features=bundled-sqlcipher
+        run: |
+          cargo test --features=bundled-sqlcipher
 
       # Checkout again to reset the test DB state
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: '18'
 
