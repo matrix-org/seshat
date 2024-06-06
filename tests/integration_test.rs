@@ -197,7 +197,7 @@ fn search_with_room() {
     db.force_commit().unwrap();
     db.reload().unwrap();
 
-    let cases = vec![
+    let cases = [
         ("\"Test message\"", true),
         ("Test message", true),
         ("Test anything", true),
