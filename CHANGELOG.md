@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 4.0.0 - 2024-06-07
+- [[#136]] Upgrade mechanism for SQLCipher, this allows our users to upgrade
+  SQLCipher since SQLCipher has some breaking changes with regards to the cipher
+  settings. Otherwise a database that was created with a previous major
+  SQLCipher version will refuse to work with a new version of SQLCipher.
+
+- [f9e193e] Removed support for the Japanese language, the tokenizer we were using caused
+  problems.
+
+[#136]: https://github.com/matrix-org/seshat/pull/136
+[f9e193e]: https://github.com/matrix-org/seshat/commit/f9e193e0b485e66bb50416023e13ba20bbc4c9e7
+
 ## 3.0.1 - 2023-05-15
 
 - [[#128]] Allow the avatar URL and display name to be null
