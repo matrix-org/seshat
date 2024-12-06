@@ -24,11 +24,11 @@ pub enum Error {
     #[error("Sqlite pool error: {}", _0)]
     /// Error signaling that there was an error with the Sqlite connection
     /// pool.
-    PoolError(#[from] r2d2::Error),
-    #[error("Sqlite database error: {}", _0)]
+    // PoolError(#[from] r2d2::Error),
+    // #[error("Sqlite database error: {}", _0)]
     /// Error signaling that there was an error with a Sqlite transaction.
-    DatabaseError(#[from] rusqlite::Error),
-    #[error("Index error: {}", _0)]
+    // DatabaseError(#[from] rusqlite::Error),
+    // #[error("Index error: {}", _0)]
     /// Error signaling that there was an error with the event indexer.
     IndexError(tantivy::TantivyError),
     #[error("File system error: {}", _0)]

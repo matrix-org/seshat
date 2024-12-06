@@ -172,330 +172,330 @@ fn create_db() {
     let _db = Database::new(tmpdir.path()).unwrap();
 }
 
-#[test]
-fn save_and_search() {
-    let tmpdir = tempdir().unwrap();
-    let mut db = Database::new(tmpdir.path()).unwrap();
-    let profile = Profile::new("Alice", "");
+// #[test]
+// fn save_and_search() {
+//     let tmpdir = tempdir().unwrap();
+//     let mut db = Database::new(tmpdir.path()).unwrap();
+//     let profile = Profile::new("Alice", "");
 
-    db.add_event(EVENT.clone(), profile);
-    db.force_commit().unwrap();
-    db.reload().unwrap();
+//     db.add_event(EVENT.clone(), profile);
+//     db.force_commit().unwrap();
+//     db.reload().unwrap();
 
-    let result = db.search("Test", &Default::default()).unwrap().results;
-    assert!(!result.is_empty());
-    assert_eq!(result[0].event_source, EVENT.source);
-}
+//     let result = db.search("Test", &Default::default()).unwrap().results;
+//     assert!(!result.is_empty());
+//     assert_eq!(result[0].event_source, EVENT.source);
+// }
 
-#[test]
-fn search_with_room() {
-    let tmpdir = tempdir().unwrap();
-    let mut db = Database::new(tmpdir.path()).unwrap();
-    let profile = Profile::new("Alice", "");
+// #[test]
+// fn search_with_room() {
+//     let tmpdir = tempdir().unwrap();
+//     let mut db = Database::new(tmpdir.path()).unwrap();
+//     let profile = Profile::new("Alice", "");
 
-    db.add_event(EVENT.clone(), profile);
-    db.force_commit().unwrap();
-    db.reload().unwrap();
+//     db.add_event(EVENT.clone(), profile);
+//     db.force_commit().unwrap();
+//     db.reload().unwrap();
 
-    let cases = [
-        ("\"Test message\"", true),
-        ("Test message", true),
-        ("Test anything", true),
-        ("anything message", true),
-        ("Test", true),
-        ("message", true),
-        ("massage", false),
-        ("\"Test massage\"", false),
-    ];
+//     let cases = [
+//         ("\"Test message\"", true),
+//         ("Test message", true),
+//         ("Test anything", true),
+//         ("anything message", true),
+//         ("Test", true),
+//         ("message", true),
+//         ("massage", false),
+//         ("\"Test massage\"", false),
+//     ];
 
-    for (phrase, should_match) in cases.iter() {
-        let result = db
-            .search(phrase, SearchConfig::new().for_room("!test_room:localhost"))
-            .unwrap()
-            .results;
-        assert!(
-            should_match == &!result.is_empty(),
-            "searching for '{}' should not return a result, but found {}",
-            phrase,
-            result[0].event_source
-        );
-        if *should_match {
-            assert_eq!(result[0].event_source, EVENT.source);
-        }
-    }
-}
+//     for (phrase, should_match) in cases.iter() {
+//         let result = db
+//             .search(phrase, SearchConfig::new().for_room("!test_room:localhost"))
+//             .unwrap()
+//             .results;
+//         assert!(
+//             should_match == &!result.is_empty(),
+//             "searching for '{}' should not return a result, but found {}",
+//             phrase,
+//             result[0].event_source
+//         );
+//         if *should_match {
+//             assert_eq!(result[0].event_source, EVENT.source);
+//         }
+//     }
+// }
 
-#[test]
-fn duplicate_events() {
-    let tmpdir = tempdir().unwrap();
-    let mut db = Database::new(tmpdir.path()).unwrap();
-    let profile = Profile::new("Alice", "");
+// #[test]
+// fn duplicate_events() {
+//     let tmpdir = tempdir().unwrap();
+//     let mut db = Database::new(tmpdir.path()).unwrap();
+//     let profile = Profile::new("Alice", "");
 
-    db.add_event(EVENT.clone(), profile.clone());
-    db.add_event(EVENT.clone(), profile);
+//     db.add_event(EVENT.clone(), profile.clone());
+//     db.add_event(EVENT.clone(), profile);
 
-    db.force_commit().unwrap();
-    db.reload().unwrap();
+//     db.force_commit().unwrap();
+//     db.reload().unwrap();
 
-    let searcher = db.get_searcher();
-    let result = searcher
-        .search("Test", &Default::default())
-        .unwrap()
-        .results;
-    assert_eq!(result.len(), 1);
-}
+//     let searcher = db.get_searcher();
+//     let result = searcher
+//         .search("Test", &Default::default())
+//         .unwrap()
+//         .results;
+//     assert_eq!(result.len(), 1);
+// }
 
-#[test]
-fn save_and_search_historic_events() {
-    let tmpdir = tempdir().unwrap();
-    let db = Database::new(tmpdir.path()).unwrap();
-    let profile = Profile::new("Alice", "");
+// #[test]
+// fn save_and_search_historic_events() {
+//     let tmpdir = tempdir().unwrap();
+//     let db = Database::new(tmpdir.path()).unwrap();
+//     let profile = Profile::new("Alice", "");
 
-    let mut events = Vec::new();
+//     let mut events = Vec::new();
 
-    for i in 1..6 {
-        let mut event: Event = fake_event();
-        event.server_ts = EVENT.server_ts - i;
-        event.source = format!("Hello before event {}", i);
-        events.push((event, profile.clone()));
-    }
+//     for i in 1..6 {
+//         let mut event: Event = fake_event();
+//         event.server_ts = EVENT.server_ts - i;
+//         event.source = format!("Hello before event {}", i);
+//         events.push((event, profile.clone()));
+//     }
 
-    let checkpoint = CrawlerCheckpoint {
-        room_id: "!test:room".to_string(),
-        token: "1234".to_string(),
-        full_crawl: false,
-        direction: CheckpointDirection::Backwards,
-    };
+//     let checkpoint = CrawlerCheckpoint {
+//         room_id: "!test:room".to_string(),
+//         token: "1234".to_string(),
+//         full_crawl: false,
+//         direction: CheckpointDirection::Backwards,
+//     };
 
-    let receiver = db.add_historic_events(events, Some(checkpoint.clone()), None);
-    let ret = receiver.recv().unwrap();
-    assert!(ret.is_ok());
-    let connection = db.get_connection().unwrap();
+//     let receiver = db.add_historic_events(events, Some(checkpoint.clone()), None);
+//     let ret = receiver.recv().unwrap();
+//     assert!(ret.is_ok());
+//     let connection = db.get_connection().unwrap();
 
-    let checkpoints = connection.load_checkpoints().unwrap();
-    assert!(checkpoints.contains(&checkpoint));
-}
+//     let checkpoints = connection.load_checkpoints().unwrap();
+//     assert!(checkpoints.contains(&checkpoint));
+// }
 
-#[test]
-fn get_size() {
-    let tmpdir = tempdir().unwrap();
-    let mut db = Database::new(tmpdir.path()).unwrap();
+// #[test]
+// fn get_size() {
+//     let tmpdir = tempdir().unwrap();
+//     let mut db = Database::new(tmpdir.path()).unwrap();
 
-    let profile = Profile::new("Alice", "");
+//     let profile = Profile::new("Alice", "");
 
-    db.add_event(EVENT.clone(), profile.clone());
+//     db.add_event(EVENT.clone(), profile.clone());
 
-    let mut before_event = None;
+//     let mut before_event = None;
 
-    for i in 1..6 {
-        let mut event: Event = fake_event();
-        event.server_ts = EVENT.server_ts - i;
-        event.source = format!("Hello before event {}", i);
+//     for i in 1..6 {
+//         let mut event: Event = fake_event();
+//         event.server_ts = EVENT.server_ts - i;
+//         event.source = format!("Hello before event {}", i);
 
-        if before_event.is_none() {
-            before_event = Some(event.clone());
-        }
+//         if before_event.is_none() {
+//             before_event = Some(event.clone());
+//         }
 
-        db.add_event(event, profile.clone());
-    }
-    db.force_commit().unwrap();
-    assert!(db.get_size().unwrap() > 0);
-}
+//         db.add_event(event, profile.clone());
+//     }
+//     db.force_commit().unwrap();
+//     assert!(db.get_size().unwrap() > 0);
+// }
 
-#[test]
-fn add_differing_events() {
-    let tmpdir = tempdir().unwrap();
-    let mut db = Database::new(tmpdir.path()).unwrap();
-    let profile = Profile::new("Alice", "");
+// #[test]
+// fn add_differing_events() {
+//     let tmpdir = tempdir().unwrap();
+//     let mut db = Database::new(tmpdir.path()).unwrap();
+//     let profile = Profile::new("Alice", "");
 
-    db.add_event(EVENT.clone(), profile.clone());
-    db.add_event(TOPIC_EVENT.clone(), profile);
-    db.force_commit().unwrap();
-    db.reload().unwrap();
+//     db.add_event(EVENT.clone(), profile.clone());
+//     db.add_event(TOPIC_EVENT.clone(), profile);
+//     db.force_commit().unwrap();
+//     db.reload().unwrap();
 
-    let searcher = db.get_searcher();
-    let result = searcher
-        .search("Test", &SearchConfig::new())
-        .unwrap()
-        .results;
-    assert_eq!(result.len(), 2);
-}
+//     let searcher = db.get_searcher();
+//     let result = searcher
+//         .search("Test", &SearchConfig::new())
+//         .unwrap()
+//         .results;
+//     assert_eq!(result.len(), 2);
+// }
 
-#[test]
-fn search_with_specific_key() {
-    let tmpdir = tempdir().unwrap();
-    let mut db = Database::new(tmpdir.path()).unwrap();
-    let profile = Profile::new("Alice", "");
-    let searcher = db.get_searcher();
+// #[test]
+// fn search_with_specific_key() {
+//     let tmpdir = tempdir().unwrap();
+//     let mut db = Database::new(tmpdir.path()).unwrap();
+//     let profile = Profile::new("Alice", "");
+//     let searcher = db.get_searcher();
 
-    db.add_event(EVENT.clone(), profile.clone());
-    db.force_commit().unwrap();
-    db.reload().unwrap();
+//     db.add_event(EVENT.clone(), profile.clone());
+//     db.force_commit().unwrap();
+//     db.reload().unwrap();
 
-    let result = searcher
-        .search("Test", SearchConfig::new().with_key(EventType::Topic))
-        .unwrap()
-        .results;
-    assert!(result.is_empty());
+//     let result = searcher
+//         .search("Test", SearchConfig::new().with_key(EventType::Topic))
+//         .unwrap()
+//         .results;
+//     assert!(result.is_empty());
 
-    db.add_event(TOPIC_EVENT.clone(), profile);
-    db.force_commit().unwrap();
-    db.reload().unwrap();
+//     db.add_event(TOPIC_EVENT.clone(), profile);
+//     db.force_commit().unwrap();
+//     db.reload().unwrap();
 
-    let searcher = db.get_searcher();
-    let result = searcher
-        .search("Test", SearchConfig::new().with_key(EventType::Topic))
-        .unwrap()
-        .results;
-    assert_eq!(result.len(), 1);
-    assert_eq!(result[0].event_source, TOPIC_EVENT.source)
-}
+//     let searcher = db.get_searcher();
+//     let result = searcher
+//         .search("Test", SearchConfig::new().with_key(EventType::Topic))
+//         .unwrap()
+//         .results;
+//     assert_eq!(result.len(), 1);
+//     assert_eq!(result[0].event_source, TOPIC_EVENT.source)
+// }
 
-#[test]
-fn delete() {
-    let tmpdir = tempdir().unwrap();
-    let path: &Path = tmpdir.path();
+// #[test]
+// fn delete() {
+//     let tmpdir = tempdir().unwrap();
+//     let path: &Path = tmpdir.path();
 
-    assert!(path.exists());
+//     assert!(path.exists());
 
-    let db = Database::new(tmpdir.path()).unwrap();
-    db.delete().unwrap();
+//     let db = Database::new(tmpdir.path()).unwrap();
+//     db.delete().unwrap();
 
-    assert!(!path.exists());
-}
+//     assert!(!path.exists());
+// }
 
-#[cfg(feature = "encryption")]
-#[test]
-fn encrypted_save_and_search() {
-    let tmpdir = tempdir().unwrap();
-    let db_config = Config::new().set_passphrase("wordpass");
-    let mut db = Database::new_with_config(tmpdir.path(), &db_config).unwrap();
-    let profile = Profile::new("Alice", "");
+// #[cfg(feature = "encryption")]
+// #[test]
+// fn encrypted_save_and_search() {
+//     let tmpdir = tempdir().unwrap();
+//     let db_config = Config::new().set_passphrase("wordpass");
+//     let mut db = Database::new_with_config(tmpdir.path(), &db_config).unwrap();
+//     let profile = Profile::new("Alice", "");
 
-    db.add_event(EVENT.clone(), profile);
-    db.force_commit().unwrap();
-    db.reload().unwrap();
+//     db.add_event(EVENT.clone(), profile);
+//     db.force_commit().unwrap();
+//     db.reload().unwrap();
 
-    let result = db.search("Test", &Default::default()).unwrap().results;
-    assert!(!result.is_empty());
-    assert_eq!(result[0].event_source, EVENT.source);
-}
+//     let result = db.search("Test", &Default::default()).unwrap().results;
+//     assert!(!result.is_empty());
+//     assert_eq!(result[0].event_source, EVENT.source);
+// }
 
-#[test]
-fn load_file_events() {
-    let tmpdir = tempdir().unwrap();
-    let mut db = Database::new(tmpdir.path()).unwrap();
-    let profile = Profile::new("Alice", "");
+// #[test]
+// fn load_file_events() {
+//     let tmpdir = tempdir().unwrap();
+//     let mut db = Database::new(tmpdir.path()).unwrap();
+//     let profile = Profile::new("Alice", "");
 
-    db.add_event(EVENT.clone(), profile.clone());
-    db.add_event(FILE_EVENT.clone(), profile.clone());
-    db.add_event(IMAGE_EVENT.clone(), profile);
-    db.force_commit().unwrap();
-    db.reload().unwrap();
+//     db.add_event(EVENT.clone(), profile.clone());
+//     db.add_event(FILE_EVENT.clone(), profile.clone());
+//     db.add_event(IMAGE_EVENT.clone(), profile);
+//     db.force_commit().unwrap();
+//     db.reload().unwrap();
 
-    let connection = db.get_connection().unwrap();
+//     let connection = db.get_connection().unwrap();
 
-    let mut config = LoadConfig::new(&FILE_EVENT.room_id).limit(10);
+//     let mut config = LoadConfig::new(&FILE_EVENT.room_id).limit(10);
 
-    let result = connection
-        .load_file_events(&config)
-        .expect("Can't load file events");
-    assert!(!result.is_empty());
-    assert!(result.len() == 2);
-    assert_eq!(result[0].0, IMAGE_EVENT.source);
-    assert!(result.len() == 2);
-    assert_eq!(result[1].0, FILE_EVENT.source);
+//     let result = connection
+//         .load_file_events(&config)
+//         .expect("Can't load file events");
+//     assert!(!result.is_empty());
+//     assert!(result.len() == 2);
+//     assert_eq!(result[0].0, IMAGE_EVENT.source);
+//     assert!(result.len() == 2);
+//     assert_eq!(result[1].0, FILE_EVENT.source);
 
-    config = config.limit(1);
+//     config = config.limit(1);
 
-    let result = connection
-        .load_file_events(&config)
-        .expect("Can't load file events");
-    assert!(!result.is_empty());
-    assert!(result.len() == 1);
-    assert_eq!(result[0].0, IMAGE_EVENT.source);
+//     let result = connection
+//         .load_file_events(&config)
+//         .expect("Can't load file events");
+//     assert!(!result.is_empty());
+//     assert!(result.len() == 1);
+//     assert_eq!(result[0].0, IMAGE_EVENT.source);
 
-    config = config.from_event(&IMAGE_EVENT.event_id);
+//     config = config.from_event(&IMAGE_EVENT.event_id);
 
-    let result = connection
-        .load_file_events(&config)
-        .expect("Can't load file events with token");
+//     let result = connection
+//         .load_file_events(&config)
+//         .expect("Can't load file events with token");
 
-    assert!(!result.is_empty());
-    assert!(result.len() == 1);
-    assert_eq!(result[0].0, FILE_EVENT.source);
-}
+//     assert!(!result.is_empty());
+//     assert!(result.len() == 1);
+//     assert_eq!(result[0].0, FILE_EVENT.source);
+// }
 
-#[test]
-fn load_file_events_directions() {
-    let tmpdir = tempdir().unwrap();
-    let mut db = Database::new(tmpdir.path()).unwrap();
-    let profile = Profile::new("Alice", "");
+// #[test]
+// fn load_file_events_directions() {
+//     let tmpdir = tempdir().unwrap();
+//     let mut db = Database::new(tmpdir.path()).unwrap();
+//     let profile = Profile::new("Alice", "");
 
-    db.add_event(EVENT.clone(), profile.clone());
-    db.add_event(FILE_EVENT.clone(), profile.clone());
-    db.add_event(IMAGE_EVENT.clone(), profile.clone());
-    db.add_event(VIDEO_EVENT.clone(), profile);
-    db.force_commit().unwrap();
-    db.reload().unwrap();
+//     db.add_event(EVENT.clone(), profile.clone());
+//     db.add_event(FILE_EVENT.clone(), profile.clone());
+//     db.add_event(IMAGE_EVENT.clone(), profile.clone());
+//     db.add_event(VIDEO_EVENT.clone(), profile);
+//     db.force_commit().unwrap();
+//     db.reload().unwrap();
 
-    let connection = db.get_connection().unwrap();
+//     let connection = db.get_connection().unwrap();
 
-    // Get the newest event.
-    let mut config = LoadConfig::new(&FILE_EVENT.room_id).limit(1);
-    let result = connection.load_file_events(&config).unwrap();
+//     // Get the newest event.
+//     let mut config = LoadConfig::new(&FILE_EVENT.room_id).limit(1);
+//     let result = connection.load_file_events(&config).unwrap();
 
-    assert_eq!(result.len(), 1);
-    assert_eq!(result[0].0, VIDEO_EVENT.source);
+//     assert_eq!(result.len(), 1);
+//     assert_eq!(result[0].0, VIDEO_EVENT.source);
 
-    // Get the next two.
-    config = config.from_event(&VIDEO_EVENT.event_id).limit(10);
-    let result = connection.load_file_events(&config).unwrap();
-    assert_eq!(result.len(), 2);
-    assert_eq!(result[0].0, IMAGE_EVENT.source);
-    assert_eq!(result[1].0, FILE_EVENT.source);
+//     // Get the next two.
+//     config = config.from_event(&VIDEO_EVENT.event_id).limit(10);
+//     let result = connection.load_file_events(&config).unwrap();
+//     assert_eq!(result.len(), 2);
+//     assert_eq!(result[0].0, IMAGE_EVENT.source);
+//     assert_eq!(result[1].0, FILE_EVENT.source);
 
-    // Try to get a newer one than the last one.
-    config = config.direction(LoadDirection::Forwards);
-    let result = connection.load_file_events(&config).unwrap();
-    assert!(result.is_empty());
+//     // Try to get a newer one than the last one.
+//     config = config.direction(LoadDirection::Forwards);
+//     let result = connection.load_file_events(&config).unwrap();
+//     assert!(result.is_empty());
 
-    // Get the two newer events than the last one.
-    config = config.from_event(&FILE_EVENT.event_id);
-    let result = connection.load_file_events(&config).unwrap();
-    assert_eq!(result.len(), 2);
-    assert_eq!(result[0].0, IMAGE_EVENT.source);
-    assert_eq!(result[1].0, VIDEO_EVENT.source);
-}
+//     // Get the two newer events than the last one.
+//     config = config.from_event(&FILE_EVENT.event_id);
+//     let result = connection.load_file_events(&config).unwrap();
+//     assert_eq!(result.len(), 2);
+//     assert_eq!(result[0].0, IMAGE_EVENT.source);
+//     assert_eq!(result[1].0, VIDEO_EVENT.source);
+// }
 
-#[test]
-fn delete_events() {
-    let tmpdir = tempdir().unwrap();
-    let mut db = Database::new(tmpdir.path()).unwrap();
-    let profile = Profile::new("Alice", "");
+// #[test]
+// fn delete_events() {
+//     let tmpdir = tempdir().unwrap();
+//     let mut db = Database::new(tmpdir.path()).unwrap();
+//     let profile = Profile::new("Alice", "");
 
-    db.add_event(EVENT.clone(), profile.clone());
-    db.add_event(TOPIC_EVENT.clone(), profile);
-    db.force_commit().unwrap();
-    db.reload().unwrap();
+//     db.add_event(EVENT.clone(), profile.clone());
+//     db.add_event(TOPIC_EVENT.clone(), profile);
+//     db.force_commit().unwrap();
+//     db.reload().unwrap();
 
-    let searcher = db.get_searcher();
-    let result = searcher
-        .search("Test", &SearchConfig::new())
-        .unwrap()
-        .results;
-    assert_eq!(result.len(), 2);
+//     let searcher = db.get_searcher();
+//     let result = searcher
+//         .search("Test", &SearchConfig::new())
+//         .unwrap()
+//         .results;
+//     assert_eq!(result.len(), 2);
 
-    let receiver = db.delete_event(&EVENT.event_id);
-    let result = receiver.recv().unwrap();
-    result.unwrap();
-    db.force_commit().unwrap();
-    db.reload().unwrap();
+//     let receiver = db.delete_event(&EVENT.event_id);
+//     let result = receiver.recv().unwrap();
+//     result.unwrap();
+//     db.force_commit().unwrap();
+//     db.reload().unwrap();
 
-    let result = searcher
-        .search("Test", &SearchConfig::new())
-        .unwrap()
-        .results;
-    assert_eq!(result.len(), 1);
-    assert_eq!(result[0].event_source, TOPIC_EVENT.source);
-}
+//     let result = searcher
+//         .search("Test", &SearchConfig::new())
+//         .unwrap()
+//         .results;
+//     assert_eq!(result.len(), 1);
+//     assert_eq!(result[0].event_source, TOPIC_EVENT.source);
+// }

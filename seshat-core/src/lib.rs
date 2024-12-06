@@ -64,7 +64,11 @@ mod events;
 mod index;
 
 pub use database::{
-    Connection, Database, DatabaseStats, RecoveryDatabase, RecoveryInfo, SearchBatch, SearchResult,
+    // Connection,
+    Database,
+    // DatabaseStats, RecoveryDatabase, RecoveryInfo,
+    SearchBatch,
+    SearchResult,
     Searcher,
 };
 

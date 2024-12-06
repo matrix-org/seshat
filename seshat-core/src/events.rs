@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use rusqlite::{
-    types::{FromSql, FromSqlError, FromSqlResult, ToSqlOutput, ValueRef},
-    ToSql,
-};
+// use rusqlite::{
+//     types::{FromSql, FromSqlError, FromSqlResult, ToSqlOutput, ValueRef},
+//     ToSql,
+// };
 use std::{
     collections::HashMap,
     fmt::{Display, Formatter},
@@ -60,31 +60,31 @@ impl Display for EventType {
     }
 }
 
-impl ToSql for EventType {
-    fn to_sql(&self) -> rusqlite::Result<ToSqlOutput<'_>> {
-        Ok(ToSqlOutput::from(format!("{}", self)))
-    }
-}
+// impl ToSql for EventType {
+//     fn to_sql(&self) -> rusqlite::Result<ToSqlOutput<'_>> {
+//         Ok(ToSqlOutput::from(format!("{}", self)))
+//     }
+// }
 
-impl FromSql for EventType {
-    fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
-        match value {
-            ValueRef::Text(s) => {
-                let s = std::str::from_utf8(s).map_err(|e| FromSqlError::Other(Box::new(e)))?;
+// impl FromSql for EventType {
+//     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+//         match value {
+//             ValueRef::Text(s) => {
+//                 let s = std::str::from_utf8(s).map_err(|e| FromSqlError::Other(Box::new(e)))?;
 
-                let e = match s {
-                    "m.room.message" => EventType::Message,
-                    "m.room.name" => EventType::Name,
-                    "m.room.topic" => EventType::Topic,
-                    _ => return Err(FromSqlError::InvalidType),
-                };
+//                 let e = match s {
+//                     "m.room.message" => EventType::Message,
+//                     "m.room.name" => EventType::Name,
+//                     "m.room.topic" => EventType::Topic,
+//                     _ => return Err(FromSqlError::InvalidType),
+//                 };
 
-                Ok(e)
-            }
-            _ => Err(FromSqlError::InvalidType),
-        }
-    }
-}
+//                 Ok(e)
+//             }
+//             _ => Err(FromSqlError::InvalidType),
+//         }
+//     }
+// }
 
 /// Matrix event that can be added to the database.
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
@@ -212,6 +212,7 @@ impl Profile {
 }
 
 #[cfg(test)]
+///
 pub static EVENT_SOURCE: &str = r#"{
     "content": {
         "body": "Test message, msgtype: m.text"
@@ -226,6 +227,7 @@ pub static EVENT_SOURCE: &str = r#"{
 }"#;
 
 #[cfg(test)]
+///
 pub static TOPIC_EVENT_SOURCE: &str = r#"{
     "content": {
         "topic": "Test topic"
@@ -240,7 +242,9 @@ pub static TOPIC_EVENT_SOURCE: &str = r#"{
 }"#;
 
 #[cfg(test)]
+///
 lazy_static! {
+    ///
     pub static ref EVENT: Event = Event::new(
         EventType::Message,
         "Test message",
@@ -254,7 +258,9 @@ lazy_static! {
 }
 
 #[cfg(test)]
+///
 lazy_static! {
+    ///
     pub static ref TOPIC_EVENT: Event = Event::new(
         EventType::Topic,
         "Test topic",
@@ -331,27 +337,27 @@ impl Display for CheckpointDirection {
     }
 }
 
-impl ToSql for CheckpointDirection {
-    fn to_sql(&self) -> rusqlite::Result<ToSqlOutput<'_>> {
-        Ok(ToSqlOutput::from(format!("{}", self)))
-    }
-}
+// impl ToSql for CheckpointDirection {
+//     fn to_sql(&self) -> rusqlite::Result<ToSqlOutput<'_>> {
+//         Ok(ToSqlOutput::from(format!("{}", self)))
+//     }
+// }
 
-impl FromSql for CheckpointDirection {
-    fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
-        match value {
-            ValueRef::Text(s) => {
-                let s = std::str::from_utf8(s).map_err(|e| FromSqlError::Other(Box::new(e)))?;
+// impl FromSql for CheckpointDirection {
+//     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+//         match value {
+//             ValueRef::Text(s) => {
+//                 let s = std::str::from_utf8(s).map_err(|e| FromSqlError::Other(Box::new(e)))?;
 
-                let e = match s {
-                    "Forwards" => CheckpointDirection::Forwards,
-                    "Backwards" => CheckpointDirection::Backwards,
-                    _ => return Err(FromSqlError::InvalidType),
-                };
+//                 let e = match s {
+//                     "Forwards" => CheckpointDirection::Forwards,
+//                     "Backwards" => CheckpointDirection::Backwards,
+//                     _ => return Err(FromSqlError::InvalidType),
+//                 };
 
-                Ok(e)
-            }
-            _ => Err(FromSqlError::InvalidType),
-        }
-    }
-}
+//                 Ok(e)
+//             }
+//             _ => Err(FromSqlError::InvalidType),
+//         }
+//     }
+// }

@@ -1,0 +1,29 @@
+[package]
+name = "seshat-wasm"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[profile.release]
+debug = true
+
+[dependencies]
+seshat = { path = "../../seshat-core", default-features = false, features = [
+    # "js",
+    "encryption",
+] }
+wasm-bindgen.workspace = true
+wasm-bindgen-futures.workspace = true
+wasm-bindgen-test.workspace = true
+diesel-wasm-sqlite.workspace = true
+diesel = { workspace = true, features = [
+    "r2d2",
+    "returning_clauses_for_sqlite_3_35",
+] }
+futures.workspace = true
+# [target.'cfg(target_arch = "wasm32")'.dependencies]
+# parking_lot_core = { version = "0.9.10"}
+
+[dev-dependencies]
+wasm-bindgen-test.workspace = true

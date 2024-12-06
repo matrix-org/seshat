@@ -615,27 +615,27 @@ impl Seshat {
         task.schedule(cx)
     }
 
-    fn change_passphrase(mut cx: FunctionContext) -> JsResult<JsUndefined> {
-        let this = cx.argument::<JsBox<RefCell<Seshat>>>(0)?;
-        let new_passphrase = cx.argument::<JsString>(1)?;
+    // fn change_passphrase(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+    //     let this = cx.argument::<JsBox<RefCell<Seshat>>>(0)?;
+    //     let new_passphrase = cx.argument::<JsString>(1)?;
 
-        let db = {
-            let db = &mut this.borrow_mut().database;
-            db.take()
-        };
+    //     let db = {
+    //         let db = &mut this.borrow_mut().database;
+    //         db.take()
+    //     };
 
-        let db = match db {
-            Some(db) => db,
-            None => return cx.throw_type_error(CLOSED_ERROR),
-        };
+    //     let db = match db {
+    //         Some(db) => db,
+    //         None => return cx.throw_type_error(CLOSED_ERROR),
+    //     };
 
-        let task = ChangePassphraseTask {
-            database: Mutex::new(Some(db)),
-            new_passphrase: new_passphrase.value(&mut cx),
-        };
+    //     let task = ChangePassphraseTask {
+    //         database: Mutex::new(Some(db)),
+    //         new_passphrase: new_passphrase.value(&mut cx),
+    //     };
 
-        task.schedule(cx)
-    }
+    //     task.schedule(cx)
+    // }
 
     fn shutdown(mut cx: FunctionContext) -> JsResult<JsUndefined> {
         let this = cx.argument::<JsBox<RefCell<Seshat>>>(0)?;
@@ -735,7 +735,7 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
     cx.export_function("searchSync", Seshat::search_sync)?;
     cx.export_function("search", Seshat::search)?;
     cx.export_function("deleteDb", Seshat::delete)?;
-    cx.export_function("changePassphrase", Seshat::change_passphrase)?;
+    // cx.export_function("changePassphrase", Seshat::change_passphrase)?;
     cx.export_function("shutdown", Seshat::shutdown)?;
     cx.export_function("loadFileEvents", Seshat::load_file_events)?;
 

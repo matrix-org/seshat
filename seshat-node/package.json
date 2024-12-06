@@ -14,7 +14,7 @@
   },
   "scripts": {
     "build": "cargo-cp-artifact -nc index.node -- cargo build --message-format=json-render-diagnostics --release",
-    "build-bundled": "yarn run build --features=bundled-sqlcipher",
+    "build-bundled": "yarn run build",
     "test": "jest",
     "lint": "eslint lib/index.js"
   }

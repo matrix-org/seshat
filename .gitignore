@@ -8,3 +8,12 @@ seshat-node/coverage
 .gdb_history
 target
 /Cargo.lock
+
+
+# Added by cargo
+
+/target
+
+node_modules
+
+DS_Store

@@ -19,14 +19,14 @@ use std::{
     time::Duration,
 };
 
-use r2d2::PooledConnection;
-use r2d2_sqlite::SqliteConnectionManager;
+// use r2d2::PooledConnection;
+// use r2d2_sqlite::SqliteConnectionManager;
 use uuid::Uuid;
 
 use crate::{
     config::SearchConfig,
     error::Result,
-    events::{MxId, Profile, SerializedEvent},
+    events::{self, MxId, Profile, SerializedEvent},
     index::IndexSearcher,
     Database,
 };
@@ -66,7 +66,7 @@ pub struct SearchBatch {
 /// The main entry point to the index and database.
 pub struct Searcher {
     pub(crate) inner: IndexSearcher,
-    pub(crate) database: Arc<Mutex<PooledConnection<SqliteConnectionManager>>>,
+    // pub(crate) database: Arc<Mutex<PooledConnection<SqliteConnectionManager>>>,
 }
 
 impl Searcher {
@@ -92,35 +92,36 @@ impl Searcher {
 
         let mut retry = 0;
 
-        let events = loop {
-            match Database::load_events(
-                &self.database.lock().unwrap(),
-                &search_result.results,
-                config.before_limit,
-                config.after_limit,
-                config.order_by_recency,
-            ) {
-                Ok(e) => break e,
-                Err(e) => match e {
-                    // Usually the busy timeout on a sqlite connection should
-                    // handle this, but setting it on the connection didn't
-                    // seem to get rid of database busy errors like expected.
-                    rusqlite::Error::SqliteFailure(sql_error, _) => {
-                        if sql_error.code == rusqlite::ffi::ErrorCode::DatabaseBusy
-                            && retry < BUSY_RETRY
-                        {
-                            retry += 1;
-                            sleep(BUSY_SLEEP);
-                            continue;
-                        } else {
-                            return Err(e.into());
-                        }
-                    }
-                    e => return Err(e.into()),
-                },
-            }
-        };
+        // let events = loop {
+        //     match Database::load_events(
+        //         // &self.database.lock().unwrap(),
+        //         &search_result.results,
+        //         config.before_limit,
+        //         config.after_limit,
+        //         config.order_by_recency,
+        //     ) {
+        //         Ok(e) => break e,
+        //         Err(e) => match e {
+        //             // Usually the busy timeout on a sqlite connection should
+        //             // handle this, but setting it on the connection didn't
+        //             // seem to get rid of database busy errors like expected.
+        //             rusqlite::Error::SqliteFailure(sql_error, _) => {
+        //                 if sql_error.code == rusqlite::ffi::ErrorCode::DatabaseBusy
+        //                     && retry < BUSY_RETRY
+        //                 {
+        //                     retry += 1;
+        //                     sleep(BUSY_SLEEP);
+        //                     continue;
+        //                 } else {
+        //                     return Err(e.into());
+        //                 }
+        //             }
+        //             e => return Err(e.into()),
+        //         },
+        //     }
+        // };
 
+        let events = vec![];
         Ok(SearchBatch {
             count: search_result.count,
             next_batch: search_result.next_batch,

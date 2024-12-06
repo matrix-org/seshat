@@ -1,0 +1,18 @@
+{
+  "name": "seshat-wasm",
+  "type": "module",
+  "version": "4.0.0",
+  "description": "wasm bindings for seshat",
+  "repository": "https://github.com/matrix-org/seshat",
+  "devDependencies": {
+    "@jest/globals": "^29.7.0",
+    "jest": "^29.7.0",
+    "jsdom": "^25.0.1",
+    "vitest": "^2.1.6"
+  },
+  "scripts": {
+    "dev-build": "wasm-pack build --target web --out-name seshat --out-dir ./pkg",
+    "build": "RUSTFLAGS='-C opt-level=s' WASM_BINDGEN_WEAKREF=1 wasm-pack build --release --target web --out-name seshat --out-dir ./pkg",
+    "test": "vitest"
+  }
+}

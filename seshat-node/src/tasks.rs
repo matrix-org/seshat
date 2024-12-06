@@ -169,7 +169,7 @@ impl Task for AddBacklogTask {
 }
 
 pub(crate) struct LoadCheckPointsTask {
-    pub(crate) connection: Connection,
+    pub(crate) conn: Connection,
 }
 
 impl Task for LoadCheckPointsTask {
@@ -217,7 +217,7 @@ impl Task for LoadCheckPointsTask {
 }
 
 pub(crate) struct IsEmptyTask {
-    pub(crate) connection: Connection,
+    pub(crate) conn: Connection,
 }
 
 impl Task for IsEmptyTask {
@@ -242,7 +242,7 @@ impl Task for IsEmptyTask {
 }
 
 pub(crate) struct IsRoomIndexedTask {
-    pub(crate) connection: Connection,
+    pub(crate) conn: Connection,
     pub(crate) room_id: String,
 }
 
@@ -268,7 +268,7 @@ impl Task for IsRoomIndexedTask {
 }
 
 pub(crate) struct StatsTask {
-    pub(crate) connection: Connection,
+    pub(crate) conn: Connection,
 }
 
 impl Task for StatsTask {
@@ -496,38 +496,38 @@ pub(crate) struct ChangePassphraseTask {
     pub(crate) new_passphrase: String,
 }
 
-impl Task for ChangePassphraseTask {
-    type Output = ();
-    type Error = seshat::Error;
-    type JsEvent = JsUndefined;
+// impl Task for ChangePassphraseTask {
+//     type Output = ();
+//     type Error = seshat::Error;
+//     type JsEvent = JsUndefined;
 
-    fn perform(&self) -> Result<Self::Output, Self::Error> {
-        let database = self
-            .database
-            .lock()
-            .unwrap()
-            .take()
-            .expect("No database found while changing passphrase");
-        database.change_passphrase(&self.new_passphrase)
-    }
+//     fn perform(&self) -> Result<Self::Output, Self::Error> {
+//         let database = self
+//             .database
+//             .lock()
+//             .unwrap()
+//             .take()
+//             .expect("No database found while changing passphrase");
+//         database.change_passphrase(&self.new_passphrase)
+//     }
 
-    fn complete<'a, 'b>(
-        self,
-        mut cx: ComputeContext<'a, 'b>,
-        result: Result<Self::Output, Self::Error>,
-    ) -> JsResult<'a, Self::JsEvent> {
-        match result {
-            Ok(_) => Ok(cx.undefined()),
-            Err(e) => cx.throw_error(format!(
-                "Error while changing the passphrase: {}",
-                e.to_string()
-            )),
-        }
-    }
-}
+//     fn complete<'a, 'b>(
+//         self,
+//         mut cx: ComputeContext<'a, 'b>,
+//         result: Result<Self::Output, Self::Error>,
+//     ) -> JsResult<'a, Self::JsEvent> {
+//         match result {
+//             Ok(_) => Ok(cx.undefined()),
+//             Err(e) => cx.throw_error(format!(
+//                 "Error while changing the passphrase: {}",
+//                 e.to_string()
+//             )),
+//         }
+//     }
+// }
 
 pub(crate) struct GetUserVersionTask {
-    pub(crate) connection: Connection,
+    pub(crate) conn: Connection,
 }
 
 impl Task for GetUserVersionTask {
@@ -558,7 +558,7 @@ impl Task for GetUserVersionTask {
 }
 
 pub(crate) struct SetUserVersionTask {
-    pub(crate) connection: Connection,
+    pub(crate) conn: Connection,
     pub(crate) new_version: i64,
 }
 

@@ -1,0 +1,9 @@
+# [unstable]
+# build-std = ['std', 'panic_abort']
+# [target.wasm32-unknown-unknown]
+# runner = 'wasm-bindgen-test-runner'
+
+[build]
+target = "wasm32-unknown-unknown"
+# rustflags = ["--cfg", "tracing_unstable"]
+# rustflags = ["-C", "link-args=-rdynamic", "-C", "link-arg=-fuse-ld=lld"]
