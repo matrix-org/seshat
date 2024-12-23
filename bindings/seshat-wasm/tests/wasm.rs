@@ -3,27 +3,8 @@
 
 wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_dedicated_worker);
 
-use diesel::Connection;
-use diesel_wasm_sqlite::connection::WasmSqliteConnection;
-use futures::executor;
 use seshat_wasm::{new_seshat_db, Config};
-use wasm_bindgen::prelude::*;
 use wasm_bindgen_test::*;
-
-async fn establish_connection() -> WasmSqliteConnection {
-    diesel_wasm_sqlite::init_sqlite().await;
-    let result = WasmSqliteConnection::establish("test");
-    let conn = result.unwrap();
-    conn
-}
-
-// test copied from diesel
-// #[wasm_bindgen_test]
-// async fn fun_with_row_iters() {
-//     let mut connection = establish_connection().await;
-
-//     assert!(true)
-// }
 
 #[wasm_bindgen_test]
 async fn test_create_db() {

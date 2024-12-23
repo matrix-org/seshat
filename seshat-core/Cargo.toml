@@ -47,6 +47,8 @@ pbkdf2 = { version = "0.8.0", optional = true }
 rand = { version = "0.8.5", optional = true }
 zeroize = { version = "1.8.1", optional = true }
 byteorder = { version = "1.5.0", optional = true }
+rayon = "1.10.0"
+rayon-core = "1.12.1"
 # wasm-bindgen = { version = "0.2.95", default-features = false, optional = true }
 # web-sys = { version = "0.3.60", default-features = false, features = [
 #     "Document",
@@ -96,7 +98,6 @@ diesel-wasm-sqlite = { workspace = true }
 diesel_migrations.workspace = true
 # getrandom = { workspace = true, features = ["js"] }
 wasm-bindgen-futures.workspace = true
-tracing-wasm.workspace = true
 web-sys = { workspace = true, default-features = false, features = ["console"] }
 futures.workspace = true
 futures-core.workspace = true

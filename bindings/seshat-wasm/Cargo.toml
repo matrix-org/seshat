@@ -22,8 +22,14 @@ diesel = { workspace = true, features = [
     "returning_clauses_for_sqlite_3_35",
 ] }
 futures.workspace = true
+wasm-bindgen-rayon = "1.2.2"
 # [target.'cfg(target_arch = "wasm32")'.dependencies]
 # parking_lot_core = { version = "0.9.10"}
+web-sys.workspace = true
+js-sys.workspace = true
+uuid.workspace = true
+console_error_panic_hook.workspace = true
+tracing-wasm.workspace = true
 
 [dev-dependencies]
 wasm-bindgen-test.workspace = true

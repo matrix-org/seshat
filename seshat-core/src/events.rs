@@ -24,6 +24,12 @@ use std::{
 
 use crate::error::Result;
 
+use diesel::{
+    prelude::{Insertable, QueryableByName},
+    sql_types::{BigInt, Integer, Nullable, Text, Timestamp},
+    Selectable,
+};
+
 #[cfg(test)]
 use fake::faker::internet::raw::*;
 #[cfg(test)]
@@ -108,6 +114,16 @@ pub struct Event {
     /// The serialized JSON string of the event. This string will be returned
     /// by a search later on.
     pub source: String,
+}
+
+impl From<&str> for EventType {
+    fn from(event_type_str: &str) -> Self {
+        match event_type_str {
+            "m.room.name" => Self::Name,
+            "m.room.topic" => Self::Topic,
+            "m.room.message" | _ => Self::Message,
+        }
+    }
 }
 
 #[cfg(test)]

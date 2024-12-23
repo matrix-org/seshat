@@ -21,14 +21,14 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Error, Debug)]
 /// Seshat error types.
 pub enum Error {
-    #[error("Sqlite pool error: {}", _0)]
+    // #[error("Sqlite pool error: {}", _0)]
     /// Error signaling that there was an error with the Sqlite connection
     /// pool.
     // PoolError(#[from] r2d2::Error),
-    // #[error("Sqlite database error: {}", _0)]
+    #[error("Sqlite database error: {}", _0)]
     /// Error signaling that there was an error with a Sqlite transaction.
-    // DatabaseError(#[from] rusqlite::Error),
-    // #[error("Index error: {}", _0)]
+    DatabaseError(#[from] diesel::result::Error),
+    #[error("Index error: {}", _0)]
     /// Error signaling that there was an error with the event indexer.
     IndexError(tantivy::TantivyError),
     #[error("File system error: {}", _0)]

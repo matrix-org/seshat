@@ -1,9 +1,15 @@
-# [unstable]
-# build-std = ['std', 'panic_abort']
+[unstable]
+build-std = ['std', 'panic_abort']
 # [target.wasm32-unknown-unknown]
 # runner = 'wasm-bindgen-test-runner'
 
 [build]
 target = "wasm32-unknown-unknown"
+rustflags = [
+    "-Ctarget-feature=+atomics,+bulk-memory,+mutable-globals,+simd128",
+    "-Clink-arg=--initial-memory=67108864",
+    "-Clink-arg=--max-memory=4294967296",
+]
+# rustflags = ["-C", "target-feature=+atomics,+bulk-memory,+mutable-globals"]
 # rustflags = ["--cfg", "tracing_unstable"]
 # rustflags = ["-C", "link-args=-rdynamic", "-C", "link-arg=-fuse-ld=lld"]

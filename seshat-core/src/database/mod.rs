@@ -17,9 +17,11 @@ mod recovery;
 mod searcher;
 mod static_methods;
 mod writer;
-use static_methods::MIGRATIONS;
-use web_sys::console;
-mod schema;
+use rayon::ThreadPoolBuilder;
+use tantivy::SingleSegmentIndexWriter;
+// use static_methods::MIGRATIONS;
+use web_sys::{console, wasm_bindgen::UnwrapThrowExt};
+mod pool;
 
 use aes::cipher::Key;
 use diesel::{
@@ -29,7 +31,8 @@ use diesel::{
 pub(crate) use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use diesel_wasm_sqlite::connection::WasmSqliteConnection;
 use fs_extra::dir;
-use futures::executor;
+use futures::executor::{self, block_on};
+use writer::Writer;
 // use r2d2::{Pool, PooledConnection};
 
 use std::{
@@ -82,12 +85,14 @@ pub(crate) enum ThreadMessage {
 
 /// The Seshat database.
 pub struct Database {
-    path: PathBuf,
-    // conn: Arc<Mutex<WasmSqliteConnection>>,
+    path: String,
+    writer: Writer,
+    conn: Arc<Mutex<WasmSqliteConnection>>,
+    loaded_unprocessed: bool,
     // pool: r2d2::Pool<SqliteConnectionManager>,
     // _write_thread: JoinHandle<()>,
     // tx: Sender<ThreadMessage>,
-    // index: Index,
+    index: Index,
     // config: Config,
 }
 
@@ -101,14 +106,6 @@ struct CipherVersion {
 
 fn pragma_set(name: impl Display, key: impl Display) -> impl Display {
     format!(r#"PRAGMA {name} = '{key}';"#)
-}
-
-fn simple_logger() -> Option<Box<dyn Instrumentation>> {
-    // we need the explicit argument type there due
-    // to bugs in rustc
-    Some(Box::new(|event: InstrumentationEvent<'_>| {
-        console::log_1(&format!("SQL: {event:?}").into());
-    }))
 }
 
 impl Database {
@@ -135,44 +132,28 @@ impl Database {
     where
         PathBuf: std::convert::From<P>,
     {
-        let result = set_default_instrumentation(simple_logger);
-        let logconfig = tracing_wasm::WASMLayerConfigBuilder::default()
-            .set_console_config(tracing_wasm::ConsoleConfig::ReportWithoutConsoleColor)
-            .build();
-        tracing_wasm::set_as_global_default_with_config(logconfig);
-        // console_error_panic_hook::set_once();
-
-        if result.is_err() {
-            console::log_1(&"set_default_instrumentation error".into());
-        } else {
-            console::log_1(&"set_default_instrumentation no error".into());
-        }
-
         let db_path = path.as_ref().join(EVENTS_DB_NAME);
+        let path = db_path.clone().into_os_string().into_string().unwrap();
 
-        // let pool = Self::get_pool(&db_path, config)?;
-
-        console::log_1(&"connecting..".into());
-        let mut connection = Self::establish_connection(&db_path, config).await;
-
-        // connection.set_instrumentation(simple_logger());
+        let mut conn = Self::establish_connection(path.clone()).await;
 
         // let mut connection = pool.get()?;
         // console::log_1(&"unlocking..".into());
         // Database::unlock(&mut connection, config)?;
 
         // console::log_1(&"unlocked".into());
-        Database::set_pragmas(&mut connection)?;
+        Database::set_pragmas(&mut conn);
 
         console::log_1(&"pragmas set".into());
 
-        let (version, reindex_needed) = match Database::get_version(&mut connection) {
+        let (version, reindex_needed) = match Database::get_version(&mut conn) {
             Ok(ret) => ret,
             Err(e) => return Err(Error::DatabaseOpenError(e.to_string())),
         };
 
-        Database::create_tables(&mut connection)?;
+        Database::create_tables(&mut conn)?;
 
+        console::log_1(&"tables created".into());
         if version != DATABASE_VERSION {
             return Err(Error::DatabaseVersionError);
         }
@@ -181,8 +162,34 @@ impl Database {
             return Err(Error::ReindexError);
         }
 
+        console::log_1(&"creating index".into());
         let index = Database::create_index(&path, config)?;
-        // let writer = index.get_writer()?;
+
+        console::log_1(&"index created".into());
+
+        // let pool = ThreadPoolBuilder::new()
+        //     .thread_name(|_| "segment_updater2".to_string())
+        //     .spawn_handler(|thread| {
+        //         // pool.run(|| thread.run()).unwrap();
+        //         console::log_1(&"threaded from spawn!".into());
+        //         Ok(())
+        //     })
+        //     .num_threads(1)
+        //     .build()
+        //     .map_err(|e| console::log_1(&format!("error {:?}", e).into()));
+
+        // let thread_pool = rayon::ThreadPoolBuilder::new()
+        //     .thread_name(|_| "segment_updater2".to_string())
+        //     // .num_threads(2)
+        //     .spawn_handler(|thread| {
+        //         // pool.run(|| thread.run()).unwrap();
+        //         console::log_1(&"threaded from spawn!".into());
+        //         Ok(())
+        //     })
+        //     .build()
+        //     .map_err(|e| console::log_1(&format!("error {:?}", e).into()));
+
+        let index_writer = index.get_writer()?;
 
         // Warning: Do not open a new db connection before we write the tables
         // to the DB, otherwise sqlcipher might think that we are initializing
@@ -191,25 +198,30 @@ impl Database {
         // let writer_connection = pool.get()?;
         // Database::unlock(&writer_connection, config)?;
         // Database::set_pragmas(&writer_connection)?;
+        // console::log_1(&"index writer created".into());
+        let writer = Writer::new(index_writer);
 
-        // let (t_handle, tx) = Database::spawn_writer(connection, writer);
+        console::log_1(&"writer created".into());
 
         Ok(Database {
-            path: path.into(),
+            path,
+            writer,
+            conn: Arc::new(Mutex::new(conn)),
+            loaded_unprocessed: false,
             // conn: Arc::new(Mutex::new(connection)),
             // pool,
             // _write_thread: t_handle,
             // tx,
-            // index,
+            index,
             // config: config.clone(),
         })
     }
 
-    async fn establish_connection(db_path: &PathBuf, config: &Config) -> WasmSqliteConnection {
+    async fn establish_connection(path: String) -> WasmSqliteConnection {
         console::log_1(&"INIT".into());
         diesel_wasm_sqlite::init_sqlite().await;
 
-        let path = db_path.clone().into_os_string().into_string().unwrap();
+        // let path = db_path.clone().into_os_string().into_string().unwrap();
         console::log_1(&path.clone().into());
         let result = WasmSqliteConnection::establish(&path);
         let conn = result.unwrap();
@@ -348,7 +360,7 @@ impl Database {
 
     /// Get the path of the directory where the Seshat database lives in.
     pub fn get_path(&self) -> &Path {
-        self.path.as_path()
+        Path::new(&self.path)
     }
 
     fn create_index<P: AsRef<Path>>(path: &P, config: &Config) -> Result<Index> {
@@ -418,8 +430,9 @@ impl Database {
     /// This is a fast non-blocking operation, it only queues up the event to be
     /// added to the database. The events will be committed to the database
     /// only when the user calls the `commit()` method.
-    pub fn add_event(&self, event: Event, profile: Profile) {
-        let message = ThreadMessage::Event((event, profile));
+    pub fn add_event(&mut self, event: Event, profile: Profile) {
+        self.writer.add_event(event, profile);
+        // let message = ThreadMessage::Event((event, profile));
         // self.tx.send(message).unwrap();
     }
 
@@ -433,24 +446,46 @@ impl Database {
     /// Returns a receiver that will receive an boolean once the event has
     /// been deleted. The boolean indicates if the event was deleted or if a
     /// commit will be needed.
-    pub fn delete_event(&self, event_id: &str) -> Receiver<Result<bool>> {
-        let (sender, receiver): (_, Receiver<Result<bool>>) = channel();
-        let message = ThreadMessage::Delete(sender, event_id.to_owned());
-        // self.tx.send(message).unwrap();
-        receiver
-    }
+    // pub fn delete_event(&mut self, event_id: &str) -> Result<bool> {
+    //     // let (sender, receiver): (_, Receiver<Result<bool>>) = channel();
+    //     // let message = ThreadMessage::Delete(sender, event_id.to_owned());
+    //     // self.tx.send(message).unwrap();
+    //     // receiver
+    //     return self
+    //         .writer
+    //         .delete_event(&mut self.conn, event_id.to_owned());
+    // }
 
-    fn commit_helper(&mut self, force: bool) -> Receiver<Result<()>> {
+    fn commit_helper(&mut self, force: bool) -> Result<()> {
         let (sender, receiver): (_, Receiver<Result<()>>) = channel();
         // self.tx.send(ThreadMessage::Write(sender, force)).unwrap();
-        receiver
+        // receiver
+        // We may have events that aren't deleted or committed
+        //                     // to the index but are stored in the db, let us load
+        //                     // them from the db and commit them to the index now.
+        //                     // They will later be marked as committed in the
+        //                     // database as part of a normal write.
+        if !self.loaded_unprocessed {
+            let ret = self.writer.load_unprocessed_events();
+
+            self.loaded_unprocessed = true;
+
+            if ret.is_err() {
+                sender.send(ret).unwrap_or(());
+                return Ok(());
+            }
+        }
+        console::log_1(&"write_queued_events".into());
+        return self
+            .writer
+            .write_queued_events(&mut self.conn.lock().unwrap(), force);
     }
 
     /// Commit the currently queued up events. This method will block. A
     /// non-blocking version of this method exists in the `commit_no_wait()`
     /// method.
     pub fn commit(&mut self) -> Result<()> {
-        self.commit_helper(false).recv().unwrap()
+        self.commit_helper(false)
     }
 
     /// Commit the currently queued up events forcing the commit to the index.
@@ -463,14 +498,19 @@ impl Database {
     ///
     /// This should only be used for testing purposes.
     pub fn force_commit(&mut self) -> Result<()> {
-        self.commit_helper(true).recv().unwrap()
+        self.commit_helper(true)
+    }
+
+    ///
+    pub async fn wait_merging_threads(self) -> Result<()> {
+        self.writer.wait_merging_threads().await
     }
 
     /// Reload the database so that a search reflects the state of the last
     /// commit. Note that this happens automatically and this method should be
     /// used only in unit tests.
     pub fn reload(&mut self) -> Result<()> {
-        // self.index.reload()?;
+        self.index.reload()?;
         Ok(())
     }
 
@@ -479,9 +519,9 @@ impl Database {
     ///
     /// Returns a receiver that will receive an empty message once the commit is
     /// done.
-    pub fn commit_no_wait(&mut self) -> Receiver<Result<()>> {
-        self.commit_helper(false)
-    }
+    // pub fn commit_no_wait(&mut self) -> Result<()> {
+    //     self.commit_helper(false)
+    // }
 
     /// Commit the currently queued up events forcing the commit to the index.
     ///
@@ -492,9 +532,9 @@ impl Database {
     ///
     /// Returns a receiver that will receive an empty message once the commit is
     /// done.
-    pub fn force_commit_no_wait(&mut self) -> Receiver<Result<()>> {
-        self.commit_helper(true)
-    }
+    // pub fn force_commit_no_wait(&mut self) -> Result<()> {
+    //     self.commit_helper(true)
+    // }
 
     /// Add the given events from the room history to the database.
     /// # Arguments
@@ -505,19 +545,25 @@ impl Database {
     /// persisted in the database.
     /// * `old_checkpoint` - The checkpoint that was used to fetch the given
     /// events. This checkpoint will be removed from the database.
-    pub fn add_historic_events(
-        &self,
-        events: Vec<(Event, Profile)>,
-        new_checkpoint: Option<CrawlerCheckpoint>,
-        old_checkpoint: Option<CrawlerCheckpoint>,
-    ) -> Receiver<Result<bool>> {
-        let (sender, receiver): (_, Receiver<Result<bool>>) = channel();
-        let payload = (new_checkpoint, old_checkpoint, events, sender);
-        let message = ThreadMessage::HistoricEvents(payload);
-        // self.tx.send(message).unwrap();
+    // pub fn add_historic_events(
+    //     &mut self,
+    //     events: Vec<(Event, Profile)>,
+    //     new_checkpoint: Option<CrawlerCheckpoint>,
+    //     old_checkpoint: Option<CrawlerCheckpoint>,
+    // ) -> Result<bool> {
+    //     // let (sender, receiver): (_, Receiver<Result<bool>>) = channel();
+    //     // let payload = (new_checkpoint, old_checkpoint, events, sender);
+    //     // let message = ThreadMessage::HistoricEvents(payload);
+    //     // self.tx.send(message).unwrap();
 
-        receiver
-    }
+    //     return self.writer.write_historic_events(
+    //         &mut self.conn,
+    //         new_checkpoint,
+    //         old_checkpoint,
+    //         events,
+    //         true,
+    //     );
+    // }
 
     /// Search the index and return events matching a search term.
     /// This is just a helper function that gets a searcher and performs a
@@ -525,19 +571,21 @@ impl Database {
     /// # Arguments
     ///
     /// * `term` - The search term that should be used to search the index.
-    // pub fn search(&self, term: &str, config: &SearchConfig) -> Result<SearchBatch> {
-    //     let searcher = self.get_searcher();
-    //     searcher.search(term, config)
-    // }
+    pub async fn search(&mut self, term: &str, config: &SearchConfig) -> Result<SearchBatch> {
+        let searcher = self.get_searcher();
+        // let db_path = path.as_ref().join(EVENTS_DB_NAME);
+        // let path = db_path.clone().into_os_string().into_string().unwrap();
+        // let mut conn = Self::establish_connection("".to_string()).await;
+        searcher.search(&mut self.conn.lock().unwrap(), term, config)
+    }
 
     /// Get a searcher that can be used to perform a search.
-    // pub fn get_searcher(&self) -> Searcher {
-    //     let index_searcher = self.index.get_searcher();
-    //     Searcher {
-    //         inner: index_searcher,
-    //         // database: self.connection.clone(),
-    //     }
-    // }
+    pub fn get_searcher(&self) -> Searcher {
+        let index_searcher = self.index.get_searcher();
+        Searcher {
+            inner: index_searcher,
+        }
+    }
 
     /// Get a database connection.
     /// Note that this connection should only be used for reading.

@@ -27,13 +27,20 @@ const DEFAULT_LOAD_LIMIT: usize = 20;
 /// or limit the search to specific event types.
 /// The search result can be configured in various ways as well.
 pub struct SearchConfig {
-    pub(crate) limit: usize,
-    pub(crate) before_limit: usize,
-    pub(crate) after_limit: usize,
-    pub(crate) order_by_recency: bool,
-    pub(crate) room_id: Option<RoomId>,
-    pub(crate) keys: Vec<EventType>,
-    pub(crate) next_batch: Option<Uuid>,
+    ///
+    pub limit: usize,
+    ///
+    pub before_limit: usize,
+    ///
+    pub after_limit: usize,
+    ///
+    pub order_by_recency: bool,
+    ///
+    pub room_id: Option<RoomId>,
+    ///
+    pub keys: Vec<EventType>,
+    ///
+    pub next_batch: Option<Uuid>,
 }
 
 impl SearchConfig {

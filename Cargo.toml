@@ -3,28 +3,37 @@ resolver = "2"
 members = ["bindings/seshat-wasm", "seshat-core"]
 
 [workspace.dependencies]
-# tantivy = { version = "0.22.0" }
+tantivy = { version = "0.22.0", default-features = false, features = [
+    "quickwit",
+    # "mmap",
+    # "sstable-termdict",
+    "zstd-compression",
+    # "wasm",
+] }
 # tantivy = { version = "0.22.0", default-features = false, features = [
 #     "wasm-bidgen",
 # ] }
-tantivy = { package = "izihawa-tantivy", version = "0.22.6", default-features = false, features = [
-    "quickwit",
-    # "mmap",
-    "sstable-termdict",
-    "zstd-compression",
-    "wasm",
-] }
+# tantivy = { package = "izihawa-tantivy", version = "0.22.6", default-features = false, features = [
+#     "quickwit",
+#     # "mmap",
+#     "sstable-termdict",
+#     "zstd-compression",
+#     "wasm",
+# ] }
 # tantivy-common = { package = "izihawa-tantivy-common", version = "0.7" }
 # tantivy-query-grammar = { package = "izihawa-tantivy-query-grammar", version = "0.22" }
-# tokio = { version = "1.35.1", default-features = false, features = ["sync"] }
-# tokio = { version = "1.35.1", default_features = false }
 getrandom = { version = "0.2", default-features = false }
-diesel = { version = "2.2", default-features = false }
+diesel = { version = "2.2", default-features = false }            #, features = ["sqlite"] }
 diesel-wasm-sqlite = "0.0.1"
 diesel_migrations = { version = "2.2", default-features = false }
 wasm-bindgen-futures = "0.4"
 wasm-bindgen = "=0.2.95"
 wasm-bindgen-test = "0.3.45"
+# wasm-bindgen = { path = "../wasm-bindgen" }
+# wasm-bindgen-test = { path = "../wasm-bindgen/crates/test" }
+# wasm-bindgen-shared = { path = "../wasm-bindgen/crates/shared" }
+# wasm-bindgen-macro-support = { path = "../wasm-bindgen/crates/macro-support" }
+# wasm-bindgen-macro = { path = "../wasm-bindgen/crates/macro" }
 tracing-wasm = "0.2.1"
 web-sys = "0.3"
 js-sys = "0.3"
@@ -35,7 +44,8 @@ openssl = { version = "0.10", features = ["vendored"] }
 libsqlite3-sys = { version = "0.29", features = [
     "bundled-sqlcipher-vendored-openssl",
 ] }
-
+uuid = "1.3.0"
+console_error_panic_hook = "0.1"
 
 [profile.dev]
 # Disabling debug info speeds up builds a bunch,
@@ -55,3 +65,12 @@ diesel-wasm-sqlite = { git = "https://github.com/xmtp/diesel-wasm-sqlite", branc
 diesel = { git = "https://github.com/diesel-rs/diesel", branch = "master" }
 diesel_derives = { git = "https://github.com/diesel-rs/diesel", branch = "master" }
 diesel_migrations = { git = "https://github.com/diesel-rs/diesel", branch = "master" }
+wasm-bindgen = { path = "../wasm-bindgen" }
+wasm-bindgen-test = { path = "../wasm-bindgen/crates/test" }
+wasm-bindgen-shared = { path = "../wasm-bindgen/crates/shared" }
+wasm-bindgen-futures = { path = "../wasm-bindgen/crates/futures" }
+web-sys = { path = "../wasm-bindgen/crates/web-sys" }
+js-sys = { path = "../wasm-bindgen/crates/js-sys" }
+wasm-bindgen-macro = { path = "../wasm-bindgen/crates/macro" }
+wasm-bindgen-macro-support = { path = "../wasm-bindgen/crates/macro-support" }
+tantivy = { path = "../tantivy" }

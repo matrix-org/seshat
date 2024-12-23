@@ -24,12 +24,13 @@ use std::{
 };
 
 use lru_cache::LruCache;
-use tantivy as tv;
+use tantivy::{self as tv, ReloadPolicy};
 use tantivy::{
     collector::{Count, MultiCollector, TopDocs},
     Term,
 };
 use uuid::Uuid;
+use web_sys::console;
 
 #[cfg(feature = "encryption")]
 // use crate::index::encrypted_dir::{EncryptedMmapDirectory, PBKDF_COUNT};
@@ -120,7 +121,7 @@ pub(crate) struct Writer {
     sender_field: tv::schema::Field,
     date_field: tv::schema::Field,
     added_events: usize,
-    commit_timestamp: std::time::Instant,
+    // commit_timestamp: std::time::Instant,
     room_id_field: tv::schema::Field,
 }
 
@@ -130,14 +131,12 @@ impl Writer {
     }
 
     fn commit_helper(&mut self, force: bool) -> Result<bool, tv::TantivyError> {
-        if self.added_events > 0
-            && (force
-                || self.added_events >= COMMIT_RATE
-                || self.commit_timestamp.elapsed() >= COMMIT_TIME)
+        if self.added_events > 0 && (force || self.added_events >= COMMIT_RATE)
+        // || self.commit_timestamp.elapsed() >= COMMIT_TIME)
         {
             self.inner.commit()?;
             self.added_events = 0;
-            self.commit_timestamp = std::time::Instant::now();
+            // self.commit_timestamp = std::time::Instant::now();
             Ok(true)
         } else {
             Ok(false)
@@ -163,7 +162,11 @@ impl Writer {
         doc.add_text(self.sender_field, &event.sender);
         doc.add_u64(self.date_field, event.server_ts as u64);
 
-        self.inner.add_document(doc);
+        console::log_1(&"add_document".into());
+        console::log_1(&event.content_value.clone().into());
+
+        let op = self.inner.add_document(doc).expect("add doc failed");
+        console::log_1(&format!("add_document {}", op).into());
         self.added_events += 1;
     }
 
@@ -174,8 +177,8 @@ impl Writer {
         self.inner.commit().unwrap();
     }
 
-    pub fn wait_merging_threads(self) -> Result<(), tv::TantivyError> {
-        self.inner.wait_merging_threads()
+    pub async fn wait_merging_threads(self) -> Result<(), tv::TantivyError> {
+        self.inner.wait_merging_threads().await
     }
 }
 
@@ -213,6 +216,7 @@ impl IndexSearcher {
         };
 
         if config.keys.is_empty() {
+            console::log_1(&"config.keys.is_empty()r".into());
             keys.append(&mut vec![
                 self.body_field,
                 self.topic_field,
@@ -227,7 +231,8 @@ impl IndexSearcher {
                 }
             }
         }
-
+        console::log_1(&format!("keys: {keys:?}").into());
+        console::log_1(&format!("term: {term:?}").into());
         let query_parser =
             tv::query::QueryParser::new(self.schema.clone(), keys, self.tokenizer.clone());
 
@@ -253,6 +258,7 @@ impl IndexSearcher {
             );
 
             let mut result = self.inner.search(query, &multicollector)?;
+            console::log_1(&"result 1 ".into());
             let mut top_docs = top_docs_handle.extract(&mut result);
             (
                 result,
@@ -264,6 +270,7 @@ impl IndexSearcher {
         } else {
             let top_docs_handle = multicollector.add_collector(TopDocs::with_limit(limit));
             let mut result = self.inner.search(query, &multicollector)?;
+            console::log_1(&"result 3 ".into());
 
             let top_docs = top_docs_handle.extract(&mut result);
             (result, top_docs)
@@ -276,7 +283,9 @@ impl IndexSearcher {
 
         let end = count == top_docs.len();
 
+        console::log_1(&"top_docs".into());
         for (score, docaddress) in top_docs {
+            console::log_1(&"top_docs doc".into());
             let doc: tv::TantivyDocument = match self.inner.doc(docaddress) {
                 Ok(d) => d,
                 Err(_e) => continue,
@@ -326,14 +335,16 @@ impl IndexSearcher {
         term: &str,
         config: &SearchConfig,
     ) -> Result<SearchResult, tv::TantivyError> {
+        console::log_1(&"search inner".into());
         let past_search = if let Some(token) = &config.next_batch {
             let mut search_cache = self.search_cache.write().unwrap();
             search_cache.get_mut(token).cloned()
         } else {
             None
         };
-
+        console::log_1(&"search past cache".into());
         let ((result, event_ids), term, config) = if let Some(past_search) = past_search {
+            console::log_1(&"using past search".into());
             let query = self.parse_query(term, &past_search.search_config)?;
             let previous_results = &past_search.event_ids;
 
@@ -354,6 +365,7 @@ impl IndexSearcher {
                 past_search.search_config.clone(),
             )
         } else {
+            console::log_1(&"new query".into());
             let query = self.parse_query(term, config)?;
             (
                 self.search_helper(
@@ -368,8 +380,11 @@ impl IndexSearcher {
             )
         };
 
+        console::log_1(&"search result".into());
         let (count, results) = result;
-
+        let c = results.len();
+        console::log_1(&format!("search: {count:?}").into());
+        console::log_1(&format!("search: {c:?}").into());
         let next_batch = if event_ids.len() == count {
             None
         } else {
@@ -384,7 +399,7 @@ impl IndexSearcher {
             search_cache.insert(token, search);
             Some(token)
         };
-
+        console::log_1(&"search result return".into());
         Ok(SearchResult {
             count,
             results,
@@ -415,8 +430,15 @@ impl Index {
 
         let schema = schemabuilder.build();
 
-        let index = Index::open_index(path, config, schema)?;
-        let reader = index.reader()?;
+        // let index = Index::open_index(path, config, schema)?;
+        let index = tv::Index::create_in_ram(schema);
+        let reader = index
+            .reader_builder()
+            .reload_policy(ReloadPolicy::Manual)
+            .try_into()?;
+
+        // let index = Index::open_index(path, config, schema)?;
+        // let reader = index.reader()?;
 
         match config.language {
             Language::Unknown => (),
@@ -458,6 +480,7 @@ impl Index {
         // tv::Index::open_or_create(dir, schema)
         //     }
         //     None => {
+
         let dir = tv::directory::RamDirectory::create(); // open(path)?;
         tv::Index::open_or_create(dir, schema)
         // }
@@ -534,7 +557,7 @@ impl Index {
             sender_field: self.sender_field,
             date_field: self.date_field,
             added_events: 0,
-            commit_timestamp: std::time::Instant::now(),
+            // commit_timestamp: std::time::Instant::now(),
         })
     }
 }

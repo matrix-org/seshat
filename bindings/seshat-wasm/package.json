@@ -12,7 +12,7 @@
   },
   "scripts": {
     "dev-build": "wasm-pack build --target web --out-name seshat --out-dir ./pkg",
-    "build": "RUSTFLAGS='-C opt-level=s' WASM_BINDGEN_WEAKREF=1 wasm-pack build --release --target web --out-name seshat --out-dir ./pkg",
+    "build": "WASM_BINDGEN_WEAKREF=1 wasm-pack build --release --target web --out-name seshat --out-dir ./pkg",
     "test": "vitest"
   }
 }

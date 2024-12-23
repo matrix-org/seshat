@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::{
+    any,
     cmp::Ordering,
     collections::{hash_map, HashMap},
     fmt::format,
@@ -26,30 +27,33 @@ use std::{
 // use r2d2_sqlite::SqliteConnectionManager;
 
 use diesel::{
-    dsl::insert_or_ignore_into,
+    dsl::{insert_or_ignore_into, sql},
     prelude::QueryableByName,
+    query_builder::SqlQuery,
     query_dsl::methods::FilterDsl,
     sql_query,
-    sql_types::{BigInt, Bool, Integer},
-    update, ExpressionMethods, Identifiable, Insertable, Queryable, RunQueryDsl, Selectable,
+    sql_types::{BigInt, Bool, Integer, Nullable, Text, TinyInt},
+    update, ExpressionMethods, Identifiable, Insertable, QueryResult, Queryable, RunQueryDsl,
+    Selectable,
 };
 use diesel_wasm_sqlite::connection::WasmSqliteConnection;
-use tantivy::schema;
+use tantivy::{query, schema};
 use web_sys::console;
 
 use crate::{
     config::LoadDirection,
-    database::{schema::version_table, SearchResult, DATABASE_VERSION},
+    database::{SearchResult, DATABASE_VERSION},
     error::Result,
     events::{CrawlerCheckpoint, Event, EventContext, EventId, Profile, SerializedEvent},
     index::Writer as IndexWriter,
+    schema::version_table,
     Database, EventType,
 };
 
 const FILE_EVENT_TYPES: &str = "'m.image', 'm.file', 'm.audio', 'm.video'";
-use super::schema::reindex_needed_table;
+use super::{super::schema::reindex_needed_table, CipherVersion};
 pub(crate) use diesel_migrations::{embed_migrations, EmbeddedMigrations};
-pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("../migrations");
+// pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("../migrations");
 
 #[derive(QueryableByName, Selectable, Insertable, Debug, PartialEq, Clone)]
 #[diesel(table_name = version_table)]
@@ -66,13 +70,19 @@ pub struct ReindexNeeded {
     reindex_needed: bool,
 }
 
+#[derive(QueryableByName)]
+pub struct IdResult {
+    #[diesel(sql_type = BigInt)]
+    pub id: i64,
+}
+
 impl Database {
     /// Write the events to the database.
     /// Returns a tuple containing a boolean and an array if integers. The
     /// boolean notifies us if all the events were already added to the
     /// database, the integers are the database ids of our events.
     pub(crate) fn write_events_helper(
-        // conn: &WasmSqliteConnection,
+        conn: &mut WasmSqliteConnection,
         index_writer: &mut IndexWriter,
         events: &mut Vec<(Event, Profile)>,
     ) -> Result<(bool, Vec<i64>)> {
@@ -80,7 +90,8 @@ impl Database {
         let mut event_ids = Vec::new();
 
         for (mut e, mut p) in events.drain(..) {
-            let event_id = Database::save_event(&mut e, &mut p)?;
+            let event_id = Database::save_event(conn, &mut e, &mut p)?;
+            console::log_1(&format!("index_writer.add_event: {event_id:?}").into());
             match event_id {
                 Some(event_id) => {
                     index_writer.add_event(&e);
@@ -98,7 +109,7 @@ impl Database {
     }
 
     pub(crate) fn delete_event_helper(
-        // conn: &mut WasmSqliteConnection,
+        conn: &mut WasmSqliteConnection,
         index_writer: &mut IndexWriter,
         event_id: EventId,
         pending_deletion_events: &mut Vec<EventId>,
@@ -125,7 +136,7 @@ impl Database {
     }
 
     pub(crate) fn mark_events_as_deleted(
-        // conn: &mut WasmSqliteConnection,
+        conn: &mut WasmSqliteConnection,
         events: &mut Vec<EventId>,
     ) -> Result<()> {
         if events.is_empty() {
@@ -153,7 +164,7 @@ impl Database {
 
     /// Delete non committed events from the database that were committed
     pub(crate) fn mark_events_as_indexed(
-        // conn: &mut WasmSqliteConnection,
+        conn: &mut WasmSqliteConnection,
         events: &mut Vec<i64>,
     ) -> Result<()> {
         if events.is_empty() {
@@ -180,7 +191,7 @@ impl Database {
     }
 
     pub(crate) fn write_events(
-        // conn: &mut WasmSqliteConnection,
+        conn: &mut WasmSqliteConnection,
         index_writer: &mut IndexWriter,
         message: (
             Option<CrawlerCheckpoint>,
@@ -193,7 +204,11 @@ impl Database {
         let (new_checkpoint, old_checkpoint, events) = message;
         // let transaction = connection.transaction()?;
 
-        let (ret, event_ids) = Database::write_events_helper(index_writer, events)?;
+        console::log_1(&"write_events_helper".into());
+        console::log_1(&events.len().to_string().as_str().into());
+        let (ret, event_ids) = Database::write_events_helper(conn, index_writer, events)?;
+
+        console::log_1(&"replace_crawler_checkpoint".into());
         Database::replace_crawler_checkpoint(
             // &transaction,
             new_checkpoint.as_ref(),
@@ -201,18 +216,20 @@ impl Database {
         );
 
         // transaction.commit()?;
-
+        console::log_1(&"replace_crawler_checkpoint".into());
         uncommitted_events.extend(event_ids);
 
         let committed = if force_commit {
+            console::log_1(&"index_writer.force_commit".into());
             index_writer.force_commit()?;
             true
         } else {
+            console::log_1(&"index_writer.commit".into());
             index_writer.commit()?
         };
 
         if committed {
-            // Database::mark_events_as_indexed(connection, uncommitted_events)?;
+            // Database::mark_events_as_indexed(conn, uncommitted_events)?;
         }
 
         Ok((ret, committed))
@@ -416,8 +433,7 @@ impl Database {
         )
         .execute(conn);
 
-        let _ =
-            sql_query("INSERT OR IGNORE INTO user_version ( version ) VALUES(?1)").execute(conn);
+        let _ = sql_query("INSERT OR IGNORE INTO user_version ( version ) VALUES(0)").execute(conn);
 
         Ok(())
     }
@@ -427,11 +443,8 @@ impl Database {
         // connection.query_row("SELECT COUNT(*) FROM events", [], |row| row.get(0))
     }
 
-    pub(crate) fn get_event_count_for_room(
-        // conn: &WasmSqliteConnection,
-        room_id: &str,
-    ) -> i64 {
-        let room_id = Database::get_room_id(room_id);
+    pub(crate) fn get_event_count_for_room(conn: &mut WasmSqliteConnection, room_id: &str) -> i64 {
+        let room_id = Database::get_room_id(conn, room_id);
         // connection.query_row(
         //     "SELECT COUNT(*) FROM events WHERE room_id=?1",
         //     [room_id],
@@ -449,10 +462,10 @@ impl Database {
     }
 
     pub(crate) fn save_profile(
-        // conn: &WasmSqliteConnection,
+        conn: &mut WasmSqliteConnection,
         user_id: &str,
         profile: &Profile,
-    ) -> i64 {
+    ) -> QueryResult<i64> {
         let displayname = profile.displayname.as_ref();
         let avatar_url = profile.avatar_url.as_ref();
 
@@ -461,25 +474,37 @@ impl Database {
 
         let avatar_url = if let Some(a) = avatar_url { a } else { "" };
 
-        // connection.execute(
-        //     "
-        //     INSERT OR IGNORE INTO profile (
-        //         user_id, displayname, avatar_url
-        //     ) VALUES(?1, ?2, ?3)",
-        //     [user_id, displayname, avatar_url],
-        // )?;
+        sql_query(
+            "
+            INSERT OR IGNORE INTO profile (
+                user_id, displayname, avatar_url
+            ) VALUES(?1, ?2, ?3)",
+        )
+        .bind::<Text, _>(user_id)
+        .bind::<Text, _>(displayname)
+        .bind::<Text, _>(avatar_url)
+        .execute(conn)?;
 
-        // let profile_id: i64 = connection.query_row(
-        //     "
-        //     SELECT id FROM profile WHERE (
-        //         user_id=?1
-        //         and displayname=?2
-        //         and avatar_url=?3)",
-        //     [user_id, displayname, avatar_url],
-        //     |row| row.get(0),
-        // )?;
-        let profile_id: i64 = 0;
-        profile_id
+        #[derive(QueryableByName)]
+        pub struct Profile {
+            #[diesel(sql_type = BigInt)]
+            pub id: i64,
+        }
+
+        let profile_id = sql_query(
+            "
+            SELECT id FROM profile WHERE (
+                user_id=?1
+                and displayname=?2
+                and avatar_url=?3)",
+        )
+        .bind::<Text, _>(user_id)
+        .bind::<Text, _>(displayname)
+        .bind::<Text, _>(avatar_url)
+        .load::<Profile>(conn)?[0]
+            .id;
+
+        Ok(profile_id)
     }
 
     #[cfg(test)]
@@ -505,17 +530,24 @@ impl Database {
     }
 
     pub(crate) fn get_room_id(
-        // conn: &WasmSqliteConnection,
+        conn: &mut WasmSqliteConnection,
         room: &str,
-    ) -> i64 {
-        // connection.execute("INSERT OR IGNORE INTO rooms (room_id) VALUES(?1)", [room])?;
+    ) -> diesel::QueryResult<i64> {
+        #[derive(QueryableByName)]
+        pub struct Room {
+            #[diesel(sql_type = BigInt)]
+            pub id: i64,
+        }
 
-        let room_id: i64 = 0;
-        // connection.query_row("SELECT id FROM rooms WHERE (room_id=?1)", [room], |row| {
-        //     row.get(0)
-        // })?;
+        sql_query("INSERT OR IGNORE INTO rooms (room_id) VALUES(?)")
+            .bind::<Text, _>(room.clone())
+            .execute(conn);
 
-        room_id
+        let room_result = &sql_query("SELECT id FROM rooms WHERE (room_id=?)")
+            .bind::<Text, _>(room)
+            .load::<Room>(conn)?[0];
+
+        Ok(room_result.id)
     }
 
     pub(crate) fn load_pending_deletion_events(// conn: &WasmSqliteConnection,
@@ -558,89 +590,96 @@ impl Database {
     }
 
     pub(crate) fn save_event_helper(
-        // conn: &WasmSqliteConnection,
+        conn: &mut WasmSqliteConnection,
         event: &mut Event,
         profile_id: i64,
-    ) -> i64 {
-        let room_id = Database::get_room_id(&event.room_id);
-        room_id
-        // let mut statement = connection.prepare(
-        //     "
-        //     INSERT INTO events (
-        //         event_id, sender, server_ts, room_id, type,
-        //         msgtype, source, profile_id
-        //     ) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-        // )?;
+    ) -> diesel::QueryResult<i64> {
+        let room_id = Database::get_room_id(conn, &event.room_id)?;
 
-        // let event_id = statement.insert([
-        //     &event.event_id,
-        //     &event.sender,
-        //     &event.server_ts as &dyn ToSql,
-        //     &room_id as &dyn ToSql,
-        //     &event.event_type as &dyn ToSql,
-        //     &event.msgtype,
-        //     &event.source,
-        //     &profile_id as &dyn ToSql,
-        // ])?;
+        let event_id = sql_query(
+            "
+            INSERT INTO events (
+                event_id, sender, server_ts, room_id, type,
+                msgtype, source, profile_id
+            ) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+             RETURNING id",
+        )
+        .bind::<Text, _>(&event.event_id)
+        .bind::<Text, _>(&event.sender)
+        .bind::<BigInt, _>(&event.server_ts)
+        .bind::<BigInt, _>(&room_id)
+        .bind::<Text, _>(&event.event_type.to_string())
+        .bind::<Nullable<Text>, _>(&event.msgtype)
+        .bind::<Text, _>(&event.source)
+        .bind::<BigInt, _>(&profile_id)
+        // .execute(conn)?;
+        .load::<IdResult>(conn)?[0]
+            .id;
 
-        // let mut stmt = connection.prepare(
-        //     "
-        //     INSERT OR IGNORE INTO uncommitted_events (
-        //         event_id, content_value
-        //     ) VALUES (?1, ?2)",
-        // )?;
+        console::log_1(&format!("save event h {event_id:?}").into()); // should not be using rowid?
+        let id = sql_query(
+            "INSERT OR IGNORE INTO uncommitted_events (
+                event_id, content_value
+            ) VALUES (?1, ?2)
+            RETURNING id",
+        )
+        .bind::<BigInt, _>(event_id as i64)
+        .bind::<Text, _>(&event.content_value)
+        .load::<IdResult>(conn)?[0]
+            .id;
 
-        // let id = 0;
-        // stmt.insert([&event_id as &dyn ToSql, &event.content_value])?;
-
-        // id
+        console::log_1(&format!("save uncommitted_events h {id:?}").into()); // should not be using rowid?
+        Ok(id as i64)
     }
 
     pub(crate) fn save_event(
-        // conn: &WasmSqliteConnection,
+        conn: &mut WasmSqliteConnection,
         event: &mut Event,
         profile: &mut Profile,
     ) -> Result<Option<i64>> {
-        if Database::event_in_store(event) {
+        if Database::event_in_store(conn, event) {
             return Ok(None);
         }
 
-        let ret = Database::save_profile(&event.sender, profile);
-        // let profile_id = match ret {
-        //     Ok(p) => p,
-        //     Err(e) => match e {
-        //         rusqlite::Error::NulError(..) => {
-        //             // A nul error is thrown because the string contains nul
-        //             // bytes and converting it to a C string isn't possible this
-        //             // way. This is likely some string containing malicious nul
-        //             // bytes so we filter them out.
-        //             profile.displayname = profile.displayname.as_mut().map(|d| d.replace('\0', ""));
-        //             profile.avatar_url = profile.avatar_url.as_mut().map(|u| u.replace('\0', ""));
-        //             Database::save_profile(&event.sender, profile)?
-        //         }
-        //         _ => return Err(e.into()),
-        //     },
-        // };
-        // let ret = Database::save_event_helper(event, profile_id);
+        let ret = Database::save_profile(conn, &event.sender, profile);
 
-        // let event_id = match ret {
-        //     Ok(e) => e,
-        //     Err(e) => match e {
-        //         rusqlite::Error::NulError(..) => {
-        //             // Same deal for the event, but we need to delete the event
-        //             // in case a transaction was used. Sqlite will otherwise
-        //             // complain about the unique constraint that we have for
-        //             // the event id.
-        //             Database::delete_event_by_id(&event.event_id);
-        //             event.content_value = event.content_value.replace('\0', "");
-        //             event.msgtype = event.msgtype.as_mut().map(|m| m.replace('\0', ""));
-        //             Database::save_event_helper(event, profile_id)?
-        //         }
-        //         _ => return Err(e.into()),
-        //     },
-        // };
+        let profile_id = match ret {
+            Ok(p) => p,
+            Err(e) => match e {
+                diesel::result::Error::InvalidCString(..) => {
+                    // A nul error is thrown because the string contains nul
+                    // bytes and converting it to a C string isn't possible this
+                    // way. This is likely some string containing malicious nul
+                    // bytes so we filter them out.
+                    profile.displayname = profile.displayname.as_mut().map(|d| d.replace('\0', ""));
+                    profile.avatar_url = profile.avatar_url.as_mut().map(|u| u.replace('\0', ""));
+                    Database::save_profile(conn, &event.sender, profile)?
+                }
+                _ => return Err(e.into()),
+            },
+        };
 
-        Ok(Some(0))
+        console::log_1(&format!("save profile {profile_id:?}").into());
+        let ret = Database::save_event_helper(conn, event, profile_id);
+
+        let event_id = match ret {
+            Ok(e) => e,
+            Err(e) => match e {
+                diesel::result::Error::InvalidCString(..) => {
+                    // Same deal for the event, but we need to delete the event
+                    // in case a transaction was used. Sqlite will otherwise
+                    // complain about the unique constraint that we have for
+                    // the event id.
+                    Database::delete_event_by_id(&event.event_id);
+                    event.content_value = event.content_value.replace('\0', "");
+                    event.msgtype = event.msgtype.as_mut().map(|m| m.replace('\0', ""));
+                    Database::save_event_helper(conn, event, profile_id)?
+                }
+                _ => return Err(e.into()),
+            },
+        };
+        console::log_1(&format!("save event {event_id:?}").into());
+        Ok(Some(event_id))
     }
 
     pub(crate) fn delete_event_by_id(
@@ -652,11 +691,8 @@ impl Database {
         // connection.execute("DELETE from events WHERE event_id == ?1", [event_id])
     }
 
-    pub(crate) fn event_in_store(
-        // conn: &WasmSqliteConnection,
-        event: &Event,
-    ) -> bool {
-        let room_id = Database::get_room_id(&event.room_id);
+    pub(crate) fn event_in_store(conn: &mut WasmSqliteConnection, event: &Event) -> bool {
+        let room_id = Database::get_room_id(conn, &event.room_id);
         let count: i64 = 0;
         // connection.query_row(
         //     "
@@ -792,111 +828,112 @@ impl Database {
 
     /// Load events surounding the given event.
     pub(crate) fn load_event_context(
-        // conn: &WasmSqliteConnection,
+        conn: &mut WasmSqliteConnection,
         event: &Event,
         before_limit: usize,
         after_limit: usize,
-    ) -> EventContext {
+    ) -> diesel::QueryResult<EventContext> {
         let mut profiles: HashMap<String, Profile> = HashMap::new();
-        // let room_id = Database::get_room_id(&event.room_id)?;
-        let before: Vec<SerializedEvent> = vec![];
+        let room_id = Database::get_room_id(conn, &event.room_id)?;
+
+        #[derive(QueryableByName, Debug, PartialEq, Clone)]
+        pub struct ContextResult {
+            #[diesel(sql_type = Text)]
+            pub sender: String,
+            #[diesel(sql_type = Text)]
+            pub source: String,
+            #[diesel(sql_type = Nullable<Text>)]
+            pub displayname: Option<String>,
+            #[diesel(sql_type = Nullable<Text>)]
+            pub avatar_url: Option<String>,
+        }
+
         let after: Vec<SerializedEvent> = vec![];
-        // let before = if before_limit == 0 {
-        //     vec![]
-        // } else {
-        //     let mut stmt = connection.prepare(
-        //         "
-        //         WITH room_events AS (
-        //             SELECT *
-        //             FROM events
-        //             WHERE room_id == ?2
-        //         )
-        //         SELECT source, sender, displayname, avatar_url
-        //         FROM room_events
-        //         INNER JOIN profile on profile.id = room_events.profile_id
-        //         WHERE (
-        //             (event_id != ?1) &
-        //             (server_ts <= ?3)
-        //         ) ORDER BY server_ts DESC LIMIT ?4
-        //         ",
-        //     )?;
-        //     let context = stmt.query_map(
-        //         params![&event.event_id, &room_id, &event.server_ts, &after_limit,],
-        //         |row| {
-        //             Ok((
-        //                 row.get(0),
-        //                 row.get(1),
-        //                 Profile {
-        //                     displayname: row.get(2)?,
-        //                     avatar_url: row.get(3)?,
-        //                 },
-        //             ))
-        //         },
-        //     )?;
-        //     let mut ret: Vec<String> = Vec::new();
+        let before = if before_limit == 0 {
+            vec![]
+        } else {
+            let context = sql_query(
+                "
+                WITH room_events AS (
+                    SELECT *
+                    FROM events
+                    WHERE room_id == ?2
+                )
+                SELECT source, sender, displayname, avatar_url
+                FROM room_events
+                INNER JOIN profile on profile.id = room_events.profile_id
+                WHERE (
+                    (event_id != ?1) &
+                    (server_ts <= ?3)
+                ) ORDER BY server_ts DESC LIMIT ?4
+                ",
+            )
+            .bind::<BigInt, _>(room_id)
+            .bind::<BigInt, _>(event.server_ts)
+            .bind::<BigInt, _>(after_limit as i64)
+            .load::<ContextResult>(conn)?;
 
-        //     for row in context {
-        //         let (source, sender, profile) = row?;
-        //         profiles.insert(sender?, profile);
-        //         ret.push(source?)
-        //     }
+            let mut ret: Vec<String> = Vec::new();
 
-        //     ret
-        // };
+            for row in context {
+                let profile = Profile {
+                    displayname: row.displayname,
+                    avatar_url: row.avatar_url,
+                };
+                profiles.insert(row.sender, profile);
+                ret.push(row.source)
+            }
 
-        // let after = if after_limit == 0 {
-        //     vec![]
-        // } else {
-        //     let mut stmt = connection.prepare(
-        //         "
-        //         WITH room_events AS (
-        //             SELECT *
-        //             FROM events
-        //             WHERE room_id == ?2
-        //         )
-        //         SELECT source, sender, displayname, avatar_url
-        //         FROM room_events
-        //         INNER JOIN profile on profile.id = room_events.profile_id
-        //         WHERE (
-        //             (event_id != ?1) &
-        //             (server_ts >= ?3)
-        //         ) ORDER BY server_ts ASC LIMIT ?4
-        //         ",
-        //     )?;
-        //     let context = stmt.query_map(
-        //         params![&event.event_id, &room_id, &event.server_ts, &after_limit,],
-        //         |row| {
-        //             Ok((
-        //                 row.get(0),
-        //                 row.get(1),
-        //                 Profile {
-        //                     displayname: row.get(2)?,
-        //                     avatar_url: row.get(3)?,
-        //                 },
-        //             ))
-        //         },
-        //     )?;
+            ret
+        };
 
-        //     let mut ret: Vec<String> = Vec::new();
+        let after = if after_limit == 0 {
+            vec![]
+        } else {
+            let context = sql_query(
+                "
+                WITH room_events AS (
+                    SELECT *
+                    FROM events
+                    WHERE room_id == ?2
+                )
+                SELECT source, sender, displayname, avatar_url
+                FROM room_events
+                INNER JOIN profile on profile.id = room_events.profile_id
+                WHERE (
+                    (event_id != ?1) &
+                    (server_ts >= ?3)
+                ) ORDER BY server_ts ASC LIMIT ?4
+                ",
+            )
+            .bind::<Text, _>(event.event_id.clone())
+            .bind::<BigInt, _>(room_id)
+            .bind::<BigInt, _>(event.server_ts)
+            .load::<ContextResult>(conn)?;
 
-        //     for row in context {
-        //         let (source, sender, profile) = row?;
-        //         profiles.insert(sender?, profile);
-        //         ret.push(source?)
-        //     }
+            let mut ret: Vec<String> = Vec::new();
 
-        //     ret
-        // };
+            for row in context {
+                let profile = Profile {
+                    displayname: row.displayname,
+                    avatar_url: row.avatar_url,
+                };
+                profiles.insert(row.sender, profile);
+                ret.push(row.source)
+            }
 
-        (before, after, profiles)
+            ret
+        };
+
+        Ok((before, after, profiles))
     }
 
     pub(crate) fn load_event(
-        // conn: &WasmSqliteConnection,
+        conn: &mut WasmSqliteConnection,
         room_id: &str,
         event_id: &str,
     ) -> Event {
-        let room_id = Database::get_room_id(room_id);
+        let room_id = Database::get_room_id(conn, room_id);
 
         // connection.query_row(
         //     "SELECT type, msgtype, event_id, sender,
@@ -931,43 +968,17 @@ impl Database {
     }
 
     pub(crate) fn load_events(
-        // conn: &WasmSqliteConnection,
+        conn: &mut WasmSqliteConnection,
         search_result: &[(f32, EventId)],
         before_limit: usize,
         after_limit: usize,
         order_by_recency: bool,
-    ) -> Vec<SearchResult> {
+    ) -> diesel::QueryResult<Vec<SearchResult>> {
         if search_result.is_empty() {
-            return vec![];
+            return Ok(vec![]);
         }
 
-        let event_num = search_result.len();
-        let parameter_str = ", ?".repeat(event_num - 1);
-
-        // let mut stmt = if order_by_recency {
-        //     connection.prepare(&format!(
-        //         "SELECT type, msgtype, event_id, sender,
-        //          server_ts, rooms.room_id, source, displayname, avatar_url
-        //          FROM events
-        //          INNER JOIN profile on profile.id = events.profile_id
-        //          INNER JOIN rooms on rooms.id = events.room_id
-        //          WHERE event_id IN (?{})
-        //          ORDER BY server_ts DESC
-        //          ",
-        //         &parameter_str
-        //     ))?
-        // } else {
-        //     connection.prepare(&format!(
-        //         "SELECT type, msgtype, event_id, sender,
-        //          server_ts, rooms.room_id, source, displayname, avatar_url
-        //          FROM events
-        //          INNER JOIN profile on profile.id = events.profile_id
-        //          INNER JOIN rooms on rooms.id = events.room_id
-        //          WHERE event_id IN (?{})
-        //          ",
-        //         &parameter_str
-        //     ))?
-        // };
+        console::log_1(&format!("load_events not empty").into());
 
         let (mut scores, event_ids): (HashMap<String, f32>, Vec<String>) = {
             let mut s = HashMap::new();
@@ -980,51 +991,113 @@ impl Database {
             (s, e)
         };
 
-        // let db_events = stmt.query_map(params_from_iter(event_ids), |row| {
-        //     Ok((
-        //         Event {
-        //             event_type: row.get(0)?,
-        //             content_value: "".to_string(),
-        //             msgtype: row.get(1)?,
-        //             event_id: row.get(2)?,
-        //             sender: row.get(3)?,
-        //             server_ts: row.get(4)?,
-        //             room_id: row.get(5)?,
-        //             source: row.get(6)?,
-        //         },
-        //         Profile {
-        //             displayname: row.get(7)?,
-        //             avatar_url: row.get(8)?,
-        //         },
-        //     ))
-        // })?;
+        let ids_param = event_ids.join(",");
+        let event_num = search_result.len();
+        let parameter_str = ", ?".repeat(event_num - 1);
 
+        let mut query = if order_by_recency {
+            console::log_1(&format!("order_by_recency").into());
+            sql_query(&format!(
+                "SELECT type, msgtype, event_id, sender,
+                 server_ts, rooms.room_id, source, displayname, avatar_url
+                 FROM events
+                 INNER JOIN profile on profile.id = events.profile_id
+                 INNER JOIN rooms on rooms.id = events.room_id
+                 WHERE event_id IN (?{})
+                 ORDER BY server_ts DESC
+                 ",
+                parameter_str
+            ))
+            .into_boxed()
+        } else {
+            console::log_1(&format!("not order_by_recency").into());
+            sql_query(&format!(
+                "SELECT type, msgtype, event_id, sender,
+                 server_ts, rooms.room_id, source, displayname, avatar_url
+                 FROM events
+                 INNER JOIN profile on profile.id = events.profile_id
+                 INNER JOIN rooms on rooms.id = events.room_id
+                 WHERE event_id IN (?{})
+                 ",
+                parameter_str
+            ))
+            .into_boxed()
+        };
+
+        #[derive(QueryableByName, Debug, PartialEq, Clone)]
+        pub struct JoinResult {
+            #[diesel(column_name = "type", sql_type = Text)]
+            pub event_type: String,
+            #[diesel(sql_type = Nullable<Text>)]
+            pub msgtype: Option<String>,
+            #[diesel(sql_type = Text)]
+            pub event_id: String,
+            #[diesel(sql_type = Text)]
+            pub sender: String,
+            #[diesel(sql_type = BigInt)]
+            pub server_ts: i64,
+            #[diesel(sql_type = Text)]
+            pub room_id: String,
+            #[diesel(sql_type = Text)]
+            pub source: String,
+            #[diesel(sql_type = Nullable<Text>)]
+            pub displayname: Option<String>,
+            #[diesel(sql_type = Nullable<Text>)]
+            pub avatar_url: Option<String>,
+        }
+
+        // let a = query.bind::<Text, _>("".to_string()).into_boxed();
+        // let any: any
+        for event_id in event_ids {
+            query = query.bind::<Text, _>(event_id)
+        }
+        // let unboxed = query.q();
+        // console::log_1(&format!("loading events query: {query:?}").into());
+        let db_events = query.load::<JoinResult>(conn)?;
+
+        console::log_1(&format!("load_events.db_events: {db_events:?}").into());
         let mut events = Vec::new();
-        // for row in db_events {
-        //     let (event, profile): (Event, Profile) = row?;
-        //     let (before, after, profiles) =
-        //         Database::load_event_context(connection, &event, before_limit, after_limit)?;
+        for row in db_events {
+            // let join_result: JoinResult = row;
+            let event = Event {
+                event_type: EventType::from(row.event_type.as_str()),
+                content_value: "".to_string(),
+                msgtype: row.msgtype,
+                event_id: row.event_id,
+                sender: row.sender,
+                server_ts: row.server_ts,
+                room_id: row.room_id,
+                source: row.source,
+            };
+            let profile = Profile {
+                displayname: row.displayname,
+                avatar_url: row.avatar_url,
+            };
+            let (before, after, profiles) =
+                Database::load_event_context(conn, &event, before_limit, after_limit)?;
 
-        //     let mut profiles = profiles;
-        //     profiles.insert(event.sender.clone(), profile);
+            let mut profiles = profiles;
+            profiles.insert(event.sender.clone(), profile);
 
-        //     let result = SearchResult {
-        //         score: scores.remove(&event.event_id).unwrap(),
-        //         event_source: event.source,
-        //         events_before: before,
-        //         events_after: after,
-        //         profile_info: profiles,
-        //     };
-        //     events.push(result);
-        // }
+            let result = SearchResult {
+                score: scores.remove(&event.event_id).unwrap(),
+                event_source: event.source,
+                events_before: before,
+                events_after: after,
+                profile_info: profiles,
+            };
+            events.push(result);
+        }
 
+        console::log_1(&format!("load_events.events: {events:?}").into());
         // Sqlite orders by recency for us, but if we score by rank sqlite will
         // mess up our order, re-sort our events here.
         if !order_by_recency {
-            // events.sort_by(|a, b| a.score.partial_cmp(&b.score).unwrap_or(Ordering::Equal));
+            events.sort_by(|a, b| a.score.partial_cmp(&b.score).unwrap_or(Ordering::Equal));
         }
 
-        events
+        console::log_1(&format!("load_events.events order_by_recency: {events:?}").into());
+        Ok(events)
     }
 
     pub(crate) fn replace_crawler_checkpoint(
