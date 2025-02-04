@@ -74,7 +74,7 @@ impl RecoveryDatabase {
     /// # Arguments
     ///
     /// * `path` - The directory where the database will be stored in. This
-    /// should be an empty directory if a new database should be created.
+    ///   should be an empty directory if a new database should be created.
     pub fn new<P: AsRef<Path>>(path: P) -> Result<Self>
     where
         PathBuf: std::convert::From<P>,
@@ -87,7 +87,7 @@ impl RecoveryDatabase {
     /// # Arguments
     ///
     /// * `path` - The directory where the database will be stored in. This
-    /// should be an empty directory if a new database should be created.
+    ///   should be an empty directory if a new database should be created.
     ///
     /// * `config` - Configuration that changes the behaviour of the database.
     pub fn new_with_config<P: AsRef<Path>>(path: P, config: &Config) -> Result<Self>

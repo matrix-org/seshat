@@ -174,25 +174,25 @@ impl EncryptedMmapDirectory {
         })
     }
     /// Open a encrypted mmap directory. If the directory is empty a new
-    /// directory key will be generated and encrypted with the given passphrase.
+    ///   directory key will be generated and encrypted with the given passphrase.
     ///
     /// If a new store is created, this method will randomly generated a new
-    /// store key and encrypted using the given passphrase.
+    ///   store key and encrypted using the given passphrase.
     ///
     /// # Arguments
     ///
     /// * `path` - The path where the directory should reside in.
     /// * `passphrase` - The passphrase that was used to encrypt our directory
-    /// or the one that will be used to encrypt our directory.
+    ///   or the one that will be used to encrypt our directory.
     /// * `key_derivation_count` - The number of iterations that our key
-    /// derivation function should use. Can't be lower than 1, should be chosen
-    /// as high as possible, depending on how much time is acceptable for the
-    /// caller to wait. Is only used when a new store is created. The count will
-    /// be stored with the store key.
+    ///   derivation function should use. Can't be lower than 1, should be chosen
+    ///   as high as possible, depending on how much time is acceptable for the
+    ///   caller to wait. Is only used when a new store is created. The count will
+    ///   be stored with the store key.
     ///
     /// Returns an error if the path does not exist, if it is not a directory or
-    /// if there was an error when trying to decrypt the directory key e.g. the
-    /// given passphrase was incorrect.
+    ///   if there was an error when trying to decrypt the directory key e.g. the
+    ///   given passphrase was incorrect.
     pub fn open_or_create<P: AsRef<Path>>(
         path: P,
         passphrase: &str,
@@ -238,9 +238,8 @@ impl EncryptedMmapDirectory {
     /// * `passphrase` - The passphrase that was used to encrypt our directory.
     ///
     /// Returns an error if the path does not exist, if it is not a directory or
-    /// if there was an error when trying to decrypt the directory key e.g. the
-    /// given passphrase was incorrect.
-
+    ///   if there was an error when trying to decrypt the directory key e.g. the
+    ///   given passphrase was incorrect.
     // This isn't currently used anywhere, but it will make sense if the
     // EncryptedMmapDirectory gets upstreamed.
     #[allow(dead_code)]
@@ -266,7 +265,7 @@ impl EncryptedMmapDirectory {
     /// * `old_passphrase` - The currently used passphrase.
     /// * `new_passphrase` - The passphrase that should be used from now on.
     /// * `new_key_derivation_count` - The key derivation count that should be
-    /// used for the re-encrypted store key.
+    ///   used for the re-encrypted store key.
     pub fn change_passphrase<P: AsRef<Path>>(
         path: P,
         old_passphrase: &str,
