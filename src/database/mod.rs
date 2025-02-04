@@ -87,7 +87,7 @@ impl Database {
     /// # Arguments
     ///
     /// * `path` - The directory where the database will be stored in. This
-    /// should be an empty directory if a new database should be created.
+    ///   should be an empty directory if a new database should be created.
     pub fn new<P: AsRef<Path>>(path: P) -> Result<Database>
     where
         PathBuf: std::convert::From<P>,
@@ -100,7 +100,7 @@ impl Database {
     /// # Arguments
     ///
     /// * `path` - The directory where the database will be stored in. This
-    /// should be an empty directory if a new database should be created.
+    ///   should be an empty directory if a new database should be created.
     /// * `config` - Configuration that changes the behaviour of the database.
     pub fn new_with_config<P: AsRef<Path>>(path: P, config: &Config) -> Result<Database>
     where
@@ -207,15 +207,15 @@ impl Database {
     /// Change the passphrase of the Seshat database.
     ///
     /// Note that this consumes the database object and any searcher objects
-    /// can't be used anymore. A new database will have to be opened and new
-    /// searcher objects as well.
+    ///   can't be used anymore. A new database will have to be opened and new
+    ///   searcher objects as well.
     ///
     /// # Arguments
     ///
     /// * `path` - The directory where the database will be stored in. This
-    /// should be an empty directory if a new database should be created.
+    ///   should be an empty directory if a new database should be created.
     /// * `new_passphrase` - The passphrase that should be used instead of the
-    /// current one.
+    ///   current one.
     #[cfg(feature = "encryption")]
     pub fn change_passphrase(self, new_passphrase: &str) -> Result<()> {
         match &self.config.passphrase {
@@ -430,10 +430,10 @@ impl Database {
     ///
     /// * `events` - The events that will be added.
     /// * `new_checkpoint` - A checkpoint that states where we need to continue
-    /// fetching events from the room history. This checkpoint will be
-    /// persisted in the database.
+    ///   fetching events from the room history. This checkpoint will be
+    ///   persisted in the database.
     /// * `old_checkpoint` - The checkpoint that was used to fetch the given
-    /// events. This checkpoint will be removed from the database.
+    ///   events. This checkpoint will be removed from the database.
     pub fn add_historic_events(
         &self,
         events: Vec<(Event, Profile)>,

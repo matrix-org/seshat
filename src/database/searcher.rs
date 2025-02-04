@@ -75,10 +75,10 @@ impl Searcher {
     ///
     /// * `term` - The search term that should be used to search the index.
     /// * `config` - A SearchConfig that will modify what the search result
-    /// should contain.
+    ///   should contain.
     ///
     /// Returns a tuple of the count of matching documents and a list of
-    /// `SearchResult`.
+    ///   `SearchResult`.
     pub fn search(&self, term: &str, config: &SearchConfig) -> Result<SearchBatch> {
         let search_result = self.inner.search(term, config)?;
 

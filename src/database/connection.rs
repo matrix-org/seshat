@@ -117,7 +117,7 @@ impl Connection {
     /// # Arguments
     ///
     /// * `load_config` - Configuration deciding which events and how many of
-    /// them should be loaded.
+    ///   them should be loaded.
     ///
     /// # Examples
     ///
@@ -127,7 +127,7 @@ impl Connection {
     /// ```
     ///
     /// Returns a list of tuples containing the serialized events and the
-    /// profile of the sender at the time when the event was sent.
+    ///   profile of the sender at the time when the event was sent.
     pub fn load_file_events(
         &self,
         load_config: &LoadConfig,

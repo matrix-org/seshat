@@ -118,7 +118,7 @@ impl<T> Dummy<T> for Event {
             EventType::Message,
             "Hello world",
             Some("m.text"),
-            &format!("${}:{}", (0..std::u64::MAX).fake::<u64>(), &domain),
+            &format!("${}:{}", (0..u64::MAX).fake::<u64>(), &domain),
             &format!(
                 "@{}:{}",
                 Username(EN).fake::<String>(),
@@ -155,12 +155,12 @@ impl Event {
     ///
     /// * `event_type` - The type of the event.
     /// * `content_value` - The plain text value of the content, body for a
-    /// message event, topic for a topic event and name for a name event.
+    ///   message event, topic for a topic event and name for a name event.
     /// * `event_id` - The unique identifier of the event.
     /// * `sender` - The unique identifier of the event author.
     /// * `server_ts` - The timestamp of the event.
     /// * `room_id` - The unique identifier of the room that the event belongs
-    /// to.
+    ///   to.
     /// * `source` - The serialized version of the event.
     #[allow(clippy::too_many_arguments)]
     pub fn new(
@@ -212,6 +212,7 @@ impl Profile {
 }
 
 #[cfg(test)]
+#[allow(missing_docs)]
 pub static EVENT_SOURCE: &str = r#"{
     "content": {
         "body": "Test message, msgtype: m.text"
@@ -221,11 +222,12 @@ pub static EVENT_SOURCE: &str = r#"{
     "sender": "@example2:localhost",
     "type": "m.room.message",
     "unsigned": {"age": 43289803095},
-    "user_id": "@example2:localhost",
+    "user_id": "@examp  le2:localhost",
     "age": 43289803095
 }"#;
 
 #[cfg(test)]
+#[allow(missing_docs)]
 pub static TOPIC_EVENT_SOURCE: &str = r#"{
     "content": {
         "topic": "Test topic"
@@ -241,6 +243,7 @@ pub static TOPIC_EVENT_SOURCE: &str = r#"{
 
 #[cfg(test)]
 lazy_static! {
+    #[allow(missing_docs)]
     pub static ref EVENT: Event = Event::new(
         EventType::Message,
         "Test message",
@@ -255,6 +258,7 @@ lazy_static! {
 
 #[cfg(test)]
 lazy_static! {
+    #[allow(missing_docs)]
     pub static ref TOPIC_EVENT: Event = Event::new(
         EventType::Topic,
         "Test topic",
