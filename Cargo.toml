@@ -15,7 +15,7 @@ encryption = ["rusqlite/sqlcipher", "aes", "hmac", "sha2",
 bundled-sqlcipher = ["encryption", "rusqlite/bundled-sqlcipher-vendored-openssl"]
 
 [dependencies]
-tantivy = "0.12.0"
+tantivy = "0.13.3"
 tinysegmenter = "0.1.1"
 rusqlite = "0.31.0"
 fs_extra = "1.2.0"
@@ -41,7 +41,7 @@ serde_json = "1.0.95"
 
 # Relevant serde commit https://github.com/serde-rs/serde/commit/dd1f4b483ee204d58465064f6e5bf5a457543b54
 # Tantivy patch that fixes this issue https://github.com/tantivy-search/tantivy/pull/975
-serde = { version = "=1.0.118", default-features = false, features = ["derive"] }
+serde = { version = "1", default-features = false, features = ["derive"] }
 thiserror = "1.0.26"
 
 [dev-dependencies]
