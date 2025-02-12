@@ -35,14 +35,14 @@ rand = { version = "0.8.5", optional = true }
 zeroize = { version = "1.8.1", optional = true }
 byteorder = { version = "1.5.0", optional = true }
 
-serde_json = "=1.0.95"
+serde_json = "1.0.95"
 
 # This is pinned because Tantivy used an serde re-export that turned private in
 # 1.0.119.
 
 # Relevant serde commit https://github.com/serde-rs/serde/commit/dd1f4b483ee204d58465064f6e5bf5a457543b54
 # Tantivy patch that fixes this issue https://github.com/tantivy-search/tantivy/pull/975
-serde = { version = "=1.0.118", default-features = false, features = ["derive"] }
+serde = { version = "1.0.118", default-features = false, features = ["derive"] }
 thiserror = "1.0.26"
 
 [dev-dependencies]
