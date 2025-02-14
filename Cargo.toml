@@ -1,6 +1,6 @@
 [package]
 name = "seshat"
-version = "4.0.0"
+version = "4.0.1"
 authors = ["Damir Jelić <poljar@termina.org.uk>"]
 edition = "2018"
 license = "Apache-2.0"
