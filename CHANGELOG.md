@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 4.0.1 - 2025-02-18
+
+- Update the used OpenSSL version for improved ARM64 compatibility.
+  [[#144](https://github.com/matrix-org/seshat/pull/144)]
+
 ## 4.0.0 - 2024-06-07
 - [[#136]] Upgrade mechanism for SQLCipher, this allows our users to upgrade
   SQLCipher since SQLCipher has some breaking changes with regards to the cipher
