@@ -75,7 +75,7 @@ impl SearchConfig {
     /// # Arguments
     ///
     /// * `limit` - The max number of contextual events to return in the search
-    /// result.
+    ///   result.
     pub fn before_limit(&mut self, limit: usize) -> &mut Self {
         self.before_limit = limit;
         self
@@ -87,7 +87,7 @@ impl SearchConfig {
     /// # Arguments
     ///
     /// * `limit` - The max number of contextual events to return in the search
-    /// result.
+    ///   result.
     pub fn after_limit(&mut self, limit: usize) -> &mut Self {
         self.after_limit = limit;
         self
@@ -98,7 +98,7 @@ impl SearchConfig {
     /// # Arguments
     ///
     /// * `order_by_recency` - Flag to determine if we should order by recency.
-    /// result.
+    ///   result.
     pub fn order_by_recency(&mut self, order_by_recency: bool) -> &mut Self {
         self.order_by_recency = order_by_recency;
         self
@@ -122,7 +122,7 @@ impl SearchConfig {
     }
 
     /// The point to return events from. If given, this should be a next_batch
-    /// result from a previous search.
+    ///   result from a previous search.
     pub fn next_batch(&mut self, token: Uuid) -> &mut Self {
         self.next_batch = Some(token);
         self
@@ -324,8 +324,8 @@ impl LoadConfig {
     /// # Arguments
     ///
     /// * `event_id` - An event id of a previous event returned by this
-    /// method. If set events that are older than the event with the given
-    /// event ID will be returned.
+    ///   method. If set events that are older than the event with the given
+    ///   event ID will be returned.
     #[allow(clippy::wrong_self_convention)]
     pub fn from_event<E: Into<String>>(mut self, event_id: E) -> Self {
         self.from_event = Some(event_id.into());

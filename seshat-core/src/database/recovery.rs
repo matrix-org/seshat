@@ -12,9 +12,9 @@
 //     io::{Error as IoError, ErrorKind},
 // };
 
-// // use r2d2::PooledConnection;
-// // use r2d2_sqlite::SqliteConnectionManager;
-// // use rusqlite::ToSql;
+// use r2d2::PooledConnection;
+// use r2d2_sqlite::SqliteConnectionManager;
+// use rusqlite::ToSql;
 
 // use crate::{
 //     config::Config,
@@ -22,13 +22,10 @@
 //     error::{Error, Result},
 //     events::{Event, SerializedEvent},
 //     index::{Index, Writer},
-//     // Connection,
-//     Database,
+//     Connection, Database,
 // };
 
 // use crate::EventType;
-// use diesel_wasm_sqlite::connection::WasmSqliteConnection;
-// use futures::lock::Mutex;
 // use serde_json::Value;
 
 // /// Database that can be used to reindex the events.
@@ -38,10 +35,10 @@
 // /// change.
 // pub struct RecoveryDatabase {
 //     path: PathBuf,
-//     // conn: Arc<Mutex<WasmSqliteConnection>>,
-//     // pool: r2d2::Pool<SqliteConnectionManager>,
+//     connection: PooledConnection<SqliteConnectionManager>,
+//     pool: r2d2::Pool<SqliteConnectionManager>,
 //     config: Config,
-//     // recovery_info: RecoveryInfo,
+//     recovery_info: RecoveryInfo,
 //     index_deleted: bool,
 //     index: Option<Index>,
 //     index_writer: Option<Writer>,
@@ -77,7 +74,7 @@
 //     /// # Arguments
 //     ///
 //     /// * `path` - The directory where the database will be stored in. This
-//     /// should be an empty directory if a new database should be created.
+//     ///   should be an empty directory if a new database should be created.
 //     pub fn new<P: AsRef<Path>>(path: P) -> Result<Self>
 //     where
 //         PathBuf: std::convert::From<P>,
@@ -90,7 +87,7 @@
 //     /// # Arguments
 //     ///
 //     /// * `path` - The directory where the database will be stored in. This
-//     /// should be an empty directory if a new database should be created.
+//     ///   should be an empty directory if a new database should be created.
 //     ///
 //     /// * `config` - Configuration that changes the behaviour of the database.
 //     pub fn new_with_config<P: AsRef<Path>>(path: P, config: &Config) -> Result<Self>
@@ -98,40 +95,36 @@
 //         PathBuf: std::convert::From<P>,
 //     {
 //         let db_path = path.as_ref().join(EVENTS_DB_NAME);
-//         // let pool = Database::get_pool(&db_path, config)?;
+//         let pool = Database::get_pool(&db_path, config)?;
 
-//         // let mut connection = pool.get()?;
-//         // Database::unlock(&connection, config)?;
-//         // connection.pragma_update(None, "foreign_keys", &1 as &dyn ToSql)?;
+//         let mut connection = pool.get()?;
+//         Database::unlock(&connection, config)?;
+//         connection.pragma_update(None, "foreign_keys", &1 as &dyn ToSql)?;
 
-//         let db = Database::new_with_config(path, config).unwrap();
+//         let (version, _) = match Database::get_version(&mut connection) {
+//             Ok(ret) => ret,
+//             Err(e) => return Err(Error::DatabaseOpenError(e.to_string())),
+//         };
 
-//         // let connection = db.conn.get_mut().unwrap();
-//         // // let x = *connection;
-//         // let (version, _) = match Database::get_version(connection) {
-//         //     Ok(ret) => ret,
-//         //     Err(e) => return Err(Error::DatabaseOpenError(e.to_string())),
-//         // };
+//         Database::create_tables(&connection)?;
 
-//         // Database::create_tables()?;
+//         if version != DATABASE_VERSION {
+//             return Err(Error::DatabaseVersionError);
+//         }
 
-//         // if version != DATABASE_VERSION {
-//         //     return Err(Error::DatabaseVersionError);
-//         // }
+//         let event_count = Database::get_event_count(&connection)?;
 
-//         // let event_count = Database::get_event_count();
-
-//         // let info = RecoveryInfo {
-//         //     total_event_count: event_count as u64,
-//         //     reindexed_events: Arc::new(AtomicU64::new(0)),
-//         // };
+//         let info = RecoveryInfo {
+//             total_event_count: event_count as u64,
+//             reindexed_events: Arc::new(AtomicU64::new(0)),
+//         };
 
 //         Ok(Self {
 //             path: path.into(),
-//             // conn: Arc::new(Mutex::new(x)),
-//             // pool,
+//             connection,
+//             pool,
 //             config: config.clone(),
-//             // recovery_info: info,
+//             recovery_info: info,
 //             index_deleted: false,
 //             index: None,
 //             index_writer: None,
@@ -264,9 +257,10 @@
 //         from_event: Option<&Event>,
 //     ) -> Result<Vec<SerializedEvent>> {
 //         Ok(Database::load_all_events(
-//             // &self.connection,
-//             limit, from_event,
-//         ))
+//             &self.connection,
+//             limit,
+//             from_event,
+//         )?)
 //     }
 
 //     /// Create and open a new index.
@@ -293,16 +287,16 @@
 //     /// Get a database connection.
 //     ///
 //     /// Note that this connection should only be used for reading.
-//     // pub fn get_connection(&self) -> Result<Connection> {
-//     //     let connection = self.pool.get()?;
-//     //     Database::unlock(&connection, &self.config)?;
-//     //     Database::set_pragmas(&connection)?;
+//     pub fn get_connection(&self) -> Result<Connection> {
+//         let connection = self.pool.get()?;
+//         Database::unlock(&connection, &self.config)?;
+//         Database::set_pragmas(&connection)?;
 
-//     //     Ok(Connection {
-//     //         inner: connection,
-//     //         path: self.path.clone(),
-//     //     })
-//     // }
+//         Ok(Connection {
+//             inner: connection,
+//             path: self.path.clone(),
+//         })
+//     }
 
 //     /// Re-index a batch of events.
 //     ///
@@ -350,8 +344,8 @@
 //         match self.index_writer.as_mut() {
 //             Some(writer) => {
 //                 writer.force_commit()?;
-//                 // self.connection
-//                 // .execute("UPDATE reindex_needed SET reindex_needed = ?1", [false])?;
+//                 self.connection
+//                     .execute("UPDATE reindex_needed SET reindex_needed = ?1", [false])?;
 //                 Ok(())
 //             }
 //             None => Err(Error::ReindexError),
@@ -456,15 +450,15 @@
 
 //         recovery_db.commit_and_close().unwrap();
 
-//         // let db = Database::new(&path).unwrap();
-//         // let mut connection = db.get_connection().unwrap();
+//         let db = Database::new(&path).unwrap();
+//         let mut connection = db.get_connection().unwrap();
 
-//         // let (version, reindex_needed) = Database::get_version().unwrap();
+//         let (version, reindex_needed) = Database::get_version(&mut connection).unwrap();
 
-//         // assert_eq!(version, DATABASE_VERSION);
-//         // assert!(!reindex_needed);
+//         assert_eq!(version, DATABASE_VERSION);
+//         assert!(!reindex_needed);
 
-//         // let result = db.search("Hello", &SearchConfig::new()).unwrap().results;
-//         // assert!(!result.is_empty())
+//         let result = db.search("Hello", &SearchConfig::new()).unwrap().results;
+//         assert!(!result.is_empty())
 //     }
 // }

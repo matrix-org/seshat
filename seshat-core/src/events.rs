@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// use rusqlite::{
-//     types::{FromSql, FromSqlError, FromSqlResult, ToSqlOutput, ValueRef},
-//     ToSql,
-// };
+use rusqlite::{
+    types::{FromSql, FromSqlError, FromSqlResult, ToSqlOutput, ValueRef},
+    ToSql,
+};
 use std::{
     collections::HashMap,
     fmt::{Display, Formatter},
@@ -23,12 +23,6 @@ use std::{
 };
 
 use crate::error::Result;
-
-use diesel::{
-    prelude::{Insertable, QueryableByName},
-    sql_types::{BigInt, Integer, Nullable, Text, Timestamp},
-    Selectable,
-};
 
 #[cfg(test)]
 use fake::faker::internet::raw::*;
@@ -66,31 +60,31 @@ impl Display for EventType {
     }
 }
 
-// impl ToSql for EventType {
-//     fn to_sql(&self) -> rusqlite::Result<ToSqlOutput<'_>> {
-//         Ok(ToSqlOutput::from(format!("{}", self)))
-//     }
-// }
+impl ToSql for EventType {
+    fn to_sql(&self) -> rusqlite::Result<ToSqlOutput<'_>> {
+        Ok(ToSqlOutput::from(format!("{}", self)))
+    }
+}
 
-// impl FromSql for EventType {
-//     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
-//         match value {
-//             ValueRef::Text(s) => {
-//                 let s = std::str::from_utf8(s).map_err(|e| FromSqlError::Other(Box::new(e)))?;
+impl FromSql for EventType {
+    fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+        match value {
+            ValueRef::Text(s) => {
+                let s = std::str::from_utf8(s).map_err(|e| FromSqlError::Other(Box::new(e)))?;
 
-//                 let e = match s {
-//                     "m.room.message" => EventType::Message,
-//                     "m.room.name" => EventType::Name,
-//                     "m.room.topic" => EventType::Topic,
-//                     _ => return Err(FromSqlError::InvalidType),
-//                 };
+                let e = match s {
+                    "m.room.message" => EventType::Message,
+                    "m.room.name" => EventType::Name,
+                    "m.room.topic" => EventType::Topic,
+                    _ => return Err(FromSqlError::InvalidType),
+                };
 
-//                 Ok(e)
-//             }
-//             _ => Err(FromSqlError::InvalidType),
-//         }
-//     }
-// }
+                Ok(e)
+            }
+            _ => Err(FromSqlError::InvalidType),
+        }
+    }
+}
 
 /// Matrix event that can be added to the database.
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
@@ -116,16 +110,6 @@ pub struct Event {
     pub source: String,
 }
 
-impl From<&str> for EventType {
-    fn from(event_type_str: &str) -> Self {
-        match event_type_str {
-            "m.room.name" => Self::Name,
-            "m.room.topic" => Self::Topic,
-            "m.room.message" | _ => Self::Message,
-        }
-    }
-}
-
 #[cfg(test)]
 impl<T> Dummy<T> for Event {
     fn dummy_with_rng<R: ?Sized>(_config: &T, _rng: &mut R) -> Self {
@@ -134,7 +118,7 @@ impl<T> Dummy<T> for Event {
             EventType::Message,
             "Hello world",
             Some("m.text"),
-            &format!("${}:{}", (0..std::u64::MAX).fake::<u64>(), &domain),
+            &format!("${}:{}", (0..u64::MAX).fake::<u64>(), &domain),
             &format!(
                 "@{}:{}",
                 Username(EN).fake::<String>(),
@@ -171,12 +155,12 @@ impl Event {
     ///
     /// * `event_type` - The type of the event.
     /// * `content_value` - The plain text value of the content, body for a
-    /// message event, topic for a topic event and name for a name event.
+    ///   message event, topic for a topic event and name for a name event.
     /// * `event_id` - The unique identifier of the event.
     /// * `sender` - The unique identifier of the event author.
     /// * `server_ts` - The timestamp of the event.
     /// * `room_id` - The unique identifier of the room that the event belongs
-    /// to.
+    ///   to.
     /// * `source` - The serialized version of the event.
     #[allow(clippy::too_many_arguments)]
     pub fn new(
@@ -228,7 +212,7 @@ impl Profile {
 }
 
 #[cfg(test)]
-///
+#[allow(missing_docs)]
 pub static EVENT_SOURCE: &str = r#"{
     "content": {
         "body": "Test message, msgtype: m.text"
@@ -238,12 +222,12 @@ pub static EVENT_SOURCE: &str = r#"{
     "sender": "@example2:localhost",
     "type": "m.room.message",
     "unsigned": {"age": 43289803095},
-    "user_id": "@example2:localhost",
+    "user_id": "@examp  le2:localhost",
     "age": 43289803095
 }"#;
 
 #[cfg(test)]
-///
+#[allow(missing_docs)]
 pub static TOPIC_EVENT_SOURCE: &str = r#"{
     "content": {
         "topic": "Test topic"
@@ -258,9 +242,8 @@ pub static TOPIC_EVENT_SOURCE: &str = r#"{
 }"#;
 
 #[cfg(test)]
-///
 lazy_static! {
-    ///
+    #[allow(missing_docs)]
     pub static ref EVENT: Event = Event::new(
         EventType::Message,
         "Test message",
@@ -274,9 +257,8 @@ lazy_static! {
 }
 
 #[cfg(test)]
-///
 lazy_static! {
-    ///
+    #[allow(missing_docs)]
     pub static ref TOPIC_EVENT: Event = Event::new(
         EventType::Topic,
         "Test topic",
@@ -353,27 +335,27 @@ impl Display for CheckpointDirection {
     }
 }
 
-// impl ToSql for CheckpointDirection {
-//     fn to_sql(&self) -> rusqlite::Result<ToSqlOutput<'_>> {
-//         Ok(ToSqlOutput::from(format!("{}", self)))
-//     }
-// }
+impl ToSql for CheckpointDirection {
+    fn to_sql(&self) -> rusqlite::Result<ToSqlOutput<'_>> {
+        Ok(ToSqlOutput::from(format!("{}", self)))
+    }
+}
 
-// impl FromSql for CheckpointDirection {
-//     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
-//         match value {
-//             ValueRef::Text(s) => {
-//                 let s = std::str::from_utf8(s).map_err(|e| FromSqlError::Other(Box::new(e)))?;
+impl FromSql for CheckpointDirection {
+    fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+        match value {
+            ValueRef::Text(s) => {
+                let s = std::str::from_utf8(s).map_err(|e| FromSqlError::Other(Box::new(e)))?;
 
-//                 let e = match s {
-//                     "Forwards" => CheckpointDirection::Forwards,
-//                     "Backwards" => CheckpointDirection::Backwards,
-//                     _ => return Err(FromSqlError::InvalidType),
-//                 };
+                let e = match s {
+                    "Forwards" => CheckpointDirection::Forwards,
+                    "Backwards" => CheckpointDirection::Backwards,
+                    _ => return Err(FromSqlError::InvalidType),
+                };
 
-//                 Ok(e)
-//             }
-//             _ => Err(FromSqlError::InvalidType),
-//         }
-//     }
-// }
+                Ok(e)
+            }
+            _ => Err(FromSqlError::InvalidType),
+        }
+    }
+}

@@ -9,5 +9,5 @@ worker.onmessage = async (event) => {
     console.log({ client_data: event.data });
 };
 
-worker.postMessage('search');
+// worker.postMessage('search');
 window.seshatWorker = worker

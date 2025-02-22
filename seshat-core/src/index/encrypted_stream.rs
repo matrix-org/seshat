@@ -62,7 +62,7 @@ impl<E: StreamCipher + KeyIvInit, M: Mac + NewMac, W: Write> AesWriter<E, M, W> 
     /// * `key`: The encryption key for the stream cipher.
     /// * `mac_key`: The authentication key for the MAC.
     /// * `iv_size`: The size of the initialization vector or nonce for the
-    /// stream cipher.
+    ///   stream cipher.
     pub fn new(
         mut writer: W,
         key: &[u8],
@@ -191,7 +191,7 @@ impl<D: StreamCipher + KeyIvInit, R: Read + Seek + Clone> AesReader<D, R> {
     /// * `key`: The decryption key for the stream cipher.
     /// * `mac_key`: The authentication key for the MAC.
     /// * `iv_size`: The size of the initialization vector or nonce for the
-    /// streaam cipher.
+    ///   stream cipher.
     pub fn new<M: Mac + NewMac>(
         mut reader: R,
         key: &[u8],
@@ -274,7 +274,7 @@ impl<D: StreamCipher + KeyIvInit, R: Read + Seek + Clone> AesReader<D, R> {
     /// * `reader`: Reader to read encrypted data from
     /// * `total_length`: The total number of bytes that the reader contains.
     /// * `mac_length`: The length of the MAC that is stored the file we are
-    /// reading from.
+    ///   reading from.
     fn read_until_mac(
         buffer: &mut [u8],
         reader: &mut R,

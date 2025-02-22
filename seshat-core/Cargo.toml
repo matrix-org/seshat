@@ -30,7 +30,7 @@ tantivy = { workspace = true }
 getrandom = { version = "0.2.9", features = ["js"] }
 # tantivy = { package = "izihawa-tantivy", version = "0.22.6" }
 tinysegmenter = "0.1.1"
-# rusqlite = "0.31.0"
+rusqlite = { workspace = true }
 fs_extra = "1.2.0"
 # r2d2_sqlite = "0.24.0"
 # r2d2 = "0.8.9"
@@ -80,27 +80,17 @@ thiserror = "1.0"
 wasm-bindgen = { workspace = true, optional = true }
 
 # [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-# diesel = { workspace = true, features = [
-#     "r2d2",
-#     "returning_clauses_for_sqlite_3_35",
-#     "sqlite",
-# ] }
 # libsqlite3-sys = { workspace = true }
 # openssl-sys.workspace = true
 # openssl.workspace = true
 
 # [target.'cfg(target_arch = "wasm32")'.dependencies]
-diesel = { workspace = true, features = [
-    "r2d2",
-    "returning_clauses_for_sqlite_3_35",
-] }
-diesel-wasm-sqlite = { workspace = true }
-diesel_migrations.workspace = true
 # getrandom = { workspace = true, features = ["js"] }
 wasm-bindgen-futures.workspace = true
 web-sys = { workspace = true, default-features = false, features = ["console"] }
 futures.workspace = true
 futures-core.workspace = true
+# sqlite-wasm-rs.workspace = true
 
 [dev-dependencies]
 tempfile = "3.2.0"

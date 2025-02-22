@@ -19,16 +19,15 @@ use std::{
     time::Duration,
 };
 
-use diesel_wasm_sqlite::connection::WasmSqliteConnection;
+use rusqlite::Connection;
 // use r2d2::PooledConnection;
 // use r2d2_sqlite::SqliteConnectionManager;
 use uuid::Uuid;
-use web_sys::console;
 
 use crate::{
     config::SearchConfig,
     error::Result,
-    events::{self, MxId, Profile, SerializedEvent},
+    events::{MxId, Profile, SerializedEvent},
     index::IndexSearcher,
     Database,
 };
@@ -68,7 +67,8 @@ pub struct SearchBatch {
 /// The main entry point to the index and database.
 pub struct Searcher {
     pub(crate) inner: IndexSearcher,
-    // pub(crate) conn: WasmSqliteConnection,
+    pub(crate) database: Arc<Mutex<Connection>>,
+    // pub(crate) database: Arc<Mutex<PooledConnection<SqliteConnectionManager>>>,
 }
 
 impl Searcher {
@@ -77,33 +77,26 @@ impl Searcher {
     ///
     /// * `term` - The search term that should be used to search the index.
     /// * `config` - A SearchConfig that will modify what the search result
-    /// should contain.
+    ///   should contain.
     ///
     /// Returns a tuple of the count of matching documents and a list of
-    /// `SearchResult`.
-    pub fn search(
-        &self,
-        conn: &mut WasmSqliteConnection,
-        term: &str,
-        config: &SearchConfig,
-    ) -> Result<SearchBatch> {
+    ///   `SearchResult`.
+    pub fn search(&self, term: &str, config: &SearchConfig) -> Result<SearchBatch> {
         let search_result = self.inner.search(term, config)?;
+
         if search_result.results.is_empty() {
-            console::log_1(&"empty results".into());
             return Ok(SearchBatch {
                 count: 0,
                 next_batch: search_result.next_batch,
                 results: vec![],
             });
         }
-        console::log_1(&"got results".into());
-        console::log_1(&search_result.count.into());
 
-        // let mut retry = 0;
+        let mut retry = 0;
 
         let events = loop {
             match Database::load_events(
-                conn,
+                &self.database.lock().unwrap(),
                 &search_result.results,
                 config.before_limit,
                 config.after_limit,
@@ -114,17 +107,17 @@ impl Searcher {
                     // Usually the busy timeout on a sqlite connection should
                     // handle this, but setting it on the connection didn't
                     // seem to get rid of database busy errors like expected.
-                    // rusqlite::Error::SqliteFailure(sql_error, _) => {
-                    //     if sql_error.code == rusqlite::ffi::ErrorCode::DatabaseBusy
-                    //         && retry < BUSY_RETRY
-                    //     {
-                    //         retry += 1;
-                    //         sleep(BUSY_SLEEP);
-                    //         continue;
-                    //     } else {
-                    //         return Err(e.into());
-                    //     }
-                    // }
+                    rusqlite::Error::SqliteFailure(sql_error, _) => {
+                        if sql_error.code == rusqlite::ffi::ErrorCode::DatabaseBusy
+                            && retry < BUSY_RETRY
+                        {
+                            retry += 1;
+                            sleep(BUSY_SLEEP);
+                            continue;
+                        } else {
+                            return Err(e.into());
+                        }
+                    }
                     e => return Err(e.into()),
                 },
             }

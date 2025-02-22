@@ -12,49 +12,40 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// mod connection;
+mod connection;
 mod recovery;
 mod searcher;
 mod static_methods;
 mod writer;
-use rayon::ThreadPoolBuilder;
-use tantivy::SingleSegmentIndexWriter;
-// use static_methods::MIGRATIONS;
-use web_sys::{console, wasm_bindgen::UnwrapThrowExt};
-mod pool;
 
-use aes::cipher::Key;
-use diesel::{
-    connection::{set_default_instrumentation, Instrumentation, InstrumentationEvent},
-    result, sql_query, Connection, QueryableByName, RunQueryDsl,
-};
-pub(crate) use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
-use diesel_wasm_sqlite::connection::WasmSqliteConnection;
 use fs_extra::dir;
-use futures::executor::{self, block_on};
-use writer::Writer;
+use rusqlite::Connection;
 // use r2d2::{Pool, PooledConnection};
-
+// use r2d2_sqlite::SqliteConnectionManager;
+use rusqlite::trace::{config_log, TraceEvent, TraceEventCodes};
+use rusqlite::ToSql;
+// use sqlite_wasm_rs::export::{self as ffi, install_opfs_sahpool, OpfsSAHPoolCfgBuilder};
+use std::ffi::c_int;
 use std::{
-    fmt::Display,
     fs,
     path::{Path, PathBuf},
     sync::{
         mpsc::{channel, Receiver, Sender},
         Arc, Mutex,
     },
-    thread::{self, JoinHandle},
+    thread,
+    thread::JoinHandle,
 };
+use web_sys::console;
 
 pub use crate::database::{
     // connection::{Connection, DatabaseStats},
     // recovery::{RecoveryDatabase, RecoveryInfo},
     searcher::{SearchBatch, SearchResult, Searcher},
 };
-
 use crate::{
     config::{Config, SearchConfig},
-    // database::writer::Writer,
+    database::writer::Writer,
     error::{Error, Result},
     events::{CrawlerCheckpoint, Event, EventId, HistoricEventsT, Profile},
     index::{Index, Writer as IndexWriter},
@@ -85,40 +76,27 @@ pub(crate) enum ThreadMessage {
 
 /// The Seshat database.
 pub struct Database {
-    path: String,
-    writer: Writer,
-    conn: Arc<Mutex<WasmSqliteConnection>>,
-    loaded_unprocessed: bool,
-    // pool: r2d2::Pool<SqliteConnectionManager>,
-    // _write_thread: JoinHandle<()>,
-    // tx: Sender<ThreadMessage>,
+    path: PathBuf,
+    connection: Arc<Mutex<Connection>>,
+    _write_thread: Receiver<()>,
+    tx: Sender<ThreadMessage>,
     index: Index,
-    // config: Config,
+    config: Config,
 }
 
-type WriterRet = (JoinHandle<()>, Sender<ThreadMessage>);
-
-#[derive(QueryableByName, Debug)]
-struct CipherVersion {
-    #[diesel(sql_type = diesel::sql_types::Text)]
-    version: String,
-}
-
-fn pragma_set(name: impl Display, key: impl Display) -> impl Display {
-    format!(r#"PRAGMA {name} = '{key}';"#)
-}
+type WriterRet = (Receiver<()>, Sender<ThreadMessage>);
 
 impl Database {
     /// Create a new Seshat database or open an existing one.
     /// # Arguments
     ///
     /// * `path` - The directory where the database will be stored in. This
-    /// should be an empty directory if a new database should be created.
-    pub async fn new<P: AsRef<Path>>(path: P) -> Result<Database>
+    ///   should be an empty directory if a new database should be created.
+    pub fn new<P: AsRef<Path>>(path: P) -> Result<Database>
     where
         PathBuf: std::convert::From<P>,
     {
-        Database::new_with_config(path, &Config::new()).await
+        Database::new_with_config(path, &Config::new())
     }
 
     /// Create a new Seshat database or open an existing one with the given
@@ -126,34 +104,58 @@ impl Database {
     /// # Arguments
     ///
     /// * `path` - The directory where the database will be stored in. This
-    /// should be an empty directory if a new database should be created.
+    ///   should be an empty directory if a new database should be created.
     /// * `config` - Configuration that changes the behaviour of the database.
-    pub async fn new_with_config<P: AsRef<Path>>(path: P, config: &Config) -> Result<Database>
+    ///
+    pub fn new_with_config<P: AsRef<Path>>(path: P, config: &Config) -> Result<Database>
     where
         PathBuf: std::convert::From<P>,
     {
+        console::log_1(&"setting rusqlite_log".into());
+        // fn rusqlite_log(error_code: c_int, msg: &str) {
+        //     console::log_1(&format!("SQLite Error {error_code:?} {msg:?}").into());
+        // }
+        // unsafe {
+        //     let result = rusqlite::trace::config_log(Some(rusqlite_log)).unwrap();
+        //     console::log_1(&format!("setting rusqlite_log result {result:?}").into());
+        // }
         let db_path = path.as_ref().join(EVENTS_DB_NAME);
-        let path = db_path.clone().into_os_string().into_string().unwrap();
 
-        let mut conn = Self::establish_connection(path.clone()).await;
+        let mut connection: Connection = Connection::open(db_path.clone())?;
+        fn rusqlite_log(event: TraceEvent) {
+            match event {
+                TraceEvent::Stmt(stmt_ref, _) => {
+                    let sql = stmt_ref.sql();
+                    console::log_1(&format!("SQLite Stmt {sql}").into())
+                }
+                TraceEvent::Profile(stmt_ref, duration) => {
+                    let sql = stmt_ref.sql();
+                    let millis = duration.as_millis();
+                    console::log_1(&format!("SQLite Profile {sql} duration {millis}").into())
+                }
+                TraceEvent::Row(stmt_ref) => {
+                    let sql = stmt_ref.sql();
+                    console::log_1(&format!("SQLite Row {sql}").into())
+                }
+                TraceEvent::Close(conn_ref) => console::log_1(&format!("SQLite Close").into()),
+                _ => todo!(),
+            }
+        }
 
-        // let mut connection = pool.get()?;
-        // console::log_1(&"unlocking..".into());
+        connection.trace_v2(TraceEventCodes::all(), Some(rusqlite_log));
+        // let mut connection: Connection = Connection::open_in_memory()?;
+
         // Database::unlock(&mut connection, config)?;
 
-        // console::log_1(&"unlocked".into());
-        Database::set_pragmas(&mut conn);
+        Database::set_pragmas(&mut connection)?;
 
-        console::log_1(&"pragmas set".into());
-
-        let (version, reindex_needed) = match Database::get_version(&mut conn) {
+        let (version, reindex_needed) = match Database::get_version(&mut connection) {
             Ok(ret) => ret,
             Err(e) => return Err(Error::DatabaseOpenError(e.to_string())),
         };
 
-        Database::create_tables(&mut conn)?;
+        Database::create_tables(&mut connection)?;
 
-        console::log_1(&"tables created".into());
         if version != DATABASE_VERSION {
             return Err(Error::DatabaseVersionError);
         }
@@ -162,194 +164,103 @@ impl Database {
             return Err(Error::ReindexError);
         }
 
-        console::log_1(&"creating index".into());
         let index = Database::create_index(&path, config)?;
-
-        console::log_1(&"index created".into());
-
-        // let pool = ThreadPoolBuilder::new()
-        //     .thread_name(|_| "segment_updater2".to_string())
-        //     .spawn_handler(|thread| {
-        //         // pool.run(|| thread.run()).unwrap();
-        //         console::log_1(&"threaded from spawn!".into());
-        //         Ok(())
-        //     })
-        //     .num_threads(1)
-        //     .build()
-        //     .map_err(|e| console::log_1(&format!("error {:?}", e).into()));
-
-        // let thread_pool = rayon::ThreadPoolBuilder::new()
-        //     .thread_name(|_| "segment_updater2".to_string())
-        //     // .num_threads(2)
-        //     .spawn_handler(|thread| {
-        //         // pool.run(|| thread.run()).unwrap();
-        //         console::log_1(&"threaded from spawn!".into());
-        //         Ok(())
-        //     })
-        //     .build()
-        //     .map_err(|e| console::log_1(&format!("error {:?}", e).into()));
-
-        let index_writer = index.get_writer()?;
+        let writer = index.get_writer()?;
 
         // Warning: Do not open a new db connection before we write the tables
         // to the DB, otherwise sqlcipher might think that we are initializing
         // a new database and we'll end up with two connections using differing
         // keys and writes/reads to one of the connections might fail.
         // let writer_connection = pool.get()?;
+        // let writer_connection: Connection = Connection::open(db_path)?;
+        // let writer_connection: Connection = Connection::open_in_memory()?;
+
         // Database::unlock(&writer_connection, config)?;
         // Database::set_pragmas(&writer_connection)?;
-        // console::log_1(&"index writer created".into());
-        let writer = Writer::new(index_writer);
 
-        console::log_1(&"writer created".into());
+        let (t_handle, tx) = Database::spawn_writer(connection, writer);
 
         Ok(Database {
-            path,
-            writer,
-            conn: Arc::new(Mutex::new(conn)),
-            loaded_unprocessed: false,
-            // conn: Arc::new(Mutex::new(connection)),
-            // pool,
-            // _write_thread: t_handle,
-            // tx,
+            path: path.into(),
+            connection: Arc::new(Mutex::new(connection.clone())),
+            _write_thread: t_handle,
+            tx,
             index,
-            // config: config.clone(),
+            config: config.clone(),
         })
     }
 
-    async fn establish_connection(path: String) -> WasmSqliteConnection {
-        console::log_1(&"INIT".into());
-        diesel_wasm_sqlite::init_sqlite().await;
-
-        // let path = db_path.clone().into_os_string().into_string().unwrap();
-        console::log_1(&path.clone().into());
-        let result = WasmSqliteConnection::establish(&path);
-        let conn = result.unwrap();
-
-        // conn.run_pending_migrations(MIGRATIONS).unwrap();
-        conn
-    }
-    // fn get_pool(db_path: &PathBuf, config: &Config) -> Result<Pool<SqliteConnectionManager>> {
-    //     let manager = SqliteConnectionManager::file(db_path);
-    //     let pool = r2d2::Pool::new(manager)?;
-    //     let connection = pool.get()?;
-
-    //     // Try to unlock a single connection.
-    //     match Database::unlock(&connection, config) {
-    //         // We're fine, the connection was returned successfully, we can return the pool.
-    //         Ok(_) => Ok(pool),
-    //         Err(_) => {
-    //             let Some(passphrase) = &config.passphrase else {
-    //                 // No passphrase was provided, and we failed to unlock a connection, return an
-    //                 // error.
-    //                 return Err(Error::DatabaseUnlockError("Invalid passphrase".to_owned()));
-    //             };
-
-    //             // Ok, let's see if the unlock of the connection failed because of new default
-    //             // settings for the cipher settings, let's see if we can migrate the cipher settings.
-    //             // Take a look at the documentation of cipher_migrate[1] for more info.
-    //             //
-    //             // [1]: https://www.zetetic.net/sqlcipher/sqlcipher-api/#cipher_migrate
-    //             let connection = pool.get()?;
-    //             connection.pragma_update(None, "key", &passphrase.as_str() as &dyn ToSql)?;
-
-    //             let mut statement = connection.prepare("PRAGMA cipher_migrate")?;
-    //             let result = statement.query_row([], |row| row.get::<usize, String>(0))?;
-
-    //             // The cipher_migrate pragma returns a single row/column with the value set to `0`
-    //             // if we succeeded.
-    //             if result == "0" {
-    //                 // In this case the migration was successful and we can now recreate the pool
-    //                 // so the new settings come into play.
-    //                 let manager = SqliteConnectionManager::file(db_path);
-    //                 let pool = r2d2::Pool::new(manager)?;
-
-    //                 Ok(pool)
-    //             } else {
-    //                 Err(Error::DatabaseUnlockError("Invalid passphrase".to_owned()))
-    //             }
-    //         }
-    //     }
-    // }
-
-    fn set_pragmas(conn: &mut WasmSqliteConnection) -> Result<()> {
-        let query = &format!(
-            r#"
-            {}
-            {}
-            {}
-            PRAGMA wal_checkpoint(TRUNCATE);
-        "#,
-            pragma_set("foreign_keys", &1),
-            pragma_set("journal_mode", "WAL"),
-            pragma_set("synchronous", "NORMAL")
-        );
-        let result = sql_query(query).execute(conn);
-        console::log_1(&format!("set_pragmas {:?}", result).into());
+    fn set_pragmas(connection: &Connection) -> Result<()> {
+        connection.pragma_update(None, "foreign_keys", &1 as &dyn ToSql)?;
+        connection.pragma_update(None, "journal_mode", "WAL")?;
+        connection.pragma_update(None, "synchronous", "NORMAL")?;
+        connection.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);")?;
         Ok(())
     }
 
-    // /// Change the passphrase of the Seshat database.
-    // ///
-    // /// Note that this consumes the database object and any searcher objects
-    // /// can't be used anymore. A new database will have to be opened and new
-    // /// searcher objects as well.
-    // ///
-    // /// # Arguments
-    // ///
-    // /// * `path` - The directory where the database will be stored in. This
-    // /// should be an empty directory if a new database should be created.
-    // /// * `new_passphrase` - The passphrase that should be used instead of the
-    // /// current one.
-    // #[cfg(feature = "encryption")]
-    // pub fn change_passphrase(self, new_passphrase: &str) -> Result<()> {
-    //     match &self.config.passphrase {
-    //         Some(p) => {
-    //             Index::change_passphrase(&self.path, p, new_passphrase)?;
-    //             self.connection.lock().unwrap().pragma_update(
-    //                 None,
-    //                 "rekey",
-    //                 &new_passphrase as &dyn ToSql,
-    //             )?;
-    //         }
-    //         None => panic!("Database isn't encrypted"),
-    //     }
+    /// Change the passphrase of the Seshat database.
+    ///
+    /// Note that this consumes the database object and any searcher objects
+    ///   can't be used anymore. A new database will have to be opened and new
+    ///   searcher objects as well.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - The directory where the database will be stored in. This
+    ///   should be an empty directory if a new database should be created.
+    /// * `new_passphrase` - The passphrase that should be used instead of the
+    ///   current one.
+    #[cfg(feature = "encryption")]
+    pub fn change_passphrase(self, new_passphrase: &str) -> Result<()> {
+        match &self.config.passphrase {
+            Some(p) => {
+                // Index::change_passphrase(&self.path, p, new_passphrase)?;
+                self.connection.lock().unwrap().pragma_update(
+                    None,
+                    "rekey",
+                    &new_passphrase as &dyn ToSql,
+                )?;
+            }
+            None => panic!("Database isn't encrypted"),
+        }
 
-    //     let receiver = self.shutdown();
-    //     receiver.recv().unwrap()?;
+        let receiver = self.shutdown();
+        receiver.recv().unwrap()?;
 
-    //     Ok(())
-    // }
+        Ok(())
+    }
 
-    fn unlock(conn: &mut WasmSqliteConnection, config: &Config) -> Result<()> {
-        console::log_1(&"unlocking in ..".into());
+    #[cfg(feature = "encryption")]
+    fn unlock(connection: &Connection, config: &Config) -> Result<()> {
         let passphrase: &String = if let Some(ref p) = config.passphrase {
             p
         } else {
             return Ok(());
         };
-        console::log_1(&passphrase.into());
-        let version = sql_query("PRAGMA cipher_version")
-            .load::<CipherVersion>(conn)
-            .unwrap();
 
-        console::log_1(&format!("version {}", version.len()).into());
+        let mut statement = connection.prepare("PRAGMA cipher_version")?;
+        let results = statement.query_map([], |row| row.get::<usize, String>(0))?;
 
-        if version.len() != 1 {
+        if results.count() != 1 {
             return Err(Error::SqlCipherError(
                 "Sqlcipher support is missing".to_string(),
             ));
         }
-        console::log_1(&"version ok in ..".into());
 
-        let _ = sql_query(format!("{}", pragma_set("key", &passphrase))).execute(conn);
+        connection.pragma_update(None, "key", passphrase as &dyn ToSql)?;
 
-        let count = sql_query("SELECT COUNT(*) FROM sqlite_master").execute(conn);
+        let count: std::result::Result<i64, rusqlite::Error> =
+            connection.query_row("SELECT COUNT(*) FROM sqlite_master", [], |row| row.get(0));
 
         match count {
             Ok(_) => Ok(()),
             Err(_) => Err(Error::DatabaseUnlockError("Invalid passphrase".to_owned())),
         }
+    }
+
+    #[cfg(not(feature = "encryption"))]
+    fn unlock(_: &Cnnection, _: &Config) -> Result<()> {
+        Ok(())
     }
 
     /// Get the size of the database.
@@ -360,66 +271,75 @@ impl Database {
 
     /// Get the path of the directory where the Seshat database lives in.
     pub fn get_path(&self) -> &Path {
-        Path::new(&self.path)
+        self.path.as_path()
     }
 
     fn create_index<P: AsRef<Path>>(path: &P, config: &Config) -> Result<Index> {
         Ok(Index::new(path, config)?)
     }
 
-    // fn spawn_writer(
-    //     // conn: PooledConnection<SqliteConnectionManager>,
-    //     index_writer: IndexWriter,
-    // ) -> WriterRet {
-    //     let (tx, rx): (_, Receiver<ThreadMessage>) = channel();
+    fn spawn_writer(connection: Connection, index_writer: IndexWriter) -> WriterRet {
+        console::log_1(&"spawn_writer".into());
+        let (tx, rx): (_, Receiver<ThreadMessage>) = channel();
 
-    //     let t_handle = thread::spawn(move || {
-    //         // let mut writer = Writer::new(connection, index_writer);
-    //         let mut loaded_unprocessed = false;
+        let (shutdownSender, shutdownReceiver): (_, Receiver<()>) = channel();
+        // let t_handle = thread::spawn(move || {
+        rayon::spawn(move || {
+            let mut writer = Writer::new(connection, index_writer);
+            let mut loaded_unprocessed = false;
 
-    //         while let Ok(message) = rx.recv() {
-    //             match message {
-    //                 ThreadMessage::Event((event, profile)) => writer.add_event(event, profile),
-    //                 ThreadMessage::Write(sender, force_commit) => {
-    //                     // We may have events that aren't deleted or committed
-    //                     // to the index but are stored in the db, let us load
-    //                     // them from the db and commit them to the index now.
-    //                     // They will later be marked as committed in the
-    //                     // database as part of a normal write.
-    //                     if !loaded_unprocessed {
-    //                         let ret = writer.load_unprocessed_events();
+            while let Ok(message) = rx.recv() {
+                match message {
+                    ThreadMessage::Event((event, profile)) => writer.add_event(event, profile),
+                    ThreadMessage::Write(sender, force_commit) => {
+                        console::log_1(&"spawn_writer Write".into());
+                        // We may have events that aren't deleted or committed
+                        // to the index but are stored in the db, let us load
+                        // them from the db and commit them to the index now.
+                        // They will later be marked as committed in the
+                        // database as part of a normal write.
+                        if !loaded_unprocessed {
+                            console::log_1(&"!loaded_unprocessed".into());
+                            let ret = writer.load_unprocessed_events();
+                            console::log_1(&"!loaded_unprocessed ret".into());
+                            loaded_unprocessed = true;
 
-    //                         loaded_unprocessed = true;
+                            if ret.is_err() {
+                                console::log_1(&"!loaded_unprocessed is_err".into());
+                                sender.send(ret).unwrap_or(());
+                                continue;
+                            }
+                        }
+                        console::log_1(&"!write_queued_events".into());
+                        let ret = writer.write_queued_events(force_commit);
+                        // Notify that we are done with the write.
+                        console::log_1(&"!send ret".into());
+                        sender.send(ret).unwrap_or(());
+                    }
+                    ThreadMessage::HistoricEvents(m) => {
+                        console::log_1(&"spawn_writer HistoricEvents".into());
+                        let (check, old_check, events, sender) = m;
+                        let ret = writer.write_historic_events(check, old_check, events, true);
+                        sender.send(ret).unwrap_or(());
+                    }
+                    ThreadMessage::Delete(sender, event_id) => {
+                        console::log_1(&"spawn_writer Delete".into());
+                        let ret = writer.delete_event(event_id);
+                        sender.send(ret).unwrap_or(());
+                    }
+                    ThreadMessage::ShutDown(sender) => {
+                        console::log_1(&"spawn_writer ShutDown".into());
+                        let ret = writer.shutdown();
+                        sender.send(ret).unwrap_or(());
+                        let _ = shutdownSender.send(());
+                        return;
+                    }
+                };
+            }
+        });
 
-    //                         if ret.is_err() {
-    //                             sender.send(ret).unwrap_or(());
-    //                             continue;
-    //                         }
-    //                     }
-    //                     let ret = writer.write_queued_events(force_commit);
-    //                     // Notify that we are done with the write.
-    //                     sender.send(ret).unwrap_or(());
-    //                 }
-    //                 ThreadMessage::HistoricEvents(m) => {
-    //                     let (check, old_check, events, sender) = m;
-    //                     let ret = writer.write_historic_events(check, old_check, events, true);
-    //                     sender.send(ret).unwrap_or(());
-    //                 }
-    //                 ThreadMessage::Delete(sender, event_id) => {
-    //                     let ret = writer.delete_event(event_id);
-    //                     sender.send(ret).unwrap_or(());
-    //                 }
-    //                 ThreadMessage::ShutDown(sender) => {
-    //                     let ret = writer.shutdown();
-    //                     sender.send(ret).unwrap_or(());
-    //                     return;
-    //                 }
-    //             };
-    //         }
-    //     });
-
-    //     (t_handle, tx)
-    // }
+        (shutdownReceiver, tx)
+    }
 
     /// Add an event with the given profile to the database.
     /// # Arguments
@@ -430,10 +350,9 @@ impl Database {
     /// This is a fast non-blocking operation, it only queues up the event to be
     /// added to the database. The events will be committed to the database
     /// only when the user calls the `commit()` method.
-    pub fn add_event(&mut self, event: Event, profile: Profile) {
-        self.writer.add_event(event, profile);
-        // let message = ThreadMessage::Event((event, profile));
-        // self.tx.send(message).unwrap();
+    pub fn add_event(&self, event: Event, profile: Profile) {
+        let message = ThreadMessage::Event((event, profile));
+        self.tx.send(message).unwrap();
     }
 
     /// Delete an event from the database.
@@ -446,46 +365,24 @@ impl Database {
     /// Returns a receiver that will receive an boolean once the event has
     /// been deleted. The boolean indicates if the event was deleted or if a
     /// commit will be needed.
-    // pub fn delete_event(&mut self, event_id: &str) -> Result<bool> {
-    //     // let (sender, receiver): (_, Receiver<Result<bool>>) = channel();
-    //     // let message = ThreadMessage::Delete(sender, event_id.to_owned());
-    //     // self.tx.send(message).unwrap();
-    //     // receiver
-    //     return self
-    //         .writer
-    //         .delete_event(&mut self.conn, event_id.to_owned());
-    // }
+    pub fn delete_event(&self, event_id: &str) -> Receiver<Result<bool>> {
+        let (sender, receiver): (_, Receiver<Result<bool>>) = channel();
+        let message = ThreadMessage::Delete(sender, event_id.to_owned());
+        self.tx.send(message).unwrap();
+        receiver
+    }
 
-    fn commit_helper(&mut self, force: bool) -> Result<()> {
+    fn commit_helper(&mut self, force: bool) -> Receiver<Result<()>> {
         let (sender, receiver): (_, Receiver<Result<()>>) = channel();
-        // self.tx.send(ThreadMessage::Write(sender, force)).unwrap();
-        // receiver
-        // We may have events that aren't deleted or committed
-        //                     // to the index but are stored in the db, let us load
-        //                     // them from the db and commit them to the index now.
-        //                     // They will later be marked as committed in the
-        //                     // database as part of a normal write.
-        if !self.loaded_unprocessed {
-            let ret = self.writer.load_unprocessed_events();
-
-            self.loaded_unprocessed = true;
-
-            if ret.is_err() {
-                sender.send(ret).unwrap_or(());
-                return Ok(());
-            }
-        }
-        console::log_1(&"write_queued_events".into());
-        return self
-            .writer
-            .write_queued_events(&mut self.conn.lock().unwrap(), force);
+        self.tx.send(ThreadMessage::Write(sender, force)).unwrap();
+        receiver
     }
 
     /// Commit the currently queued up events. This method will block. A
     /// non-blocking version of this method exists in the `commit_no_wait()`
     /// method.
     pub fn commit(&mut self) -> Result<()> {
-        self.commit_helper(false)
+        self.commit_helper(false).recv().unwrap()
     }
 
     /// Commit the currently queued up events forcing the commit to the index.
@@ -498,12 +395,7 @@ impl Database {
     ///
     /// This should only be used for testing purposes.
     pub fn force_commit(&mut self) -> Result<()> {
-        self.commit_helper(true)
-    }
-
-    ///
-    pub async fn wait_merging_threads(self) -> Result<()> {
-        self.writer.wait_merging_threads().await
+        self.commit_helper(true).recv().unwrap()
     }
 
     /// Reload the database so that a search reflects the state of the last
@@ -519,9 +411,9 @@ impl Database {
     ///
     /// Returns a receiver that will receive an empty message once the commit is
     /// done.
-    // pub fn commit_no_wait(&mut self) -> Result<()> {
-    //     self.commit_helper(false)
-    // }
+    pub fn commit_no_wait(&mut self) -> Receiver<Result<()>> {
+        self.commit_helper(false)
+    }
 
     /// Commit the currently queued up events forcing the commit to the index.
     ///
@@ -532,38 +424,32 @@ impl Database {
     ///
     /// Returns a receiver that will receive an empty message once the commit is
     /// done.
-    // pub fn force_commit_no_wait(&mut self) -> Result<()> {
-    //     self.commit_helper(true)
-    // }
+    pub fn force_commit_no_wait(&mut self) -> Receiver<Result<()>> {
+        self.commit_helper(true)
+    }
 
     /// Add the given events from the room history to the database.
     /// # Arguments
     ///
     /// * `events` - The events that will be added.
     /// * `new_checkpoint` - A checkpoint that states where we need to continue
-    /// fetching events from the room history. This checkpoint will be
-    /// persisted in the database.
+    ///   fetching events from the room history. This checkpoint will be
+    ///   persisted in the database.
     /// * `old_checkpoint` - The checkpoint that was used to fetch the given
-    /// events. This checkpoint will be removed from the database.
-    // pub fn add_historic_events(
-    //     &mut self,
-    //     events: Vec<(Event, Profile)>,
-    //     new_checkpoint: Option<CrawlerCheckpoint>,
-    //     old_checkpoint: Option<CrawlerCheckpoint>,
-    // ) -> Result<bool> {
-    //     // let (sender, receiver): (_, Receiver<Result<bool>>) = channel();
-    //     // let payload = (new_checkpoint, old_checkpoint, events, sender);
-    //     // let message = ThreadMessage::HistoricEvents(payload);
-    //     // self.tx.send(message).unwrap();
+    ///   events. This checkpoint will be removed from the database.
+    pub fn add_historic_events(
+        &self,
+        events: Vec<(Event, Profile)>,
+        new_checkpoint: Option<CrawlerCheckpoint>,
+        old_checkpoint: Option<CrawlerCheckpoint>,
+    ) -> Receiver<Result<bool>> {
+        let (sender, receiver): (_, Receiver<Result<bool>>) = channel();
+        let payload = (new_checkpoint, old_checkpoint, events, sender);
+        let message = ThreadMessage::HistoricEvents(payload);
+        self.tx.send(message).unwrap();
 
-    //     return self.writer.write_historic_events(
-    //         &mut self.conn,
-    //         new_checkpoint,
-    //         old_checkpoint,
-    //         events,
-    //         true,
-    //     );
-    // }
+        receiver
+    }
 
     /// Search the index and return events matching a search term.
     /// This is just a helper function that gets a searcher and performs a
@@ -571,12 +457,9 @@ impl Database {
     /// # Arguments
     ///
     /// * `term` - The search term that should be used to search the index.
-    pub async fn search(&mut self, term: &str, config: &SearchConfig) -> Result<SearchBatch> {
+    pub fn search(&self, term: &str, config: &SearchConfig) -> Result<SearchBatch> {
         let searcher = self.get_searcher();
-        // let db_path = path.as_ref().join(EVENTS_DB_NAME);
-        // let path = db_path.clone().into_os_string().into_string().unwrap();
-        // let mut conn = Self::establish_connection("".to_string()).await;
-        searcher.search(&mut self.conn.lock().unwrap(), term, config)
+        searcher.search(term, config)
     }
 
     /// Get a searcher that can be used to perform a search.
@@ -584,21 +467,27 @@ impl Database {
         let index_searcher = self.index.get_searcher();
         Searcher {
             inner: index_searcher,
+            database: self.connection.clone(),
         }
     }
 
     /// Get a database connection.
     /// Note that this connection should only be used for reading.
-    // pub fn get_connection(&self) -> Result<Connection> {
-    //     let connection = self.pool.get()?;
-    //     Database::unlock(&connection, &self.config)?;
-    //     Database::set_pragmas(&connection)?;
+    pub fn get_connection(&self) -> Connection {
+        // let connection = self.pool.get()?;
 
-    //     Ok(Connection {
-    //         inner: connection,
-    //         path: self.path.clone(),
-    //     })
-    // }
+        let connection: Connection = Connection::open(&self.path).unwrap();
+        // let mut connection = self.connection.lock().unwrap().;
+
+        // Database::unlock(&connection, &self.config);
+        Database::set_pragmas(&connection);
+
+        connection
+        // Ok(Connection {
+        //     inner: connection,
+        //     path: self.path.clone(),
+        // })
+    }
 
     /// Shut the database down.
     ///
@@ -607,7 +496,7 @@ impl Database {
     pub fn shutdown(self) -> Receiver<Result<()>> {
         let (sender, receiver): (_, Receiver<Result<()>>) = channel();
         let message = ThreadMessage::ShutDown(sender);
-        // self.tx.send(message).unwrap();
+        self.tx.send(message).unwrap();
         receiver
     }
 
@@ -620,215 +509,217 @@ impl Database {
     }
 }
 
-// #[test]
-// fn create_event_db() {
-//     let tmpdir = tempdir().unwrap();
-//     let _db = Database::new(tmpdir.path()).unwrap();
-// }
+#[test]
+fn create_event_db() {
+    let tmpdir = tempdir().unwrap();
+    let _db = Database::new(tmpdir.path()).unwrap();
+}
 
-// #[test]
-// fn store_profile() {
-//     let tmpdir = tempdir().unwrap();
-//     let db = Database::new(tmpdir.path()).unwrap();
+#[test]
+fn store_profile() {
+    let tmpdir = tempdir().unwrap();
+    let db = Database::new(tmpdir.path()).unwrap();
 
-//     let profile = Profile::new("Alice", "");
+    let profile = Profile::new("Alice", "");
 
-//     let id = Database::save_profile(
-//         // &db.connection.lock().unwrap(),
-//         "@alice.example.org",
-//         &profile,
-//     );
-//     assert_eq!(id, 1);
+    let id = Database::save_profile(
+        &db.connection.lock().unwrap(),
+        "@alice.example.org",
+        &profile,
+    );
+    assert_eq!(id.unwrap(), 1);
 
-//     let id = Database::save_profile(
-//         // &db.connection.lock().unwrap(),
-//         "@alice.example.org",
-//         &profile,
-//     );
-//     assert_eq!(id, 1);
+    let id = Database::save_profile(
+        &db.connection.lock().unwrap(),
+        "@alice.example.org",
+        &profile,
+    );
+    assert_eq!(id.unwrap(), 1);
 
-//     let profile_new = Profile::new("Alice", "mxc://some_url");
+    let profile_new = Profile::new("Alice", "mxc://some_url");
 
-//     let id = Database::save_profile(
-//         // &db.connection.lock().unwrap(),
-//         "@alice.example.org",
-//         &profile_new,
-//     );
-//     assert_eq!(id, 2);
-// }
+    let id = Database::save_profile(
+        &db.connection.lock().unwrap(),
+        "@alice.example.org",
+        &profile_new,
+    );
+    assert_eq!(id.unwrap(), 2);
+}
 
-// #[test]
-// fn store_empty_profile() {
-//     let tmpdir = tempdir().unwrap();
-//     let db = Database::new(tmpdir.path()).unwrap();
+#[test]
+fn store_empty_profile() {
+    let tmpdir = tempdir().unwrap();
+    let db = Database::new(tmpdir.path()).unwrap();
 
-//     let profile = Profile {
-//         displayname: None,
-//         avatar_url: None,
-//     };
-//     let id = Database::save_profile(
-//         // &db.connection.lock().unwrap(),
-//         "@alice.example.org",
-//         &profile,
-//     );
-//     assert_eq!(id, 1);
-// }
+    let profile = Profile {
+        displayname: None,
+        avatar_url: None,
+    };
+    let id = Database::save_profile(
+        &db.connection.lock().unwrap(),
+        "@alice.example.org",
+        &profile,
+    );
+    assert_eq!(id.unwrap(), 1);
+}
 
-// #[test]
-// fn store_event() {
-//     let tmpdir = tempdir().unwrap();
-//     let db = Database::new(tmpdir.path()).unwrap();
-//     let profile = Profile::new("Alice", "");
-//     let id = Database::save_profile(
-//         // &db.connection.lock().unwrap(),
-//         "@alice.example.org",
-//         &profile,
-//     )
-//     .unwrap();
+#[test]
+fn store_event() {
+    let tmpdir = tempdir().unwrap();
+    let db = Database::new(tmpdir.path()).unwrap();
+    let profile = Profile::new("Alice", "");
+    let id = Database::save_profile(
+        &db.connection.lock().unwrap(),
+        "@alice.example.org",
+        &profile,
+    )
+    .unwrap();
 
-//     let mut event = EVENT.clone();
-//     let id = Database::save_event_helper(&mut event, id).unwrap();
-//     assert_eq!(id, 1);
-// }
+    let mut event = EVENT.clone();
+    let id = Database::save_event_helper(&db.connection.lock().unwrap(), &mut event, id).unwrap();
+    assert_eq!(id, 1);
+}
 
-// #[test]
-// fn store_event_and_profile() {
-//     let tmpdir = tempdir().unwrap();
-//     let db = Database::new(tmpdir.path()).unwrap();
-//     let mut profile = Profile::new("Alice", "");
-//     let mut event = EVENT.clone();
-//     Database::save_event(&mut event, &mut profile).unwrap();
-// }
+#[test]
+fn store_event_and_profile() {
+    let tmpdir = tempdir().unwrap();
+    let db = Database::new(tmpdir.path()).unwrap();
+    let mut profile = Profile::new("Alice", "");
+    let mut event = EVENT.clone();
+    Database::save_event(&db.connection.lock().unwrap(), &mut event, &mut profile).unwrap();
+}
 
-// #[test]
-// fn load_event() {
-//     let tmpdir = tempdir().unwrap();
-//     let db = Database::new(tmpdir.path()).unwrap();
-//     let mut profile = Profile::new("Alice", "");
+#[test]
+fn load_event() {
+    let tmpdir = tempdir().unwrap();
+    let db = Database::new(tmpdir.path()).unwrap();
+    let mut profile = Profile::new("Alice", "");
 
-//     let mut event = EVENT.clone();
-//     Database::save_event(&mut event, &mut profile).unwrap();
-//     let events = Database::load_events(
-//         // &db.connection.lock().unwrap(),
-//         &[
-//             (1.0, "$15163622445EBvZJ:localhost".to_string()),
-//             (0.3, "$FAKE".to_string()),
-//         ],
-//         0,
-//         0,
-//         false,
-//     )
-//     .unwrap();
+    let mut event = EVENT.clone();
+    Database::save_event(&db.connection.lock().unwrap(), &mut event, &mut profile).unwrap();
+    let events = Database::load_events(
+        &db.connection.lock().unwrap(),
+        &[
+            (1.0, "$15163622445EBvZJ:localhost".to_string()),
+            (0.3, "$FAKE".to_string()),
+        ],
+        0,
+        0,
+        false,
+    )
+    .unwrap();
 
-//     assert_eq!(*EVENT.source, events[0].event_source)
-// }
+    assert_eq!(*EVENT.source, events[0].event_source)
+}
 
-// #[test]
-// fn commit_a_write() {
-//     let tmpdir = tempdir().unwrap();
-//     let mut db = Database::new(tmpdir.path()).unwrap();
-//     db.commit().unwrap();
-// }
+#[test]
+fn commit_a_write() {
+    let tmpdir = tempdir().unwrap();
+    let mut db = Database::new(tmpdir.path()).unwrap();
+    db.commit().unwrap();
+}
 
-// #[test]
-// fn save_the_event_multithreaded() {
-//     let tmpdir = tempdir().unwrap();
-//     let mut db = Database::new(tmpdir.path()).unwrap();
-//     let profile = Profile::new("Alice", "");
+#[test]
+fn save_the_event_multithreaded() {
+    let tmpdir = tempdir().unwrap();
+    let mut db = Database::new(tmpdir.path()).unwrap();
+    let profile = Profile::new("Alice", "");
 
-//     db.add_event(EVENT.clone(), profile);
-//     db.commit().unwrap();
-//     db.reload().unwrap();
+    db.add_event(EVENT.clone(), profile);
+    db.commit().unwrap();
+    db.reload().unwrap();
 
-//     let events = Database::load_events(
-//         // &db.connection.lock().unwrap(),
-//         &[
-//             (1.0, "$15163622445EBvZJ:localhost".to_string()),
-//             (0.3, "$FAKE".to_string()),
-//         ],
-//         0,
-//         0,
-//         false,
-//     )
-//     .unwrap();
+    let events = Database::load_events(
+        &db.connection.lock().unwrap(),
+        &[
+            (1.0, "$15163622445EBvZJ:localhost".to_string()),
+            (0.3, "$FAKE".to_string()),
+        ],
+        0,
+        0,
+        false,
+    )
+    .unwrap();
 
-//     assert_eq!(*EVENT.source, events[0].event_source)
-// }
+    assert_eq!(*EVENT.source, events[0].event_source)
+}
 
-// #[test]
-// fn load_a_profile() {
-//     let tmpdir = tempdir().unwrap();
-//     let db = Database::new(tmpdir.path()).unwrap();
+#[test]
+fn load_a_profile() {
+    let tmpdir = tempdir().unwrap();
+    let db = Database::new(tmpdir.path()).unwrap();
 
-//     let profile = Profile::new("Alice", "");
-//     let user_id = "@alice.example.org";
-//     let profile_id = Database::save_profile(user_id, &profile);
-//     // .unwrap();
+    let profile = Profile::new("Alice", "");
+    let user_id = "@alice.example.org";
+    let profile_id =
+        Database::save_profile(&db.connection.lock().unwrap(), user_id, &profile).unwrap();
 
-//     let loaded_profile = Database::load_profile(profile_id).unwrap();
+    let loaded_profile =
+        Database::load_profile(&db.connection.lock().unwrap(), profile_id).unwrap();
 
-//     assert_eq!(profile, loaded_profile);
-// }
+    assert_eq!(profile, loaded_profile);
+}
 
-// #[test]
-// fn load_event_context() {
-//     let tmpdir = tempdir().unwrap();
-//     let mut db = Database::new(tmpdir.path()).unwrap();
-//     let profile = Profile::new("Alice", "");
+#[test]
+fn load_event_context() {
+    let tmpdir = tempdir().unwrap();
+    let mut db = Database::new(tmpdir.path()).unwrap();
+    let profile = Profile::new("Alice", "");
 
-//     db.add_event(EVENT.clone(), profile.clone());
+    db.add_event(EVENT.clone(), profile.clone());
 
-//     let mut before_event = None;
+    let mut before_event = None;
 
-//     for i in 1..6 {
-//         let mut event: Event = Faker.fake();
-//         event.server_ts = EVENT.server_ts - i;
-//         event.source = format!("Hello before event {}", i);
+    for i in 1..6 {
+        let mut event: Event = Faker.fake();
+        event.server_ts = EVENT.server_ts - i;
+        event.source = format!("Hello before event {}", i);
 
-//         if before_event.is_none() {
-//             before_event = Some(event.clone());
-//         }
+        if before_event.is_none() {
+            before_event = Some(event.clone());
+        }
 
-//         db.add_event(event, profile.clone());
-//     }
+        db.add_event(event, profile.clone());
+    }
 
-//     let mut after_event = None;
+    let mut after_event = None;
 
-//     for i in 1..6 {
-//         let mut event: Event = Faker.fake();
-//         event.server_ts = EVENT.server_ts + i;
-//         event.source = format!("Hello after event {}", i);
+    for i in 1..6 {
+        let mut event: Event = Faker.fake();
+        event.server_ts = EVENT.server_ts + i;
+        event.source = format!("Hello after event {}", i);
 
-//         if after_event.is_none() {
-//             after_event = Some(event.clone());
-//         }
+        if after_event.is_none() {
+            after_event = Some(event.clone());
+        }
 
-//         db.add_event(event, profile.clone());
-//     }
+        db.add_event(event, profile.clone());
+    }
 
-//     db.commit().unwrap();
+    db.commit().unwrap();
 
-//     for i in 1..5 {
-//         let (before, after, _) = Database::load_event_context(&EVENT, 1, 1).unwrap();
+    for i in 1..5 {
+        let (before, after, _) =
+            Database::load_event_context(&db.connection.lock().unwrap(), &EVENT, 1, 1).unwrap();
 
-//         if (before.len() != 1
-//             || after.len() != 1
-//             || before[0] != before_event.as_ref().unwrap().source
-//             || after[0] != after_event.as_ref().unwrap().source)
-//             && i != 10
-//         {
-//             thread::sleep(time::Duration::from_millis(10));
-//             continue;
-//         }
+        if (before.len() != 1
+            || after.len() != 1
+            || before[0] != before_event.as_ref().unwrap().source
+            || after[0] != after_event.as_ref().unwrap().source)
+            && i != 10
+        {
+            thread::sleep(time::Duration::from_millis(10));
+            continue;
+        }
 
-//         assert_eq!(before.len(), 1);
-//         assert_eq!(before[0], before_event.as_ref().unwrap().source);
-//         assert_eq!(after.len(), 1);
-//         assert_eq!(after[0], after_event.as_ref().unwrap().source);
+        assert_eq!(before.len(), 1);
+        assert_eq!(before[0], before_event.as_ref().unwrap().source);
+        assert_eq!(after.len(), 1);
+        assert_eq!(after[0], after_event.as_ref().unwrap().source);
 
-//         return;
-//     }
-// }
+        return;
+    }
+}
 
 // #[test]
 // fn save_and_load_checkpoints() {
@@ -842,7 +733,7 @@ impl Database {
 //         direction: CheckpointDirection::Backwards,
 //     };
 
-//     let mut connection = db.get_connection().unwrap();
+//     let mut connection = db.get_connection();
 //     let transaction = connection.transaction().unwrap();
 
 //     Database::replace_crawler_checkpoint(&transaction, Some(&checkpoint), None).unwrap();
@@ -880,8 +771,10 @@ impl Database {
 //     };
 //     let user_id = "@alice.example.org";
 
-//     let first_id = Database::save_profile(user_id, &profile).unwrap();
-//     let second_id = Database::save_profile(user_id, &profile).unwrap();
+//     let first_id =
+//         Database::save_profile(&db.connection.lock().unwrap(), user_id, &profile).unwrap();
+//     let second_id =
+//         Database::save_profile(&db.connection.lock().unwrap(), user_id, &profile).unwrap();
 
 //     assert_eq!(first_id, second_id);
 
@@ -957,50 +850,50 @@ impl Database {
 //     );
 // }
 
-// // #[cfg(feature = "encryption")]
-// // #[test]
-// // fn change_passphrase() {
-// //     let tmpdir = tempdir().unwrap();
-// //     let db_config = Config::new().set_passphrase("test");
-// //     let mut db = match Database::new_with_config(tmpdir.path(), &db_config) {
-// //         Ok(db) => db,
-// //         Err(e) => panic!("Coulnd't open encrypted database {}", e),
-// //     };
+// #[cfg(feature = "encryption")]
+// #[test]
+// fn change_passphrase() {
+//     let tmpdir = tempdir().unwrap();
+//     let db_config = Config::new().set_passphrase("test");
+//     let mut db = match Database::new_with_config(tmpdir.path(), &db_config) {
+//         Ok(db) => db,
+//         Err(e) => panic!("Coulnd't open encrypted database {}", e),
+//     };
 
-// //     let connection = db
-// //         .get_connection()
-// //         .expect("Could not get database connection");
-// //     assert!(
-// //         connection.is_empty().unwrap(),
-// //         "New database should be empty"
-// //     );
+//     let connection = db
+//         .get_connection()
+//         .expect("Could not get database connection");
+//     assert!(
+//         connection.is_empty().unwrap(),
+//         "New database should be empty"
+//     );
 
-// //     let profile = Profile::new("Alice", "");
-// //     db.add_event(EVENT.clone(), profile);
+//     let profile = Profile::new("Alice", "");
+//     db.add_event(EVENT.clone(), profile);
 
-// //     db.commit().expect("Could not commit events to database");
-// //     db.change_passphrase("wordpass")
-// //         .expect("Could not change the database passphrase");
+//     db.commit().expect("Could not commit events to database");
+//     db.change_passphrase("wordpass")
+//         .expect("Could not change the database passphrase");
 
-// //     let db_config = Config::new().set_passphrase("wordpass");
-// //     let db = Database::new_with_config(tmpdir.path(), &db_config)
-// //         .expect("Could not open database with the new passphrase");
-// //     let connection = db
-// //         .get_connection()
-// //         .expect("Could not get database connection");
-// //     assert!(
-// //         !connection.is_empty().unwrap(),
-// //         "Database shouldn't be empty anymore"
-// //     );
-// //     drop(db);
+//     let db_config = Config::new().set_passphrase("wordpass");
+//     let db = Database::new_with_config(tmpdir.path(), &db_config)
+//         .expect("Could not open database with the new passphrase");
+//     let connection = db
+//         .get_connection()
+//         .expect("Could not get database connection");
+//     assert!(
+//         !connection.is_empty().unwrap(),
+//         "Database shouldn't be empty anymore"
+//     );
+//     drop(db);
 
-// //     let db_config = Config::new().set_passphrase("test");
-// //     let db = Database::new_with_config(tmpdir.path(), &db_config);
-// //     assert!(
-// //         db.is_err(),
-// //         "opening the database without a passphrase should fail"
-// //     );
-// // }
+//     let db_config = Config::new().set_passphrase("test");
+//     let db = Database::new_with_config(tmpdir.path(), &db_config);
+//     assert!(
+//         db.is_err(),
+//         "opening the database without a passphrase should fail"
+//     );
+// }
 
 // #[test]
 // fn resume_committing() {
@@ -1282,23 +1175,23 @@ impl Database {
 // fn user_version() {
 //     let tmpdir = tempdir().unwrap();
 //     let db = Database::new(tmpdir.path()).unwrap();
-//     // let connection = db.get_connection().unwrap();
+//     let connection = db.get_connection().unwrap();
 
-//     // assert_eq!(connection.get_user_version().unwrap(), 0);
-//     // connection.set_user_version(10).unwrap();
-//     // assert_eq!(connection.get_user_version().unwrap(), 10);
+//     assert_eq!(connection.get_user_version().unwrap(), 0);
+//     connection.set_user_version(10).unwrap();
+//     assert_eq!(connection.get_user_version().unwrap(), 10);
 // }
 
-// // #[test]
-// // #[cfg(feature = "encryption")]
-// // fn sqlcipher_cipher_settings_update() {
-// //     let mut path = PathBuf::from(file!());
-// //     path.pop();
-// //     path.pop();
-// //     path.pop();
-// //     path.push("data/database/sqlcipher-v3");
+// #[test]
+// #[cfg(feature = "encryption")]
+// fn sqlcipher_cipher_settings_update() {
+//     let mut path = PathBuf::from(file!());
+//     path.pop();
+//     path.pop();
+//     path.pop();
+//     path.push("data/database/sqlcipher-v3");
 
-// //     let config = Config::new().set_passphrase("qR17RdpWurSh2pQRSc/EnsaO9V041kOwsZk0iSdUY/g");
-// //     let _db =
-// //         Database::new_with_config(&path, &config).expect("We should be able to open the database");
-// // }
+//     let config = Config::new().set_passphrase("qR17RdpWurSh2pQRSc/EnsaO9V041kOwsZk0iSdUY/g");
+//     let _db =
+//         Database::new_with_config(&path, &config).expect("We should be able to open the database");
+// }

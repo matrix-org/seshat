@@ -62,12 +62,13 @@ mod database;
 mod error;
 mod events;
 mod index;
-mod schema;
 
 pub use database::{
     // Connection,
     Database,
-    // DatabaseStats, RecoveryDatabase, RecoveryInfo,
+    // DatabaseStats,
+    // RecoveryDatabase,
+    // RecoveryInfo,
     SearchBatch,
     SearchResult,
     Searcher,

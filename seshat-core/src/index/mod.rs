@@ -30,7 +30,6 @@ use tantivy::{
     Term,
 };
 use uuid::Uuid;
-use web_sys::console;
 
 #[cfg(feature = "encryption")]
 // use crate::index::encrypted_dir::{EncryptedMmapDirectory, PBKDF_COUNT};
@@ -131,8 +130,11 @@ impl Writer {
     }
 
     fn commit_helper(&mut self, force: bool) -> Result<bool, tv::TantivyError> {
-        if self.added_events > 0 && (force || self.added_events >= COMMIT_RATE)
-        // || self.commit_timestamp.elapsed() >= COMMIT_TIME)
+        if self.added_events > 0
+            && (force
+                || self.added_events >= COMMIT_RATE
+                // || self.commit_timestamp.elapsed() >= COMMIT_TIME
+                )
         {
             self.inner.commit()?;
             self.added_events = 0;
@@ -150,7 +152,7 @@ impl Writer {
 
     pub fn add_event(&mut self, event: &Event) {
         let mut doc = tv::TantivyDocument::default();
-        // let mut doc = tv::Document::default();
+
         match event.event_type {
             EventType::Message => doc.add_text(self.body_field, &event.content_value),
             EventType::Topic => doc.add_text(self.topic_field, &event.content_value),
@@ -162,11 +164,7 @@ impl Writer {
         doc.add_text(self.sender_field, &event.sender);
         doc.add_u64(self.date_field, event.server_ts as u64);
 
-        console::log_1(&"add_document".into());
-        console::log_1(&event.content_value.clone().into());
-
-        let op = self.inner.add_document(doc).expect("add doc failed");
-        console::log_1(&format!("add_document {}", op).into());
+        self.inner.add_document(doc);
         self.added_events += 1;
     }
 
@@ -177,13 +175,12 @@ impl Writer {
         self.inner.commit().unwrap();
     }
 
-    pub async fn wait_merging_threads(self) -> Result<(), tv::TantivyError> {
-        self.inner.wait_merging_threads().await
+    pub fn wait_merging_threads(self) -> Result<(), tv::TantivyError> {
+        self.inner.wait_merging_threads()
     }
 }
 
 pub(crate) struct IndexSearcher {
-    // inner: tv::LeasedItem<tv::Searcher>,
     inner: tv::Searcher,
     schema: tv::schema::Schema,
     tokenizer: tv::tokenizer::TokenizerManager,
@@ -216,7 +213,6 @@ impl IndexSearcher {
         };
 
         if config.keys.is_empty() {
-            console::log_1(&"config.keys.is_empty()r".into());
             keys.append(&mut vec![
                 self.body_field,
                 self.topic_field,
@@ -231,8 +227,7 @@ impl IndexSearcher {
                 }
             }
         }
-        console::log_1(&format!("keys: {keys:?}").into());
-        console::log_1(&format!("term: {term:?}").into());
+
         let query_parser =
             tv::query::QueryParser::new(self.schema.clone(), keys, self.tokenizer.clone());
 
@@ -254,11 +249,9 @@ impl IndexSearcher {
         let (mut result, top_docs) = if order_by_recency {
             let top_docs_handle = multicollector.add_collector(
                 TopDocs::with_limit(limit).order_by_u64_field("date", tantivy::Order::Desc),
-                // TopDocs::with_limit(limit).order_by_u64_field(self.date_field),
             );
 
             let mut result = self.inner.search(query, &multicollector)?;
-            console::log_1(&"result 1 ".into());
             let mut top_docs = top_docs_handle.extract(&mut result);
             (
                 result,
@@ -270,7 +263,6 @@ impl IndexSearcher {
         } else {
             let top_docs_handle = multicollector.add_collector(TopDocs::with_limit(limit));
             let mut result = self.inner.search(query, &multicollector)?;
-            console::log_1(&"result 3 ".into());
 
             let top_docs = top_docs_handle.extract(&mut result);
             (result, top_docs)
@@ -283,20 +275,17 @@ impl IndexSearcher {
 
         let end = count == top_docs.len();
 
-        console::log_1(&"top_docs".into());
         for (score, docaddress) in top_docs {
-            console::log_1(&"top_docs doc".into());
             let doc: tv::TantivyDocument = match self.inner.doc(docaddress) {
                 Ok(d) => d,
                 Err(_e) => continue,
             };
 
             let event_id: EventId = match doc.get_first(self.event_id_field) {
-                Some(o) => match o {
+                Some(o) => match o.into() {
                     tv::schema::document::OwnedValue::Str(s) => s.to_owned(),
                     _ => continue,
                 },
-                // Some(s) => s.text().unwrap().to_owned(),
                 None => continue,
             };
 
@@ -335,16 +324,14 @@ impl IndexSearcher {
         term: &str,
         config: &SearchConfig,
     ) -> Result<SearchResult, tv::TantivyError> {
-        console::log_1(&"search inner".into());
         let past_search = if let Some(token) = &config.next_batch {
             let mut search_cache = self.search_cache.write().unwrap();
             search_cache.get_mut(token).cloned()
         } else {
             None
         };
-        console::log_1(&"search past cache".into());
+
         let ((result, event_ids), term, config) = if let Some(past_search) = past_search {
-            console::log_1(&"using past search".into());
             let query = self.parse_query(term, &past_search.search_config)?;
             let previous_results = &past_search.event_ids;
 
@@ -365,7 +352,6 @@ impl IndexSearcher {
                 past_search.search_config.clone(),
             )
         } else {
-            console::log_1(&"new query".into());
             let query = self.parse_query(term, config)?;
             (
                 self.search_helper(
@@ -380,11 +366,8 @@ impl IndexSearcher {
             )
         };
 
-        console::log_1(&"search result".into());
         let (count, results) = result;
-        let c = results.len();
-        console::log_1(&format!("search: {count:?}").into());
-        console::log_1(&format!("search: {c:?}").into());
+
         let next_batch = if event_ids.len() == count {
             None
         } else {
@@ -399,7 +382,7 @@ impl IndexSearcher {
             search_cache.insert(token, search);
             Some(token)
         };
-        console::log_1(&"search result return".into());
+
         Ok(SearchResult {
             count,
             results,
@@ -436,16 +419,13 @@ impl Index {
             .reader_builder()
             .reload_policy(ReloadPolicy::Manual)
             .try_into()?;
-
-        // let index = Index::open_index(path, config, schema)?;
-        // let reader = index.reader()?;
+        let reader = index.reader()?;
 
         match config.language {
             Language::Unknown => (),
             _ => {
                 let tokenizer =
                     tv::tokenizer::TextAnalyzer::builder(tv::tokenizer::SimpleTokenizer::default())
-                        // let tokenizer = tv::tokenizer::TextAnalyzer::from(tv::tokenizer::SimpleTokenizer)
                         .filter(tv::tokenizer::RemoveLongFilter::limit(40))
                         .filter(tv::tokenizer::LowerCaser)
                         .filter(tv::tokenizer::Stemmer::new(config.language.as_tantivy()))
@@ -562,178 +542,178 @@ impl Index {
     }
 }
 
-// #[test]
-// fn add_an_event() {
-//     let tmpdir = TempDir::new().unwrap();
-//     let config = Config::new().set_language(&Language::English);
-//     let index = Index::new(&tmpdir, &config).unwrap();
+#[test]
+fn add_an_event() {
+    let tmpdir = TempDir::new().unwrap();
+    let config = Config::new().set_language(&Language::English);
+    let index = Index::new(&tmpdir, &config).unwrap();
 
-//     let mut writer = index.get_writer().unwrap();
+    let mut writer = index.get_writer().unwrap();
 
-//     writer.add_event(&EVENT);
-//     writer.force_commit().unwrap();
-//     index.reload().unwrap();
+    writer.add_event(&EVENT);
+    writer.force_commit().unwrap();
+    index.reload().unwrap();
 
-//     let searcher = index.get_searcher();
-//     let result = searcher
-//         .search("Test", &Default::default())
-//         .unwrap()
-//         .results;
+    let searcher = index.get_searcher();
+    let result = searcher
+        .search("Test", &Default::default())
+        .unwrap()
+        .results;
 
-//     let event_id = EVENT.event_id.to_string();
+    let event_id = EVENT.event_id.to_string();
 
-//     assert_eq!(result.len(), 1);
-//     assert_eq!(result[0].1, event_id)
-// }
+    assert_eq!(result.len(), 1);
+    assert_eq!(result[0].1, event_id)
+}
 
-// #[test]
-// fn add_events_to_differing_rooms() {
-//     let tmpdir = TempDir::new().unwrap();
-//     let config = Config::new().set_language(&Language::English);
-//     let index = Index::new(&tmpdir, &config).unwrap();
+#[test]
+fn add_events_to_differing_rooms() {
+    let tmpdir = TempDir::new().unwrap();
+    let config = Config::new().set_language(&Language::English);
+    let index = Index::new(&tmpdir, &config).unwrap();
 
-//     let event_id = EVENT.event_id.to_string();
-//     let mut writer = index.get_writer().unwrap();
+    let event_id = EVENT.event_id.to_string();
+    let mut writer = index.get_writer().unwrap();
 
-//     let mut event2 = EVENT.clone();
-//     event2.room_id = "!Test2:room".to_string();
+    let mut event2 = EVENT.clone();
+    event2.room_id = "!Test2:room".to_string();
 
-//     writer.add_event(&EVENT);
-//     writer.add_event(&event2);
+    writer.add_event(&EVENT);
+    writer.add_event(&event2);
 
-//     writer.force_commit().unwrap();
-//     index.reload().unwrap();
+    writer.force_commit().unwrap();
+    index.reload().unwrap();
 
-//     let searcher = index.get_searcher();
-//     let result = searcher
-//         .search("Test", SearchConfig::new().for_room(&EVENT.room_id))
-//         .unwrap()
-//         .results;
+    let searcher = index.get_searcher();
+    let result = searcher
+        .search("Test", SearchConfig::new().for_room(&EVENT.room_id))
+        .unwrap()
+        .results;
 
-//     assert_eq!(result.len(), 1);
-//     assert_eq!(result[0].1, event_id);
+    assert_eq!(result.len(), 1);
+    assert_eq!(result[0].1, event_id);
 
-//     let result = searcher
-//         .search("Test", &Default::default())
-//         .unwrap()
-//         .results;
-//     assert_eq!(result.len(), 2);
-// }
+    let result = searcher
+        .search("Test", &Default::default())
+        .unwrap()
+        .results;
+    assert_eq!(result.len(), 2);
+}
 
-// #[test]
-// fn switch_languages() {
-//     let tmpdir = TempDir::new().unwrap();
-//     let config = Config::new().set_language(&Language::English);
-//     let index = Index::new(&tmpdir, &config).unwrap();
+#[test]
+fn switch_languages() {
+    let tmpdir = TempDir::new().unwrap();
+    let config = Config::new().set_language(&Language::English);
+    let index = Index::new(&tmpdir, &config).unwrap();
 
-//     let mut writer = index.get_writer().unwrap();
+    let mut writer = index.get_writer().unwrap();
 
-//     writer.add_event(&EVENT);
-//     writer.force_commit().unwrap();
-//     index.reload().unwrap();
+    writer.add_event(&EVENT);
+    writer.force_commit().unwrap();
+    index.reload().unwrap();
 
-//     let searcher = index.get_searcher();
-//     let result = searcher
-//         .search("Test", &Default::default())
-//         .unwrap()
-//         .results;
+    let searcher = index.get_searcher();
+    let result = searcher
+        .search("Test", &Default::default())
+        .unwrap()
+        .results;
 
-//     let event_id = EVENT.event_id.to_string();
+    let event_id = EVENT.event_id.to_string();
 
-//     assert_eq!(result.len(), 1);
-//     assert_eq!(result[0].1, event_id);
+    assert_eq!(result.len(), 1);
+    assert_eq!(result[0].1, event_id);
 
-//     drop(index);
+    drop(index);
 
-//     let config = Config::new().set_language(&Language::German);
-//     let index = Index::new(&tmpdir, &config);
+    let config = Config::new().set_language(&Language::German);
+    let index = Index::new(&tmpdir, &config);
 
-//     assert!(index.is_err())
-// }
+    assert!(index.is_err())
+}
 
-// #[test]
-// fn event_count() {
-//     let tmpdir = TempDir::new().unwrap();
-//     let config = Config::new().set_language(&Language::English);
-//     let index = Index::new(&tmpdir, &config).unwrap();
+#[test]
+fn event_count() {
+    let tmpdir = TempDir::new().unwrap();
+    let config = Config::new().set_language(&Language::English);
+    let index = Index::new(&tmpdir, &config).unwrap();
 
-//     let mut writer = index.get_writer().unwrap();
+    let mut writer = index.get_writer().unwrap();
 
-//     assert_eq!(writer.added_events, 0);
-//     writer.add_event(&EVENT);
-//     assert_eq!(writer.added_events, 1);
+    assert_eq!(writer.added_events, 0);
+    writer.add_event(&EVENT);
+    assert_eq!(writer.added_events, 1);
 
-//     writer.force_commit().unwrap();
-//     assert_eq!(writer.added_events, 0);
-// }
+    writer.force_commit().unwrap();
+    assert_eq!(writer.added_events, 0);
+}
 
-// #[test]
-// fn delete_an_event() {
-//     let tmpdir = TempDir::new().unwrap();
-//     let config = Config::new().set_language(&Language::English);
-//     let index = Index::new(&tmpdir, &config).unwrap();
+#[test]
+fn delete_an_event() {
+    let tmpdir = TempDir::new().unwrap();
+    let config = Config::new().set_language(&Language::English);
+    let index = Index::new(&tmpdir, &config).unwrap();
 
-//     let mut writer = index.get_writer().unwrap();
+    let mut writer = index.get_writer().unwrap();
 
-//     writer.add_event(&EVENT);
-//     writer.add_event(&TOPIC_EVENT);
-//     writer.force_commit().unwrap();
-//     index.reload().unwrap();
+    writer.add_event(&EVENT);
+    writer.add_event(&TOPIC_EVENT);
+    writer.force_commit().unwrap();
+    index.reload().unwrap();
 
-//     let searcher = index.get_searcher();
-//     let result = searcher
-//         .search("Test", &Default::default())
-//         .unwrap()
-//         .results;
+    let searcher = index.get_searcher();
+    let result = searcher
+        .search("Test", &Default::default())
+        .unwrap()
+        .results;
 
-//     let event_id = &EVENT.event_id;
+    let event_id = &EVENT.event_id;
 
-//     assert_eq!(result.len(), 2);
-//     assert_eq!(&result[0].1, event_id);
+    assert_eq!(result.len(), 2);
+    assert_eq!(&result[0].1, event_id);
 
-//     writer.delete_event(event_id);
-//     writer.force_commit().unwrap();
-//     index.reload().unwrap();
+    writer.delete_event(event_id);
+    writer.force_commit().unwrap();
+    index.reload().unwrap();
 
-//     let searcher = index.get_searcher();
-//     let result = searcher
-//         .search("Test", &Default::default())
-//         .unwrap()
-//         .results;
-//     assert_eq!(result.len(), 1);
-//     assert_eq!(&result[0].1, &TOPIC_EVENT.event_id);
-// }
+    let searcher = index.get_searcher();
+    let result = searcher
+        .search("Test", &Default::default())
+        .unwrap()
+        .results;
+    assert_eq!(result.len(), 1);
+    assert_eq!(&result[0].1, &TOPIC_EVENT.event_id);
+}
 
-// #[test]
-// fn paginated_search() {
-//     let tmpdir = TempDir::new().unwrap();
-//     let config = Config::new().set_language(&Language::English);
-//     let index = Index::new(&tmpdir, &config).unwrap();
+#[test]
+fn paginated_search() {
+    let tmpdir = TempDir::new().unwrap();
+    let config = Config::new().set_language(&Language::English);
+    let index = Index::new(&tmpdir, &config).unwrap();
 
-//     let mut writer = index.get_writer().unwrap();
+    let mut writer = index.get_writer().unwrap();
 
-//     writer.add_event(&EVENT);
-//     writer.add_event(&TOPIC_EVENT);
-//     writer.force_commit().unwrap();
-//     index.reload().unwrap();
+    writer.add_event(&EVENT);
+    writer.add_event(&TOPIC_EVENT);
+    writer.force_commit().unwrap();
+    index.reload().unwrap();
 
-//     let searcher = index.get_searcher();
-//     let first_search = searcher
-//         .search("Test", SearchConfig::new().limit(1))
-//         .unwrap();
+    let searcher = index.get_searcher();
+    let first_search = searcher
+        .search("Test", SearchConfig::new().limit(1))
+        .unwrap();
 
-//     assert_eq!(first_search.results.len(), 1);
+    assert_eq!(first_search.results.len(), 1);
 
-//     let second_search = searcher
-//         .search(
-//             "Test",
-//             SearchConfig::new()
-//                 .limit(1)
-//                 .next_batch(first_search.next_batch.unwrap()),
-//         )
-//         .unwrap();
-//     assert_eq!(second_search.results.len(), 1);
-//     assert_eq!(&first_search.results[0].1, &EVENT.event_id);
-//     assert_eq!(&second_search.results[0].1, &TOPIC_EVENT.event_id);
-//     assert!(second_search.next_batch.is_none());
-// }
+    let second_search = searcher
+        .search(
+            "Test",
+            SearchConfig::new()
+                .limit(1)
+                .next_batch(first_search.next_batch.unwrap()),
+        )
+        .unwrap();
+    assert_eq!(second_search.results.len(), 1);
+    assert_eq!(&first_search.results[0].1, &EVENT.event_id);
+    assert_eq!(&second_search.results[0].1, &TOPIC_EVENT.event_id);
+    assert!(second_search.next_batch.is_none());
+}

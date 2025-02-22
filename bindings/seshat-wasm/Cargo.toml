@@ -16,11 +16,6 @@ seshat = { path = "../../seshat-core", default-features = false, features = [
 wasm-bindgen.workspace = true
 wasm-bindgen-futures.workspace = true
 wasm-bindgen-test.workspace = true
-diesel-wasm-sqlite.workspace = true
-diesel = { workspace = true, features = [
-    "r2d2",
-    "returning_clauses_for_sqlite_3_35",
-] }
 futures.workspace = true
 wasm-bindgen-rayon = "1.2.2"
 # [target.'cfg(target_arch = "wasm32")'.dependencies]
@@ -30,6 +25,7 @@ js-sys.workspace = true
 uuid.workspace = true
 console_error_panic_hook.workspace = true
 tracing-wasm.workspace = true
+sqlite-wasm-rs.workspace = true
 
 [dev-dependencies]
 wasm-bindgen-test.workspace = true

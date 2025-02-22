@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 
-use diesel::connection::{set_default_instrumentation, Instrumentation, InstrumentationEvent};
 use js_sys::Map;
 use seshat::{
     Database as SDatabase, Error, Event as SEvent, EventType as SEventType, Profile as SProfile,
     SearchBatch as SSearchBatch, SearchConfig as SSearchConfig, SearchResult as SSearchResult,
 };
 
+use sqlite_wasm_rs::export::{self as ffi, install_opfs_sahpool, OpfsSAHPoolCfgBuilder};
 use uuid::Uuid;
 use wasm_bindgen::{prelude::wasm_bindgen, JsError};
 use wasm_bindgen_test::console_log;
@@ -369,7 +369,8 @@ impl Database {
 
     pub async fn wait_merging_threads(self) {
         console_log!("wait_merging_threads");
-        let _ = self.inner.wait_merging_threads().await;
+        self.inner.shutdown();
+        // let _ = self.inner.wait_merging_threads().await;
         console_log!("wait_merging_threads exit");
     }
 
@@ -383,11 +384,11 @@ impl Database {
 #[wasm_bindgen]
 impl Database {
     pub async fn search(&mut self, term: &str) -> Result<SearchBatch, JsError> {
+        console_log!("search");
         let batch = match &self
             .inner
             // .search(term, &SSearchConfig::from(&config))
             .search(term, &Default::default())
-            .await
         {
             Ok(batch) => SearchBatch::from(batch),
             Err(e) => {
@@ -408,17 +409,18 @@ impl Database {
     }
 }
 
-fn simple_logger() -> Option<Box<dyn Instrumentation>> {
-    // we need the explicit argument type there due
-    // to bugs in rustc
-    Some(Box::new(|event: InstrumentationEvent<'_>| {
-        console::log_1(&format!("SQL: {event:?}").into());
-    }))
-}
+// fn simple_logger() -> Option<Box<dyn Instrumentation>> {
+//     // we need the explicit argument type there due
+//     // to bugs in rustc
+//     Some(Box::new(|event: InstrumentationEvent<'_>| {
+//         console::log_1(&format!("SQL: {event:?}").into());
+//     }))
+// }
 
 #[wasm_bindgen]
 pub async fn new_seshat_db(path: String, config: Config) -> Result<Database, JsError> {
-    let result = set_default_instrumentation(simple_logger);
+    // let result = set_default_instrumentation(simple_logger);
+
     let logconfig = tracing_wasm::WASMLayerConfigBuilder::default()
         .set_console_config(tracing_wasm::ConsoleConfig::ReportWithoutConsoleColor)
         .build();
@@ -427,13 +429,21 @@ pub async fn new_seshat_db(path: String, config: Config) -> Result<Database, JsE
 
     console_error_panic_hook::set_once();
 
-    if result.is_err() {
-        console::log_1(&"set_default_instrumentation error".into());
-    } else {
-        console::log_1(&"set_default_instrumentation no error".into());
-    }
+    // let cfg = OpfsSAHPoolCfgBuilder::new()
+    //     .vfs_name("custom-vfs")
+    //     .directory("custom/abc")
+    //     .build();
+    // install_opfs_sahpool(Some(&cfg), true).await?;
+    console_log!("install_opfs_sahpool before ");
+    let res = install_opfs_sahpool(None, true).await?;
+    console_log!("install_opfs_sahpool after");
+    // if result.is_err() {
+    //     console::log_1(&"set_default_instrumentation error".into());
+    // } else {
+    //     console::log_1(&"set_default_instrumentation no error".into());
+    // }
     let s_config = seshat::Config::from(&config);
-    let db = match SDatabase::new_with_config(&path, &s_config).await {
+    let db = match SDatabase::new_with_config(&path, &s_config) {
         Ok(db) => db,
         Err(e) => {
             // There doesn't seem to be a way to construct custom

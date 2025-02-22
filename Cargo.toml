@@ -3,7 +3,7 @@ resolver = "2"
 members = ["bindings/seshat-wasm", "seshat-core"]
 
 [workspace.dependencies]
-tantivy = { version = "0.22.0", default-features = false, features = [
+tantivy = { version = "0.23.0", default-features = false, features = [
     "quickwit",
     # "mmap",
     # "sstable-termdict",
@@ -23,17 +23,19 @@ tantivy = { version = "0.22.0", default-features = false, features = [
 # tantivy-common = { package = "izihawa-tantivy-common", version = "0.7" }
 # tantivy-query-grammar = { package = "izihawa-tantivy-query-grammar", version = "0.22" }
 getrandom = { version = "0.2", default-features = false }
-diesel = { version = "2.2", default-features = false }            #, features = ["sqlite"] }
-diesel-wasm-sqlite = "0.0.1"
-diesel_migrations = { version = "2.2", default-features = false }
 wasm-bindgen-futures = "0.4"
-wasm-bindgen = "=0.2.95"
-wasm-bindgen-test = "0.3.45"
+wasm-bindgen = "=0.2.100"
+wasm-bindgen-test = "0.3.49"
 # wasm-bindgen = { path = "../wasm-bindgen" }
 # wasm-bindgen-test = { path = "../wasm-bindgen/crates/test" }
 # wasm-bindgen-shared = { path = "../wasm-bindgen/crates/shared" }
 # wasm-bindgen-macro-support = { path = "../wasm-bindgen/crates/macro-support" }
 # wasm-bindgen-macro = { path = "../wasm-bindgen/crates/macro" }
+rusqlite = { git = "https://github.com/Spxg/rusqlite", features = [
+    "trace",
+    "bundled",
+], version = "^0.33.0" } #"0.27.0"
+quote = { version = "1.0.38", default-features = false }
 tracing-wasm = "0.2.1"
 web-sys = "0.3"
 js-sys = "0.3"
@@ -46,6 +48,10 @@ libsqlite3-sys = { version = "0.29", features = [
 ] }
 uuid = "1.3.0"
 console_error_panic_hook = "0.1"
+wasm_bindgen_spawn = "0.0.1"
+sqlite-wasm-rs = { version = ">=0.3.0, <0.4.0", default-features = false, features = [
+    "precompiled",
+] }
 
 [profile.dev]
 # Disabling debug info speeds up builds a bunch,
@@ -57,20 +63,13 @@ debug = 0
 [profile.dev.build-override]
 opt-level = 3
 
-# patch needed until some items
-# are made public for third-party dependencies: https://github.com/diesel-rs/diesel/pull/4236
-# (cfg-specific patche support does not exist)
 [patch.crates-io]
-diesel-wasm-sqlite = { git = "https://github.com/xmtp/diesel-wasm-sqlite", branch = "main" }
-diesel = { git = "https://github.com/diesel-rs/diesel", branch = "master" }
-diesel_derives = { git = "https://github.com/diesel-rs/diesel", branch = "master" }
-diesel_migrations = { git = "https://github.com/diesel-rs/diesel", branch = "master" }
-wasm-bindgen = { path = "../wasm-bindgen" }
-wasm-bindgen-test = { path = "../wasm-bindgen/crates/test" }
-wasm-bindgen-shared = { path = "../wasm-bindgen/crates/shared" }
-wasm-bindgen-futures = { path = "../wasm-bindgen/crates/futures" }
-web-sys = { path = "../wasm-bindgen/crates/web-sys" }
-js-sys = { path = "../wasm-bindgen/crates/js-sys" }
-wasm-bindgen-macro = { path = "../wasm-bindgen/crates/macro" }
-wasm-bindgen-macro-support = { path = "../wasm-bindgen/crates/macro-support" }
+# wasm-bindgen = { path = "../wasm-bindgen" }
+# wasm-bindgen-test = { path = "../wasm-bindgen/crates/test" }
+# wasm-bindgen-shared = { path = "../wasm-bindgen/crates/shared" }
+# wasm-bindgen-futures = { path = "../wasm-bindgen/crates/futures" }
+# web-sys = { path = "../wasm-bindgen/crates/web-sys" }
+# js-sys = { path = "../wasm-bindgen/crates/js-sys" }
+# wasm-bindgen-macro = { path = "../wasm-bindgen/crates/macro" }
+# wasm-bindgen-macro-support = { path = "../wasm-bindgen/crates/macro-support" }
 tantivy = { path = "../tantivy" }

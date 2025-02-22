@@ -19,8 +19,8 @@
 // use std::path::PathBuf;
 
 // use fs_extra::dir;
-// // use r2d2::PooledConnection;
-// // use r2d2_sqlite::SqliteConnectionManager;
+// use r2d2::PooledConnection;
+// use r2d2_sqlite::SqliteConnectionManager;
 
 // use crate::{
 //     config::LoadConfig,
@@ -54,7 +54,7 @@
 //         let mut stmt = self.prepare(
 //             "SELECT room_id, token, full_crawl, direction
 //                                     FROM crawlercheckpoints",
-//         );
+//         )?;
 
 //         let rows = stmt.query_map([], |row| {
 //             Ok(CrawlerCheckpoint {
@@ -77,7 +77,7 @@
 //     /// Is the database empty.
 //     /// Returns true if the database is empty, false otherwise.
 //     pub fn is_empty(&self) -> Result<bool> {
-//         let event_count: i64 = Database::get_event_count();
+//         let event_count: i64 = Database::get_event_count(&self.inner)?;
 //         let checkpoint_count: i64 =
 //             self.query_row("SELECT COUNT(*) FROM crawlercheckpoints", [], |row| {
 //                 row.get(0)
@@ -91,7 +91,7 @@
 //     /// Returns true if the database contains events from a room, false
 //     /// otherwise.
 //     pub fn is_room_indexed(&self, room_id: &str) -> Result<bool> {
-//         let event_count: i64 = Database::get_event_count_for_room(room_id);
+//         let event_count: i64 = Database::get_event_count_for_room(&self.inner, room_id)?;
 //         let checkpoint_count: i64 = self.query_row(
 //             "SELECT COUNT(*) FROM crawlercheckpoints WHERE room_id=?1",
 //             [room_id],
@@ -103,8 +103,8 @@
 
 //     /// Get statistical information of the database.
 //     pub fn get_stats(&self) -> Result<DatabaseStats> {
-//         let event_count = Database::get_event_count() as u64;
-//         let room_count = Database::get_room_count() as u64;
+//         let event_count = Database::get_event_count(&self.inner)? as u64;
+//         let room_count = Database::get_room_count(&self.inner)? as u64;
 //         let size = dir::get_size(&self.path)?;
 //         Ok(DatabaseStats {
 //             size,
@@ -117,7 +117,7 @@
 //     /// # Arguments
 //     ///
 //     /// * `load_config` - Configuration deciding which events and how many of
-//     /// them should be loaded.
+//     ///   them should be loaded.
 //     ///
 //     /// # Examples
 //     ///
@@ -127,17 +127,18 @@
 //     /// ```
 //     ///
 //     /// Returns a list of tuples containing the serialized events and the
-//     /// profile of the sender at the time when the event was sent.
+//     ///   profile of the sender at the time when the event was sent.
 //     pub fn load_file_events(
 //         &self,
 //         load_config: &LoadConfig,
 //     ) -> Result<Vec<(SerializedEvent, Profile)>> {
 //         Ok(Database::load_file_events(
+//             self,
 //             &load_config.room_id,
 //             load_config.limit,
 //             load_config.from_event.as_deref(),
 //             &load_config.direction,
-//         ))
+//         )?)
 //     }
 
 //     /// Get the user version stored in the database.
@@ -145,7 +146,7 @@
 //     /// This version isn't used anywhere internally and can be set by the user
 //     /// to signal changes between the JSON that gets stored inside of Seshat.
 //     pub fn get_user_version(&self) -> Result<i64> {
-//         Database::get_user_version()
+//         Database::get_user_version(self)
 //     }
 
 //     /// Set the user version to the given version.
@@ -154,7 +155,7 @@
 //     ///
 //     /// * `version` - The new version that will be stored in the database.
 //     pub fn set_user_version(&self, version: i64) -> Result<()> {
-//         Database::set_user_version(version)
+//         Database::set_user_version(self, version)
 //     }
 // }
 
