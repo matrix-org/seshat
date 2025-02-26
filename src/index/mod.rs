@@ -104,7 +104,7 @@ struct Search {
     event_ids: Arc<Vec<String>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, specta::Type)]
 pub(crate) struct SearchResult {
     pub(crate) count: usize,
     pub(crate) results: Vec<(f32, EventId)>,

@@ -34,7 +34,7 @@ use crate::{
 static BUSY_RETRY: usize = 10;
 static BUSY_SLEEP: Duration = Duration::from_millis(10);
 
-#[derive(Debug, PartialEq, Default, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Default, Clone, Serialize, Deserialize, specta::Type)]
 /// A search result
 pub struct SearchResult {
     /// The score that the full text search assigned to this event.
@@ -49,7 +49,7 @@ pub struct SearchResult {
     pub profile_info: HashMap<MxId, Profile>,
 }
 
-#[derive(Debug, PartialEq, Default, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Default, Clone, Serialize, Deserialize, specta::Type)]
 /// A batch of search results that were returned during a search.
 pub struct SearchBatch {
     /// The total number of events that were found.
