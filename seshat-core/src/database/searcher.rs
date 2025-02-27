@@ -32,6 +32,8 @@ use crate::{
     Database,
 };
 
+use super::event_database::EventDatabase;
+
 static BUSY_RETRY: usize = 10;
 static BUSY_SLEEP: Duration = Duration::from_millis(10);
 
@@ -67,8 +69,7 @@ pub struct SearchBatch {
 /// The main entry point to the index and database.
 pub struct Searcher {
     pub(crate) inner: IndexSearcher,
-    pub(crate) database: Arc<Mutex<Connection>>,
-    // pub(crate) database: Arc<Mutex<PooledConnection<SqliteConnectionManager>>>,
+    pub(crate) event_db: Arc<EventDatabase>,
 }
 
 impl Searcher {
@@ -95,8 +96,7 @@ impl Searcher {
         let mut retry = 0;
 
         let events = loop {
-            match Database::load_events(
-                &self.database.lock().unwrap(),
+            match self.event_db.load_events(
                 &search_result.results,
                 config.before_limit,
                 config.after_limit,
@@ -104,18 +104,23 @@ impl Searcher {
             ) {
                 Ok(e) => break e,
                 Err(e) => match e {
-                    // Usually the busy timeout on a sqlite connection should
-                    // handle this, but setting it on the connection didn't
-                    // seem to get rid of database busy errors like expected.
-                    rusqlite::Error::SqliteFailure(sql_error, _) => {
-                        if sql_error.code == rusqlite::ffi::ErrorCode::DatabaseBusy
-                            && retry < BUSY_RETRY
-                        {
-                            retry += 1;
-                            sleep(BUSY_SLEEP);
-                            continue;
-                        } else {
-                            return Err(e.into());
+                    crate::Error::DatabaseError(error) => {
+                        match error {
+                            // Usually the busy timeout on a sqlite connection should
+                            // handle this, but setting it on the connection didn't
+                            // seem to get rid of database busy errors like expected.
+                            rusqlite::Error::SqliteFailure(sql_error, _) => {
+                                if sql_error.code == rusqlite::ffi::ErrorCode::DatabaseBusy
+                                    && retry < BUSY_RETRY
+                                {
+                                    retry += 1;
+                                    sleep(BUSY_SLEEP);
+                                    continue;
+                                } else {
+                                    return Err(error.into());
+                                }
+                            }
+                            e => return Err(e.into()),
                         }
                     }
                     e => return Err(e.into()),
