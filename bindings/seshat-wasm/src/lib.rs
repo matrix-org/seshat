@@ -6,13 +6,11 @@ use seshat::{
     SearchBatch as SSearchBatch, SearchConfig as SSearchConfig, SearchResult as SSearchResult,
 };
 
-use sqlite_wasm_rs::export::{self as ffi, install_opfs_sahpool, OpfsSAHPoolCfgBuilder};
 use uuid::Uuid;
 use wasm_bindgen::{prelude::wasm_bindgen, JsError};
 use wasm_bindgen_test::console_log;
 
 pub use wasm_bindgen_rayon::init_thread_pool;
-use web_sys::console;
 
 #[wasm_bindgen]
 #[derive(Debug, PartialEq, Clone)]
@@ -429,19 +427,6 @@ pub async fn new_seshat_db(path: String, config: Config) -> Result<Database, JsE
 
     console_error_panic_hook::set_once();
 
-    // let cfg = OpfsSAHPoolCfgBuilder::new()
-    //     .vfs_name("custom-vfs")
-    //     .directory("custom/abc")
-    //     .build();
-    // install_opfs_sahpool(Some(&cfg), true).await?;
-    console_log!("install_opfs_sahpool before ");
-    let res = install_opfs_sahpool(None, true).await?;
-    console_log!("install_opfs_sahpool after");
-    // if result.is_err() {
-    //     console::log_1(&"set_default_instrumentation error".into());
-    // } else {
-    //     console::log_1(&"set_default_instrumentation no error".into());
-    // }
     let s_config = seshat::Config::from(&config);
     let db = match SDatabase::new_with_config(&path, &s_config) {
         Ok(db) => db,

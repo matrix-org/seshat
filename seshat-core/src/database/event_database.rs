@@ -20,23 +20,23 @@ use std::{
     thread,
 };
 
+use futures::executor;
 use rusqlite::{
     params, params_from_iter,
     trace::{TraceEvent, TraceEventCodes},
     ToSql,
 };
-use web_sys::console;
-
-use rusqlite::Connection;
+use web_sys::{console, wasm_bindgen};
 
 use crate::{
     config::LoadDirection,
     database::SearchResult,
     error::Result,
     events::{CrawlerCheckpoint, Event, EventContext, EventId, Profile, SerializedEvent},
-    index::Writer as IndexWriter,
     Config, Database,
 };
+use rusqlite::Connection;
+use sqlite_wasm_rs::export::install_opfs_sahpool;
 
 #[cfg(test)]
 use fake::{Fake, Faker};
@@ -97,120 +97,133 @@ impl EventDatabase {
         })
     }
 
+    pub async fn setup_database(path: PathBuf) -> Result<Connection> {
+        let ret = install_opfs_sahpool(None, true).await;
+
+        let db_path = path.join(EVENTS_DB_NAME);
+
+        let mut connection: Connection = Connection::open(db_path.clone()).unwrap();
+
+        fn rusqlite_log(event: TraceEvent) {
+            match event {
+                TraceEvent::Stmt(stmt_ref, _) => {
+                    let sql = stmt_ref.sql();
+                    console::log_1(&format!("SQLite Stmt {sql}").into())
+                }
+                TraceEvent::Profile(stmt_ref, duration) => {
+                    let sql = stmt_ref.sql();
+                    let millis = duration.as_millis();
+                    console::log_1(&format!("SQLite Profile {sql} duration {millis}").into())
+                }
+                TraceEvent::Row(stmt_ref) => {
+                    let sql = stmt_ref.sql();
+                    console::log_1(&format!("SQLite Row {sql}").into())
+                }
+                TraceEvent::Close(_) => console::log_1(&"SQLite Close".into()),
+                _ => (),
+            }
+        }
+
+        connection.trace_v2(TraceEventCodes::all(), Some(rusqlite_log));
+
+        // Self::static_unlock(&mut connection, config)?;
+        Self::set_pragmas(&mut connection)?;
+
+        let (version, reindex_needed) = match Self::get_version(&mut connection) {
+            Ok(ret) => ret,
+            Err(e) => return Err(crate::Error::DatabaseOpenError(e.to_string())),
+        };
+
+        Self::create_tables(&mut connection);
+        console::log_1(&"create_tables".into());
+
+        if version != DATABASE_VERSION {
+            return Err(crate::Error::DatabaseVersionError);
+        }
+
+        if reindex_needed {
+            return Err(crate::Error::ReindexError);
+        }
+        return Ok(connection);
+    }
+
     pub fn spawn_database_thread(path: PathBuf) -> EventDatabaseThreadRet {
         let (tx, rx): (_, Receiver<DatabaseMessage>) = channel();
         // let (shutdown_tx, shutdown_rx): (_, Receiver<()>) = channel();
         rayon::spawn(move || {
-            let db_path = path.join(EVENTS_DB_NAME);
-            let mut connection: Connection = Connection::open(db_path.clone()).unwrap();
+            wasm_bindgen_futures::spawn_local(async move {
+                let mut connection = Self::setup_database(path).await.unwrap();
 
-            fn rusqlite_log(event: TraceEvent) {
-                match event {
-                    TraceEvent::Stmt(stmt_ref, _) => {
-                        let sql = stmt_ref.sql();
-                        console::log_1(&format!("SQLite Stmt {sql}").into())
-                    }
-                    TraceEvent::Profile(stmt_ref, duration) => {
-                        let sql = stmt_ref.sql();
-                        let millis = duration.as_millis();
-                        console::log_1(&format!("SQLite Profile {sql} duration {millis}").into())
-                    }
-                    TraceEvent::Row(stmt_ref) => {
-                        let sql = stmt_ref.sql();
-                        console::log_1(&format!("SQLite Row {sql}").into())
-                    }
-                    TraceEvent::Close(conn_ref) => console::log_1(&format!("SQLite Close").into()),
-                    _ => todo!(),
-                }
-            }
-
-            connection.trace_v2(TraceEventCodes::all(), Some(rusqlite_log));
-
-            // Self::static_unlock(&mut connection, config);
-            Self::set_pragmas(&mut connection);
-
-            let (version, reindex_needed) = match Self::get_version(&mut connection) {
-                Ok(ret) => ret,
-                Err(e) => return, //TODO handle Err(Error::DatabaseOpenError(e.to_string())),
-            };
-
-            Self::create_tables(&mut connection);
-
-            // if version != DATABASE_VERSION {
-            //     return Err(Error::DatabaseVersionError);
-            // }
-
-            // if reindex_needed {
-            //     return Err(Error::ReindexError);
-            // }
-            while let Ok(message) = rx.recv() {
-                match message {
-                    DatabaseMessage::PendingDelete(event_id, sender) => {
-                        let ret = Self::static_pending_delete(&mut connection, event_id);
-                        sender.send(ret).unwrap();
-                    }
-                    DatabaseMessage::MarkEventsAsDeleted(events, sender) => {
-                        let ret = Self::static_mark_events_as_deleted(&mut connection, events);
-                        sender.send(ret).unwrap();
-                    }
-                    DatabaseMessage::SaveEvent(event, profile, sender) => {
-                        let ret = Self::static_save_event(&mut connection, event, profile);
-                        sender.send(ret).unwrap();
-                    }
-                    DatabaseMessage::ReplaceCrawlerCheckpoint(
-                        new_checkpoint,
-                        old_checkpoint,
-                        write_events_sender,
-                        result_sender,
-                    ) => {
-                        let write_events = Box::new(|| {
-                            write_events_sender.send(Ok(())).unwrap();
-                        });
-                        let ret = Self::static_replace_crawler(
-                            &mut connection,
+                while let Ok(message) = rx.recv() {
+                    match message {
+                        DatabaseMessage::PendingDelete(event_id, sender) => {
+                            let ret = Self::static_pending_delete(&mut connection, event_id);
+                            sender.send(ret).unwrap();
+                        }
+                        DatabaseMessage::MarkEventsAsDeleted(events, sender) => {
+                            let ret = Self::static_mark_events_as_deleted(&mut connection, events);
+                            sender.send(ret).unwrap();
+                        }
+                        DatabaseMessage::SaveEvent(event, profile, sender) => {
+                            let ret = Self::static_save_event(&mut connection, event, profile);
+                            sender.send(ret).unwrap();
+                        }
+                        DatabaseMessage::ReplaceCrawlerCheckpoint(
                             new_checkpoint,
                             old_checkpoint,
-                            write_events,
-                        );
-                        result_sender.send(ret).unwrap();
-                    }
-                    DatabaseMessage::MarkEventsAsIndexed(events, sender) => {
-                        let ret = Self::static_mark_events_as_indexed(&mut connection, events);
-                        sender.send(ret).unwrap();
-                    }
-                    DatabaseMessage::LoadUncomittedEvents(sender) => {
-                        let ret = Self::static_load_uncommitted_events(&mut connection);
-                        sender.send(Ok(ret.unwrap())).unwrap();
-                    }
-                    DatabaseMessage::LoadPendingDeletionEvents(sender) => {
-                        let ret = Self::static_load_pending_deletion_events(&mut connection);
-                        sender.send(Ok(ret.unwrap())).unwrap();
-                    }
-                    DatabaseMessage::ChangePassphrase(new_passphrase, sender) => {
-                        let ret = Self::static_change_passphrase(&mut connection, new_passphrase);
-                        sender.send(Ok(ret.unwrap())).unwrap();
-                    }
-                    DatabaseMessage::LoadEvents(
-                        search_results,
-                        before_limit,
-                        after_limit,
-                        order_by_recency,
-                        sender,
-                    ) => {
-                        let ret = Self::static_load_events(
-                            &mut connection,
-                            &search_results,
+                            write_events_sender,
+                            result_sender,
+                        ) => {
+                            let write_events = Box::new(|| {
+                                write_events_sender.send(Ok(())).unwrap();
+                            });
+                            let ret = Self::static_replace_crawler(
+                                &mut connection,
+                                new_checkpoint,
+                                old_checkpoint,
+                                write_events,
+                            );
+                            result_sender.send(ret).unwrap();
+                        }
+                        DatabaseMessage::MarkEventsAsIndexed(events, sender) => {
+                            let ret = Self::static_mark_events_as_indexed(&mut connection, events);
+                            sender.send(ret).unwrap();
+                        }
+                        DatabaseMessage::LoadUncomittedEvents(sender) => {
+                            let ret = Self::static_load_uncommitted_events(&mut connection);
+                            sender.send(Ok(ret.unwrap())).unwrap();
+                        }
+                        DatabaseMessage::LoadPendingDeletionEvents(sender) => {
+                            let ret = Self::static_load_pending_deletion_events(&mut connection);
+                            sender.send(Ok(ret.unwrap())).unwrap();
+                        }
+                        DatabaseMessage::ChangePassphrase(new_passphrase, sender) => {
+                            let ret =
+                                Self::static_change_passphrase(&mut connection, new_passphrase);
+                            sender.send(Ok(ret.unwrap())).unwrap();
+                        }
+                        DatabaseMessage::LoadEvents(
+                            search_results,
                             before_limit,
                             after_limit,
                             order_by_recency,
-                        );
-                        sender.send(Ok(ret.unwrap())).unwrap();
+                            sender,
+                        ) => {
+                            let ret = Self::static_load_events(
+                                &mut connection,
+                                &search_results,
+                                before_limit,
+                                after_limit,
+                                order_by_recency,
+                            );
+                            sender.send(Ok(ret.unwrap())).unwrap();
+                        }
                     }
                 }
-            }
-            return;
+                return;
+            });
+            wasm_bindgen::throw_str("Cursed hack to keep workers alive. See https://github.com/rustwasm/wasm-bindgen/issues/2945");
         });
-
         return tx;
     }
 

@@ -13,19 +13,18 @@
 // limitations under the License.
 
 mod connection;
+mod event_database;
 mod recovery;
 mod searcher;
-mod event_database;
 mod writer;
 
 use fs_extra::dir;
 use rusqlite::Connection;
 // use r2d2::{Pool, PooledConnection};
 // use r2d2_sqlite::SqliteConnectionManager;
+use event_database::EventDatabase;
 use rusqlite::trace::{config_log, TraceEvent, TraceEventCodes};
 use rusqlite::ToSql;
-use event_database::EventDatabase;
-// use sqlite_wasm_rs::export::{self as ffi, install_opfs_sahpool, OpfsSAHPoolCfgBuilder};
 use std::ffi::c_int;
 use std::{
     fs,
