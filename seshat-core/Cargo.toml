@@ -91,7 +91,6 @@ wasm-bindgen-futures.workspace = true
 web-sys = { workspace = true, default-features = false, features = ["console"] }
 futures.workspace = true
 futures-core.workspace = true
-# sqlite-wasm-rs.workspace = true
 
 [dev-dependencies]
 tempfile = "3.2.0"

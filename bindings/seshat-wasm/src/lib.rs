@@ -407,18 +407,8 @@ impl Database {
     }
 }
 
-// fn simple_logger() -> Option<Box<dyn Instrumentation>> {
-//     // we need the explicit argument type there due
-//     // to bugs in rustc
-//     Some(Box::new(|event: InstrumentationEvent<'_>| {
-//         console::log_1(&format!("SQL: {event:?}").into());
-//     }))
-// }
-
 #[wasm_bindgen]
 pub async fn new_seshat_db(path: String, config: Config) -> Result<Database, JsError> {
-    // let result = set_default_instrumentation(simple_logger);
-
     let logconfig = tracing_wasm::WASMLayerConfigBuilder::default()
         .set_console_config(tracing_wasm::ConsoleConfig::ReportWithoutConsoleColor)
         .build();
