@@ -23,15 +23,13 @@ use r2d2::{Pool, PooledConnection};
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::ToSql;
 use std::{
-    fs,
-    path::{Path, PathBuf},
-    sync::{
+    convert::TryInto, fs, path::{Path, PathBuf}, sync::{
         mpsc::{channel, Receiver, Sender},
         Arc, Mutex,
-    },
-    thread,
-    thread::JoinHandle,
+    }, thread::{self, JoinHandle}, time::SystemTime
 };
+
+
 
 pub use crate::database::{
     connection::{Connection, DatabaseStats},
@@ -42,7 +40,7 @@ use crate::{
     config::{Config, SearchConfig},
     database::writer::Writer,
     error::{Error, Result},
-    events::{CrawlerCheckpoint, Event, EventId, HistoricEventsT, Profile},
+    events::{CrawlerCheckpoint, Event, EventId, HistoricEventsT, Profile, SerializedEvent},
     index::{Index, Writer as IndexWriter},
 };
 
@@ -457,6 +455,15 @@ impl Database {
     pub fn search(&self, term: &str, config: &SearchConfig) -> Result<SearchBatch> {
         let searcher = self.get_searcher();
         searcher.search(term, config)
+    }
+
+    /// Search for old events
+    pub fn search_old(&self, older_than: u128, limit: usize) -> Result<Vec<SerializedEvent>> {
+        let connection = self.get_connection()?;
+        let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap();
+        let client_ts: u64 = (now.as_millis() - older_than).try_into().unwrap();
+        let events = Database::load_old_events(&connection, client_ts, limit)?;
+        Ok(events)
     }
 
     /// Get a searcher that can be used to perform a search.
