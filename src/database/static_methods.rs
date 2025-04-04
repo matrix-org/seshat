@@ -660,6 +660,26 @@ impl Database {
         }
     }
 
+    pub(crate) fn load_old_events(
+        connection: &rusqlite::Connection,
+        before: u64,
+        limit: usize
+    ) -> rusqlite::Result<Vec<SerializedEvent>> {
+        let mut stmt = connection.prepare(
+            "SELECT source FROM events
+                WHERE (
+                    (server_ts <= ?1)
+                ) ORDER BY server_ts LIMIT ?2
+                ",
+        )?;
+
+        let events = stmt
+            .query_map(params![&before, &limit,], |row| {
+                row.get(0)
+            })?;
+        events.collect()
+    }
+
     pub(crate) fn load_file_events(
         connection: &rusqlite::Connection,
         room_id: &str,

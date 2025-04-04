@@ -596,6 +596,42 @@ impl Seshat {
         task.schedule(cx)
     }
 
+    fn search_old_sync(mut cx: FunctionContext) -> JsResult<JsObject>  {
+
+        let this = cx.argument::<JsBox<RefCell<Seshat>>>(0)?;
+        let older_than: u128 = cx.argument::<JsNumber>(1)?.value(&mut cx) as u128;
+        let limit: usize = cx.argument::<JsNumber>(2)?.value(&mut cx) as usize;
+
+        let ret = {
+            let db = &mut this.borrow_mut().database;
+            db.as_ref()
+                .map_or_else(|| Err(CLOSED_ERROR), |db| Ok(db.search_old(older_than, limit)))
+        };
+
+        let ret = match ret {
+            Ok(r) => r,
+            Err(e) => return cx.throw_type_error(e),
+        };
+
+        let mut ret = match ret {
+            Ok(r) => r,
+            Err(e) => return cx.throw_type_error(e.to_string()),
+        };
+
+        let results = JsArray::new(&mut cx, ret.len() as u32);
+
+        for (i, element) in ret.drain(..).enumerate() {
+            let object = deserialize_event(&mut cx, element.as_str())?;
+            results.set(&mut cx, i as u32, object)?;
+        }
+
+        let search_result = cx.empty_object();
+
+        search_result.set(&mut cx, "results", results)?;
+
+        Ok(search_result.upcast())
+    }
+
     fn delete(mut cx: FunctionContext) -> JsResult<JsUndefined> {
         let this = cx.argument::<JsBox<RefCell<Seshat>>>(0)?;
         let db = this.borrow_mut().database.take();
@@ -734,6 +770,7 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
     cx.export_function("commitSync", Seshat::commit_sync)?;
     cx.export_function("searchSync", Seshat::search_sync)?;
     cx.export_function("search", Seshat::search)?;
+    cx.export_function("searchOldSync", Seshat::search_old_sync)?;
     cx.export_function("deleteDb", Seshat::delete)?;
     cx.export_function("changePassphrase", Seshat::change_passphrase)?;
     cx.export_function("shutdown", Seshat::shutdown)?;

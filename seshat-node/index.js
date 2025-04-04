@@ -286,6 +286,20 @@ class Seshat {
     }
 
     /**
+     * Search the database for events older than the specified age in milliseconds.
+     * Results are sorted from oldest to newest.
+     * 
+     * @param {*} olderThan The minimum age
+     * @param {*} limit The maximum number of events that the search
+     * should return.
+
+     * @returns The array of events that were older than the specified age.
+     */
+    searchOldSync(olderThan, limit) {
+        return seshatNative.searchOldSync(this.inner, olderThan, limit);
+    }
+
+    /**
      * Search the database for events using the given search term.
      *
      * @param  {string} term The term that is used to search the database.
