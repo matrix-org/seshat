@@ -1,8 +1,13 @@
 {
   "segments": [
     {
-      "segment_id": "b653775a-48c4-4546-afa2-49d5f9dc4848",
-      "max_doc": 999,
+      "segment_id": "bc70d72c-1e85-4e8e-b4b9-200113fa2c7b",
+      "max_doc": 500,
+      "deletes": null
+    },
+    {
+      "segment_id": "bc92c4bb-0261-4b55-a620-7135ce3045b0",
+      "max_doc": 499,
       "deletes": null
     }
   ],
@@ -41,7 +46,16 @@
       }
     },
     {
-      "name": "room_id",
+      "name": "date",
+      "type": "u64",
+      "options": {
+        "indexed": false,
+        "fast": "single",
+        "stored": false
+      }
+    },
+    {
+      "name": "sender",
       "type": "text",
       "options": {
         "indexing": {
@@ -52,13 +66,27 @@
       }
     },
     {
+      "name": "room_id",
+      "type": "text",
+      "options": {
+        "indexing": {
+          "record": "basic",
+          "tokenizer": "raw"
+        },
+        "stored": true
+      }
+    },
+    {
       "name": "event_id",
       "type": "text",
       "options": {
-        "indexing": null,
+        "indexing": {
+          "record": "basic",
+          "tokenizer": "raw"
+        },
         "stored": true
       }
     }
   ],
-  "opstamp": 1000
+  "opstamp": 1003
 }
