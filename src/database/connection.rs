@@ -30,7 +30,7 @@ use crate::{
 };
 
 /// Statistical information about the database.
-#[derive(Serialize, Deserialize, specta::Type)]
+#[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DatabaseStats {
     /// The number number of bytes the database is using on disk.

@@ -43,8 +43,6 @@ serde_json = "1.0.95"
 # Tantivy patch that fixes this issue https://github.com/tantivy-search/tantivy/pull/975
 serde = { version = "1", default-features = false, features = ["derive"] }
 thiserror = "1.0.26"
-# tchap
-specta = {version = "1.0.5", features = ["uuid"]}
 
 [dev-dependencies]
 tempfile = "3.2.0"

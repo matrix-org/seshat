@@ -32,7 +32,7 @@ use fake::locales::*;
 use fake::{Dummy, Fake};
 
 /// Matrix event types.
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Serialize, Deserialize, specta::Type)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Serialize, Deserialize)]
 pub enum EventType {
     /// Matrix room messages, corresponds to the m.room.message type, has a body
     /// inside of the content.
@@ -87,7 +87,7 @@ impl FromSql for EventType {
 }
 
 /// Matrix event that can be added to the database.
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize, specta::Type)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct Event {
     /// The type of the event.
     pub event_type: EventType,
@@ -189,7 +189,7 @@ impl Event {
 }
 
 /// A users profile information at the time an event was posted.
-#[derive(Debug, PartialEq, Default, Clone, Serialize, Deserialize, specta::Type)]
+#[derive(Debug, PartialEq, Default, Clone, Serialize, Deserialize)]
 pub struct Profile {
     /// The users display name if one is set.
     pub displayname: Option<String>,

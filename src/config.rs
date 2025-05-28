@@ -261,7 +261,7 @@ impl Default for Config {
     }
 }
 
-#[derive(Debug, Default, Clone, Serialize, Deserialize, specta::Type)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 #[allow(missing_docs)]
 pub enum LoadDirection {
     #[default]
@@ -276,7 +276,7 @@ pub enum LoadDirection {
 /// A load configuration allows users to limit the number of events that will be
 /// loaded or to continue loading events from a specific point in the room
 /// history.
-#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LoadConfig {
     pub(crate) room_id: String,
