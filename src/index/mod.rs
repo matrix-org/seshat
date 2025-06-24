@@ -204,7 +204,10 @@ impl IndexSearcher {
 
         let term = if let Some(room) = &config.room_id {
             keys.push(self.room_id_field);
-            format!("+room_id:\"{}\" AND ({})", room, term)
+            // :TCHAP: replace AND by +, starting from tantivy 0.13 the query with AND is described differently, which will affect the score only
+            // By replacing with +, we indicate that the second term is also mandatory, otherwise all the events of the room will be send 
+            // format!("+room_id:\"{}\" AND ({})", room, term)
+            format!("+room_id:\"{}\" +({})", room, term)
         } else if term.is_empty() {
             "*".to_owned()
         } else {

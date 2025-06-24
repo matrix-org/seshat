@@ -8,3 +8,5 @@ seshat-node/coverage
 .gdb_history
 target
 /Cargo.lock
+
+.vscode
