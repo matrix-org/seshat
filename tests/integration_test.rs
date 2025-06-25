@@ -190,10 +190,26 @@ fn save_and_search() {
 #[test]
 fn search_with_room() {
     let tmpdir = tempdir().unwrap();
-    let mut db = Database::new(tmpdir.path()).unwrap();
+    
+    let mut db: Database = Database::new(tmpdir.path()).unwrap();
+    
     let profile = Profile::new("Alice", "");
 
+    // :TCHAP: we add another event in the same room in order to replicate the bug when using AND operator in the query parser
+    let event_2: Event = Event::new(
+        EventType::Message,
+        "oioioi",
+        Some("m.text"),
+        "$15163622445EBvZT:localhost",
+        "@example2:localhost",
+        151636_2244036,
+        "!test_room:localhost",
+        EVENT_SOURCE,
+    );
+    let profile2 = Profile::new("Alice", "");
+
     db.add_event(EVENT.clone(), profile);
+    db.add_event(event_2.clone(), profile2);
     db.force_commit().unwrap();
     db.reload().unwrap();
 
@@ -221,6 +237,9 @@ fn search_with_room() {
         );
         if *should_match {
             assert_eq!(result[0].event_source, EVENT.source);
+            // :TCHAP: it should always return one event
+            // since the other event doesnt have any match in the text term eventhough they are from the same room
+            assert_eq!(result.len(), 1);
         }
     }
 }
