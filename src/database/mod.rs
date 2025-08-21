@@ -70,11 +70,11 @@ pub(crate) enum ThreadMessage {
 }
 
 /// The Seshat database.
+#[derive(Clone)]
 pub struct Database {
     path: PathBuf,
     connection: Arc<Mutex<PooledConnection<SqliteConnectionManager>>>,
     pool: r2d2::Pool<SqliteConnectionManager>,
-    _write_thread: JoinHandle<()>,
     tx: Sender<ThreadMessage>,
     index: Index,
     config: Config,
@@ -140,13 +140,12 @@ impl Database {
         Database::unlock(&writer_connection, config)?;
         Database::set_pragmas(&writer_connection)?;
 
-        let (t_handle, tx) = Database::spawn_writer(writer_connection, writer);
+        let (_t_handle, tx) = Database::spawn_writer(writer_connection, writer);
 
         Ok(Database {
             path: path.into(),
             connection: Arc::new(Mutex::new(connection)),
             pool,
-            _write_thread: t_handle,
             tx,
             index,
             config: config.clone(),
