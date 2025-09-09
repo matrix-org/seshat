@@ -84,6 +84,7 @@ use tempfile::TempDir;
 #[cfg(test)]
 use crate::events::{EVENT, TOPIC_EVENT};
 
+#[derive(Clone)]
 pub(crate) struct Index {
     index: tv::Index,
     reader: tv::IndexReader,
