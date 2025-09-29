@@ -42,12 +42,12 @@ The other mode is to add events from the room history using the
 storing checkpoints which remember the arguments to continue fetching events
 from the `/room/{room_id}/messages` API:
 
-```
+```rust
 database.add_historic_events(events, old_checkpoint, new_checkpoint)?;
 ```
 
 Once events have been added a search can be done:
-```
+```rust
 let result = database.search("test", &SearchConfig::new()).unwrap();
 ```
 
