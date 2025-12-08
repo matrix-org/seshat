@@ -398,11 +398,20 @@ pub(crate) mod test {
 
     #[test]
     fn test_recovery() {
-        let mut path = PathBuf::from(file!());
-        path.pop();
-        path.pop();
-        path.pop();
-        path.push("data/database/v2");
+        // Copy test database to temp directory to avoid modifying the original
+        let mut src_path = PathBuf::from(file!());
+        src_path.pop();
+        src_path.pop();
+        src_path.pop();
+        src_path.push("data/database/v2");
+
+        let tmpdir = tempfile::tempdir().unwrap();
+        let path = tmpdir.path().to_path_buf();
+
+        let mut options = fs_extra::dir::CopyOptions::new();
+        options.content_only = true;
+        fs_extra::dir::copy(&src_path, &path, &options).expect("Failed to copy test database");
+
         let db = Database::new(&path);
 
         match db {

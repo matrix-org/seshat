@@ -30,6 +30,7 @@ pub(crate) fn parse_database_config(
     if let Some(c) = argument {
         let c = c.downcast::<JsObject, _>(cx).or_throw(&mut *cx)?;
 
+        // Parse language setting
         if let Some(l) = c.get_opt::<JsString, _, _>(&mut *cx, "language")? {
             let language = Language::from(l.value(cx).as_ref());
 
@@ -40,6 +41,31 @@ pub(crate) fn parse_database_config(
                 }
                 _ => {
                     config = config.set_language(&language);
+                }
+            }
+        }
+
+        // Parse tokenizer mode setting
+        if let Some(mode) = c.get_opt::<JsString, _, _>(&mut *cx, "tokenizerMode")? {
+            let mode_str = mode.value(cx);
+            match mode_str.as_ref() {
+                "ngram" => {
+                    let min_gram = c
+                        .get_opt::<JsNumber, _, _>(&mut *cx, "ngramMinSize")?
+                        .map(|n| n.value(cx) as usize)
+                        .unwrap_or(2);
+                    let max_gram = c
+                        .get_opt::<JsNumber, _, _>(&mut *cx, "ngramMaxSize")?
+                        .map(|n| n.value(cx) as usize)
+                        .unwrap_or(4);
+                    config = config.use_ngram_tokenizer(min_gram, max_gram);
+                }
+                "language" | "" => {
+                    // Default (language-based tokenizer)
+                }
+                _ => {
+                    return cx
+                        .throw_type_error(format!("Unsupported tokenizer mode: {}", mode_str));
                 }
             }
         }

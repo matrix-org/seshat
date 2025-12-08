@@ -34,7 +34,7 @@ use uuid::Uuid;
 #[cfg(feature = "encryption")]
 use crate::index::encrypted_dir::{EncryptedMmapDirectory, PBKDF_COUNT};
 use crate::{
-    config::{Config, Language, SearchConfig},
+    config::{Config, Language, SearchConfig, TokenizerMode},
     events::{Event, EventId, EventType},
 };
 
@@ -388,7 +388,8 @@ impl IndexSearcher {
 
 impl Index {
     pub fn new<P: AsRef<Path>>(path: P, config: &Config) -> Result<Index, tv::TantivyError> {
-        let tokenizer_name = config.language.as_tokenizer_name();
+        // Determine tokenizer name based on tokenizer mode
+        let tokenizer_name = config.tokenizer_mode.as_tokenizer_name(&config.language);
 
         let text_field_options = Index::create_text_options(&tokenizer_name);
         let mut schemabuilder = tv::schema::Schema::builder();
@@ -411,14 +412,23 @@ impl Index {
         let index = Index::open_index(path, config, schema)?;
         let reader = index.reader()?;
 
-        match config.language {
-            Language::Unknown => (),
-            _ => {
-                let tokenizer = tv::tokenizer::TextAnalyzer::from(tv::tokenizer::SimpleTokenizer)
-                    .filter(tv::tokenizer::RemoveLongFilter::limit(40))
-                    .filter(tv::tokenizer::LowerCaser)
-                    .filter(tv::tokenizer::Stemmer::new(config.language.as_tantivy()));
-                index.tokenizers().register(&tokenizer_name, tokenizer);
+        // Register tokenizer based on mode
+        match &config.tokenizer_mode {
+            TokenizerMode::Ngram { min_gram, max_gram } => {
+                let ngram_tokenizer = tv::tokenizer::NgramTokenizer::new(*min_gram, *max_gram, false);
+                index.tokenizers().register(&tokenizer_name, ngram_tokenizer);
+            }
+            TokenizerMode::LanguageBased => {
+                match config.language {
+                    Language::Unknown => (), // Use default tokenizer
+                    _ => {
+                        let tokenizer = tv::tokenizer::TextAnalyzer::from(tv::tokenizer::SimpleTokenizer)
+                            .filter(tv::tokenizer::RemoveLongFilter::limit(40))
+                            .filter(tv::tokenizer::LowerCaser)
+                            .filter(tv::tokenizer::Stemmer::new(config.language.as_tantivy()));
+                        index.tokenizers().register(&tokenizer_name, tokenizer);
+                    }
+                }
             }
         }
 
@@ -702,4 +712,48 @@ fn paginated_search() {
     assert_eq!(&first_search.results[0].1, &EVENT.event_id);
     assert_eq!(&second_search.results[0].1, &TOPIC_EVENT.event_id);
     assert!(second_search.next_batch.is_none());
+}
+
+#[test]
+fn ngram_tokenizer_mode() {
+    let tmpdir = TempDir::new().unwrap();
+    let config = Config::new().use_ngram_tokenizer(2, 4);
+    let index = Index::new(&tmpdir, &config).unwrap();
+
+    let mut writer = index.get_writer().unwrap();
+    writer.add_event(&EVENT);
+    writer.force_commit().unwrap();
+    index.reload().unwrap();
+
+    let searcher = index.get_searcher();
+
+    // Search with partial text (ngram should match)
+    let result = searcher
+        .search("est", &Default::default())
+        .unwrap()
+        .results;
+
+    assert_eq!(result.len(), 1);
+    assert_eq!(result[0].1, EVENT.event_id);
+}
+
+#[test]
+fn schema_mismatch_on_tokenizer_mode_change() {
+    let tmpdir = TempDir::new().unwrap();
+
+    // Create index with language-based tokenizer
+    {
+        let config = Config::new().set_language(&Language::English);
+        let index = Index::new(&tmpdir, &config).unwrap();
+        let mut writer = index.get_writer().unwrap();
+        writer.add_event(&EVENT);
+        writer.force_commit().unwrap();
+    }
+
+    // Try to open with ngram tokenizer - should fail with schema mismatch
+    {
+        let config = Config::new().use_ngram_tokenizer(2, 4);
+        let result = Index::new(&tmpdir, &config);
+        assert!(result.is_err());
+    }
 }
