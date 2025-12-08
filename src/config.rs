@@ -216,10 +216,49 @@ impl From<&str> for Language {
     }
 }
 
+/// Tokenizer mode for the search index.
+///
+/// This determines how text is tokenized for indexing and searching.
+#[derive(Debug, PartialEq, Clone)]
+pub enum TokenizerMode {
+    /// Language-based tokenizer using stemming (default).
+    ///
+    /// Uses SimpleTokenizer with language-specific stemming.
+    /// Best for languages with word boundaries (e.g., English, German).
+    LanguageBased,
+    /// N-gram tokenizer for multi-language support.
+    ///
+    /// Splits text into character n-grams of specified sizes.
+    /// Best for languages without clear word boundaries (e.g., Japanese, Chinese).
+    Ngram {
+        /// Minimum n-gram size (default: 2)
+        min_gram: usize,
+        /// Maximum n-gram size (default: 4)
+        max_gram: usize,
+    },
+}
+
+impl Default for TokenizerMode {
+    fn default() -> Self {
+        TokenizerMode::LanguageBased
+    }
+}
+
+impl TokenizerMode {
+    /// Returns the tokenizer name for this mode.
+    pub(crate) fn as_tokenizer_name(&self, language: &Language) -> String {
+        match self {
+            TokenizerMode::Ngram { .. } => "seshat_ngram".to_string(),
+            TokenizerMode::LanguageBased => language.as_tokenizer_name(),
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Clone)]
 /// Configuration for the seshat database.
 pub struct Config {
     pub(crate) language: Language,
+    pub(crate) tokenizer_mode: TokenizerMode,
     #[cfg(feature = "encryption")]
     pub(crate) passphrase: Option<Zeroizing<String>>,
 }
@@ -232,11 +271,39 @@ impl Config {
 
     /// Set the indexing language.
     ///
+    /// This is used when `TokenizerMode::LanguageBased` is active.
+    ///
     /// # Arguments
     ///
     /// * `language` - The language that will be used to index messages.
     pub fn set_language(mut self, language: &Language) -> Self {
         self.language = language.clone();
+        self
+    }
+
+    /// Set the tokenizer mode to N-gram.
+    ///
+    /// N-gram tokenizer splits text into character n-grams, which is useful
+    /// for languages without clear word boundaries (e.g., Japanese, Chinese).
+    ///
+    /// Note: Changing the tokenizer mode on an existing database will cause
+    /// a schema mismatch error. Delete the database and recreate it to use
+    /// a different tokenizer mode.
+    ///
+    /// # Arguments
+    ///
+    /// * `min_gram` - Minimum n-gram size (typically 2)
+    /// * `max_gram` - Maximum n-gram size (typically 4)
+    pub fn use_ngram_tokenizer(mut self, min_gram: usize, max_gram: usize) -> Self {
+        self.tokenizer_mode = TokenizerMode::Ngram { min_gram, max_gram };
+        self
+    }
+
+    /// Set the tokenizer mode to language-based (default).
+    ///
+    /// This uses SimpleTokenizer with language-specific stemming.
+    pub fn use_language_based_tokenizer(mut self) -> Self {
+        self.tokenizer_mode = TokenizerMode::LanguageBased;
         self
     }
 
@@ -255,6 +322,7 @@ impl Default for Config {
     fn default() -> Config {
         Config {
             language: Language::Unknown,
+            tokenizer_mode: TokenizerMode::default(),
             #[cfg(feature = "encryption")]
             passphrase: None,
         }
