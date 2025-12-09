@@ -759,6 +759,34 @@ fn schema_mismatch_on_tokenizer_mode_change() {
 }
 
 #[test]
+fn schema_mismatch_on_ngram_size_change() {
+    let tmpdir = TempDir::new().unwrap();
+
+    // Create index with ngram tokenizer (2, 4)
+    {
+        let config = Config::new().use_ngram_tokenizer(2, 4);
+        let index = Index::new(&tmpdir, &config).unwrap();
+        let mut writer = index.get_writer().unwrap();
+        writer.add_event(&EVENT);
+        writer.force_commit().unwrap();
+    }
+
+    // Try to open with different ngram size - should fail with schema mismatch
+    {
+        let config = Config::new().use_ngram_tokenizer(3, 5);
+        let result = Index::new(&tmpdir, &config);
+        assert!(result.is_err(), "Different ngram sizes should cause schema mismatch");
+    }
+
+    // Reopen with same ngram size - should succeed
+    {
+        let config = Config::new().use_ngram_tokenizer(2, 4);
+        let result = Index::new(&tmpdir, &config);
+        assert!(result.is_ok(), "Same ngram sizes should work");
+    }
+}
+
+#[test]
 fn ngram_tokenizer_japanese() {
     let tmpdir = TempDir::new().unwrap();
     let config = Config::new().use_ngram_tokenizer(2, 4);

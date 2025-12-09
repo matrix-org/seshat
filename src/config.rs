@@ -246,9 +246,14 @@ impl Default for TokenizerMode {
 
 impl TokenizerMode {
     /// Returns the tokenizer name for this mode.
+    ///
+    /// For N-gram mode, the name includes min/max gram sizes to ensure
+    /// schema mismatch detection when these values change.
     pub(crate) fn as_tokenizer_name(&self, language: &Language) -> String {
         match self {
-            TokenizerMode::Ngram { .. } => "seshat_ngram".to_string(),
+            TokenizerMode::Ngram { min_gram, max_gram } => {
+                format!("seshat_ngram_{}_{}", min_gram, max_gram)
+            }
             TokenizerMode::LanguageBased => language.as_tokenizer_name(),
         }
     }
