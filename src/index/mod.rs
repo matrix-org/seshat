@@ -757,3 +757,65 @@ fn schema_mismatch_on_tokenizer_mode_change() {
         assert!(result.is_err());
     }
 }
+
+#[test]
+fn ngram_tokenizer_japanese() {
+    let tmpdir = TempDir::new().unwrap();
+    let config = Config::new().use_ngram_tokenizer(2, 4);
+    let index = Index::new(&tmpdir, &config).unwrap();
+
+    // Create a Japanese event
+    let japanese_event = Event::new(
+        EventType::Message,
+        "トフォリゲートのことでした",
+        Some("m.text"),
+        "$japanese_event:example.org",
+        "@user:example.org",
+        1234567890,
+        "!test:example.org",
+        "{}",
+    );
+
+    let mut writer = index.get_writer().unwrap();
+    writer.add_event(&japanese_event);
+    writer.force_commit().unwrap();
+    index.reload().unwrap();
+
+    let searcher = index.get_searcher();
+
+    // Test 1: Full word search
+    println!("Test 1: Searching for 'トフォリゲート'");
+    let result = searcher
+        .search("トフォリゲート", &Default::default())
+        .unwrap()
+        .results;
+    println!("Result count: {}", result.len());
+    assert_eq!(result.len(), 1, "Full word search should match");
+
+    // Test 2: Partial search with 4-gram (should match)
+    println!("Test 2: Searching for 'トフォリ'");
+    let result = searcher
+        .search("トフォリ", &Default::default())
+        .unwrap()
+        .results;
+    println!("Result count: {}", result.len());
+    assert_eq!(result.len(), 1, "4-gram partial search 'トフォリ' should match");
+
+    // Test 3: Partial search with 2-gram (should match)
+    println!("Test 3: Searching for 'リゲ'");
+    let result = searcher
+        .search("リゲ", &Default::default())
+        .unwrap()
+        .results;
+    println!("Result count: {}", result.len());
+    assert_eq!(result.len(), 1, "2-gram partial search 'リゲ' should match");
+
+    // Test 4: Partial search with 3-gram (should match)
+    println!("Test 4: Searching for 'ゲート'");
+    let result = searcher
+        .search("ゲート", &Default::default())
+        .unwrap()
+        .results;
+    println!("Result count: {}", result.len());
+    assert_eq!(result.len(), 1, "3-gram partial search 'ゲート' should match");
+}
