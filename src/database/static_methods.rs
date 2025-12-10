@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{cmp::Ordering, collections::HashMap};
+use std::{cmp::Ordering, collections::HashMap, collections::HashSet};
 
 use rusqlite::{params, params_from_iter, ToSql};
 
@@ -25,7 +25,7 @@ use crate::{
     config::LoadDirection,
     database::{SearchResult, DATABASE_VERSION},
     error::Result,
-    events::{CrawlerCheckpoint, Event, EventContext, EventId, Profile, SerializedEvent},
+    events::{get_replaced_event_id, CrawlerCheckpoint, Event, EventContext, EventId, Profile, SerializedEvent},
     index::Writer as IndexWriter,
     Database,
 };
@@ -41,11 +41,26 @@ impl Database {
         connection: &rusqlite::Connection,
         index_writer: &mut IndexWriter,
         events: &mut Vec<(Event, Profile)>,
+        replaced_event_ids: &mut HashSet<EventId>,
     ) -> Result<(bool, Vec<i64>)> {
         let mut ret = Vec::new();
         let mut event_ids = Vec::new();
 
         for (mut e, mut p) in events.drain(..) {
+            // (1) If this is an edit event, delete the original and mark it as replaced
+            if let Some(target_id) = get_replaced_event_id(&e.source) {
+                Database::delete_event_by_id(connection, &target_id)?;
+                index_writer.delete_event(&target_id);
+                replaced_event_ids.insert(target_id);
+            }
+
+            // (2) If this event has been replaced by an edit, skip it
+            if replaced_event_ids.contains(&e.event_id) {
+                ret.push(true);
+                continue;
+            }
+
+            // (3) Normal save logic
             let event_id = Database::save_event(connection, &mut e, &mut p)?;
             match event_id {
                 Some(id) => {
@@ -155,11 +170,12 @@ impl Database {
         ),
         force_commit: bool,
         uncommitted_events: &mut Vec<i64>,
+        replaced_event_ids: &mut HashSet<EventId>,
     ) -> Result<(bool, bool)> {
         let (new_checkpoint, old_checkpoint, events) = message;
         let transaction = connection.transaction()?;
 
-        let (ret, event_ids) = Database::write_events_helper(&transaction, index_writer, events)?;
+        let (ret, event_ids) = Database::write_events_helper(&transaction, index_writer, events, replaced_event_ids)?;
         Database::replace_crawler_checkpoint(
             &transaction,
             new_checkpoint.as_ref(),
