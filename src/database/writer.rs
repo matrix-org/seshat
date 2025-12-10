@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
+
 use r2d2_sqlite::SqliteConnectionManager;
 
 use crate::{
@@ -27,12 +29,14 @@ pub(crate) struct Writer {
     events: Vec<(Event, Profile)>,
     uncommitted_events: Vec<i64>,
     pending_deletion_events: Vec<EventId>,
+    replaced_event_ids: HashSet<EventId>,
 }
 
 impl Writer {
     pub fn new(
         connection: r2d2::PooledConnection<SqliteConnectionManager>,
         index_writer: IndexWriter,
+        replaced_event_ids: HashSet<EventId>,
     ) -> Self {
         Writer {
             inner: index_writer,
@@ -40,6 +44,7 @@ impl Writer {
             events: Vec::new(),
             uncommitted_events: Vec::new(),
             pending_deletion_events: Vec::new(),
+            replaced_event_ids,
         }
     }
 
@@ -70,6 +75,7 @@ impl Writer {
             (None, None, &mut self.events),
             force_commit,
             &mut self.uncommitted_events,
+            &mut self.replaced_event_ids,
         )?;
 
         if committed {
@@ -93,6 +99,7 @@ impl Writer {
             (checkpoint, old_checkpoint, &mut events),
             force_commit,
             &mut self.uncommitted_events,
+            &mut self.replaced_event_ids,
         )?;
 
         if committed {

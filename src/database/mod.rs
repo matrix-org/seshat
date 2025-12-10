@@ -23,6 +23,7 @@ use r2d2::{Pool, PooledConnection};
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::ToSql;
 use std::{
+    collections::HashSet,
     fs,
     path::{Path, PathBuf},
     sync::{
@@ -42,7 +43,7 @@ use crate::{
     config::{Config, SearchConfig},
     database::writer::Writer,
     error::{Error, Result},
-    events::{CrawlerCheckpoint, Event, EventId, HistoricEventsT, Profile},
+    events::{get_replaced_event_id, CrawlerCheckpoint, Event, EventId, HistoricEventsT, Profile},
     index::{Index, Writer as IndexWriter},
 };
 
@@ -140,7 +141,10 @@ impl Database {
         Database::unlock(&writer_connection, config)?;
         Database::set_pragmas(&writer_connection)?;
 
-        let (t_handle, tx) = Database::spawn_writer(writer_connection, writer);
+        // Load the set of event IDs that have been replaced by edit events.
+        let replaced_event_ids = Database::load_replaced_event_ids(&writer_connection);
+
+        let (t_handle, tx) = Database::spawn_writer(writer_connection, writer, replaced_event_ids);
 
         Ok(Database {
             path: path.into(),
@@ -284,14 +288,35 @@ impl Database {
         Ok(Index::new(path, config)?)
     }
 
+    /// Load the set of event IDs that have been replaced by edit events.
+    /// This scans all m.room.message events and extracts m.replace targets.
+    fn load_replaced_event_ids(connection: &rusqlite::Connection) -> HashSet<EventId> {
+        let mut replaced = HashSet::new();
+
+        let query = "SELECT source FROM events WHERE type = 'm.room.message'";
+        if let Ok(mut stmt) = connection.prepare(query) {
+            let rows = stmt.query_map([], |row| row.get::<_, String>(0));
+            if let Ok(rows) = rows {
+                for source in rows.flatten() {
+                    if let Some(replaced_id) = get_replaced_event_id(&source) {
+                        replaced.insert(replaced_id);
+                    }
+                }
+            }
+        }
+
+        replaced
+    }
+
     fn spawn_writer(
         connection: PooledConnection<SqliteConnectionManager>,
         index_writer: IndexWriter,
+        replaced_event_ids: HashSet<EventId>,
     ) -> WriterRet {
         let (tx, rx): (_, Receiver<ThreadMessage>) = channel();
 
         let t_handle = thread::spawn(move || {
-            let mut writer = Writer::new(connection, index_writer);
+            let mut writer = Writer::new(connection, index_writer, replaced_event_ids);
             let mut loaded_unprocessed = false;
 
             while let Ok(message) = rx.recv() {
@@ -1186,4 +1211,110 @@ fn sqlcipher_cipher_settings_update() {
     let config = Config::new().set_passphrase("qR17RdpWurSh2pQRSc/EnsaO9V041kOwsZk0iSdUY/g");
     let _db =
         Database::new_with_config(&path, &config).expect("We should be able to open the database");
+}
+
+#[test]
+fn edit_event_removes_original() {
+    use crate::config::SearchConfig;
+
+    let tmpdir = tempdir().unwrap();
+    let mut db = Database::new(tmpdir.path()).unwrap();
+    let profile = Profile::new("Alice", "");
+
+    // Add an original message
+    let original_event = Event::new(
+        crate::EventType::Message,
+        "Original message",
+        Some("m.text"),
+        "$original:localhost",
+        "@alice:localhost",
+        1000,
+        "!test_room:localhost",
+        r#"{"type":"m.room.message","event_id":"$original:localhost","sender":"@alice:localhost","origin_server_ts":1000,"room_id":"!test_room:localhost","content":{"body":"Original message","msgtype":"m.text"}}"#,
+    );
+
+    db.add_event(original_event, profile.clone());
+    db.force_commit().unwrap();
+    db.reload().unwrap();
+
+    // Verify the original message is searchable
+    let results = db.search("Original", &SearchConfig::new()).unwrap();
+    assert_eq!(results.results.len(), 1, "Original message should be found");
+
+    // Add an edit event that replaces the original
+    let edit_event = Event::new(
+        crate::EventType::Message,
+        "Edited message",
+        Some("m.text"),
+        "$edit:localhost",
+        "@alice:localhost",
+        2000,
+        "!test_room:localhost",
+        r#"{"type":"m.room.message","event_id":"$edit:localhost","sender":"@alice:localhost","origin_server_ts":2000,"room_id":"!test_room:localhost","content":{"body":"* Edited message","msgtype":"m.text","m.new_content":{"body":"Edited message","msgtype":"m.text"},"m.relates_to":{"rel_type":"m.replace","event_id":"$original:localhost"}}}"#,
+    );
+
+    db.add_event(edit_event, profile);
+    db.force_commit().unwrap();
+    db.reload().unwrap();
+
+    // The original message should no longer be searchable
+    let results = db.search("Original", &SearchConfig::new()).unwrap();
+    assert_eq!(results.results.len(), 0, "Original message should be removed from index");
+
+    // The edited message should be searchable
+    let results = db.search("Edited", &SearchConfig::new()).unwrap();
+    assert_eq!(results.results.len(), 1, "Edited message should be found");
+}
+
+#[test]
+fn original_event_skipped_if_edit_comes_first() {
+    use crate::config::SearchConfig;
+
+    let tmpdir = tempdir().unwrap();
+    let mut db = Database::new(tmpdir.path()).unwrap();
+    let profile = Profile::new("Alice", "");
+
+    // Add an edit event FIRST (before the original)
+    let edit_event = Event::new(
+        crate::EventType::Message,
+        "Edited message",
+        Some("m.text"),
+        "$edit:localhost",
+        "@alice:localhost",
+        2000,
+        "!test_room:localhost",
+        r#"{"type":"m.room.message","event_id":"$edit:localhost","sender":"@alice:localhost","origin_server_ts":2000,"room_id":"!test_room:localhost","content":{"body":"* Edited message","msgtype":"m.text","m.new_content":{"body":"Edited message","msgtype":"m.text"},"m.relates_to":{"rel_type":"m.replace","event_id":"$original:localhost"}}}"#,
+    );
+
+    db.add_event(edit_event, profile.clone());
+    db.force_commit().unwrap();
+    db.reload().unwrap();
+
+    // Verify the edited message is searchable
+    let results = db.search("Edited", &SearchConfig::new()).unwrap();
+    assert_eq!(results.results.len(), 1, "Edited message should be found");
+
+    // Now add the original event (it should be skipped)
+    let original_event = Event::new(
+        crate::EventType::Message,
+        "Original message",
+        Some("m.text"),
+        "$original:localhost",
+        "@alice:localhost",
+        1000,
+        "!test_room:localhost",
+        r#"{"type":"m.room.message","event_id":"$original:localhost","sender":"@alice:localhost","origin_server_ts":1000,"room_id":"!test_room:localhost","content":{"body":"Original message","msgtype":"m.text"}}"#,
+    );
+
+    db.add_event(original_event, profile);
+    db.force_commit().unwrap();
+    db.reload().unwrap();
+
+    // The original message should NOT be searchable (it was skipped)
+    let results = db.search("Original", &SearchConfig::new()).unwrap();
+    assert_eq!(results.results.len(), 0, "Original message should not be added to index");
+
+    // The edited message should still be the only result
+    let results = db.search("Edited", &SearchConfig::new()).unwrap();
+    assert_eq!(results.results.len(), 1, "Edited message should still be the only result");
 }

@@ -359,3 +359,18 @@ impl FromSql for CheckpointDirection {
         }
     }
 }
+
+/// Extract the event ID that this event replaces, if this is an edit event (m.replace).
+///
+/// Returns `Some(event_id)` if the event has `m.relates_to.rel_type == "m.replace"`,
+/// otherwise returns `None`.
+pub fn get_replaced_event_id(source: &str) -> Option<String> {
+    let json: serde_json::Value = serde_json::from_str(source).ok()?;
+    let relates_to = json.get("content")?.get("m.relates_to")?;
+    let rel_type = relates_to.get("rel_type")?.as_str()?;
+    if rel_type == "m.replace" {
+        relates_to.get("event_id")?.as_str().map(|s| s.to_string())
+    } else {
+        None
+    }
+}
