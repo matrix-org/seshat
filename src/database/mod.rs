@@ -289,11 +289,12 @@ impl Database {
     }
 
     /// Load the set of event IDs that have been replaced by edit events.
-    /// This scans all m.room.message events and extracts m.replace targets.
+    /// This only scans m.replace events (not all messages) for efficiency.
     fn load_replaced_event_ids(connection: &rusqlite::Connection) -> HashSet<EventId> {
         let mut replaced = HashSet::new();
 
-        let query = "SELECT source FROM events WHERE type = 'm.room.message'";
+        // Only select events that contain m.replace relation (much faster than scanning all messages)
+        let query = r#"SELECT source FROM events WHERE type = 'm.room.message' AND source LIKE '%"rel_type":"m.replace"%'"#;
         if let Ok(mut stmt) = connection.prepare(query) {
             let rows = stmt.query_map([], |row| row.get::<_, String>(0));
             if let Ok(rows) = rows {

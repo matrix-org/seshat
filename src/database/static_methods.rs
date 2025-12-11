@@ -48,10 +48,13 @@ impl Database {
 
         for (mut e, mut p) in events.drain(..) {
             // (1) If this is an edit event, delete the original and mark it as replaced
-            if let Some(target_id) = get_replaced_event_id(&e.source) {
-                Database::delete_event_by_id(connection, &target_id)?;
-                index_writer.delete_event(&target_id);
-                replaced_event_ids.insert(target_id);
+            // Use fast string match first to avoid JSON parsing for most events
+            if e.source.contains("m.replace") {
+                if let Some(target_id) = get_replaced_event_id(&e.source) {
+                    Database::delete_event_by_id(connection, &target_id)?;
+                    index_writer.delete_event(&target_id);
+                    replaced_event_ids.insert(target_id);
+                }
             }
 
             // (2) If this event has been replaced by an edit, skip it
@@ -613,7 +616,22 @@ impl Database {
         connection: &rusqlite::Connection,
         event_id: &str,
     ) -> rusqlite::Result<usize> {
-        connection.execute("DELETE from events WHERE event_id == ?1", [event_id])
+        // First, get the internal event id to delete from uncommitted_events
+        let internal_id: Option<i64> = connection
+            .query_row(
+                "SELECT id FROM events WHERE event_id = ?1",
+                [event_id],
+                |row| row.get(0),
+            )
+            .ok();
+
+        if let Some(id) = internal_id {
+            // Delete from uncommitted_events first (due to FOREIGN KEY constraint)
+            connection.execute("DELETE FROM uncommitted_events WHERE event_id = ?1", [id])?;
+        }
+
+        // Then delete the event
+        connection.execute("DELETE FROM events WHERE event_id = ?1", [event_id])
     }
 
     pub(crate) fn event_in_store(
