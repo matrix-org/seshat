@@ -14,7 +14,7 @@
 
 use std::{cmp::Ordering, collections::HashMap, collections::HashSet};
 
-use rusqlite::{params, params_from_iter, ToSql};
+use rusqlite::{params, params_from_iter, OptionalExtension, ToSql};
 
 #[cfg(test)]
 use r2d2::PooledConnection;
@@ -616,22 +616,42 @@ impl Database {
         connection: &rusqlite::Connection,
         event_id: &str,
     ) -> rusqlite::Result<usize> {
-        // First, get the internal event id to delete from uncommitted_events
-        let internal_id: Option<i64> = connection
-            .query_row(
-                "SELECT id FROM events WHERE event_id = ?1",
-                [event_id],
-                |row| row.get(0),
-            )
-            .ok();
+        // Make the multi-statement delete atomic even if we're called outside an existing
+        // transaction. SAVEPOINT also works when we *are* already inside an outer transaction.
+        connection.execute_batch("SAVEPOINT seshat_delete_event_by_id;")?;
 
-        if let Some(id) = internal_id {
-            // Delete from uncommitted_events first (due to FOREIGN KEY constraint)
-            connection.execute("DELETE FROM uncommitted_events WHERE event_id = ?1", [id])?;
+        let res: rusqlite::Result<usize> = (|| {
+            // First, get the internal event id to delete from uncommitted_events
+            let internal_id: Option<i64> = connection
+                .query_row(
+                    "SELECT id FROM events WHERE event_id = ?1",
+                    [event_id],
+                    |row| row.get(0),
+                )
+                .optional()?;
+
+            if let Some(id) = internal_id {
+                // Delete from uncommitted_events first (due to FOREIGN KEY constraint)
+                connection.execute("DELETE FROM uncommitted_events WHERE event_id = ?1", [id])?;
+            }
+
+            // Then delete the event
+            connection.execute("DELETE FROM events WHERE event_id = ?1", [event_id])
+        })();
+
+        match res {
+            Ok(n) => {
+                connection.execute_batch("RELEASE seshat_delete_event_by_id;")?;
+                Ok(n)
+            }
+            Err(e) => {
+                // Best-effort rollback to avoid leaving the connection inside a savepoint.
+                let _ = connection.execute_batch(
+                    "ROLLBACK TO seshat_delete_event_by_id; RELEASE seshat_delete_event_by_id;",
+                );
+                Err(e)
+            }
         }
-
-        // Then delete the event
-        connection.execute("DELETE FROM events WHERE event_id = ?1", [event_id])
     }
 
     pub(crate) fn event_in_store(
