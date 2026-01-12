@@ -1260,7 +1260,11 @@ fn edit_event_removes_original() {
 
     // The original message should no longer be searchable
     let results = db.search("Original", &SearchConfig::new()).unwrap();
-    assert_eq!(results.results.len(), 0, "Original message should be removed from index");
+    assert_eq!(
+        results.results.len(),
+        0,
+        "Original message should be removed from index"
+    );
 
     // The edited message should be searchable
     let results = db.search("Edited", &SearchConfig::new()).unwrap();
@@ -1313,9 +1317,17 @@ fn original_event_skipped_if_edit_comes_first() {
 
     // The original message should NOT be searchable (it was skipped)
     let results = db.search("Original", &SearchConfig::new()).unwrap();
-    assert_eq!(results.results.len(), 0, "Original message should not be added to index");
+    assert_eq!(
+        results.results.len(),
+        0,
+        "Original message should not be added to index"
+    );
 
     // The edited message should still be the only result
     let results = db.search("Edited", &SearchConfig::new()).unwrap();
-    assert_eq!(results.results.len(), 1, "Edited message should still be the only result");
+    assert_eq!(
+        results.results.len(),
+        1,
+        "Edited message should still be the only result"
+    );
 }

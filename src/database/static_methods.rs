@@ -25,7 +25,10 @@ use crate::{
     config::LoadDirection,
     database::{SearchResult, DATABASE_VERSION},
     error::Result,
-    events::{get_replaced_event_id, CrawlerCheckpoint, Event, EventContext, EventId, Profile, SerializedEvent},
+    events::{
+        get_replaced_event_id, CrawlerCheckpoint, Event, EventContext, EventId, Profile,
+        SerializedEvent,
+    },
     index::Writer as IndexWriter,
     Database,
 };
@@ -178,7 +181,8 @@ impl Database {
         let (new_checkpoint, old_checkpoint, events) = message;
         let transaction = connection.transaction()?;
 
-        let (ret, event_ids) = Database::write_events_helper(&transaction, index_writer, events, replaced_event_ids)?;
+        let (ret, event_ids) =
+            Database::write_events_helper(&transaction, index_writer, events, replaced_event_ids)?;
         Database::replace_crawler_checkpoint(
             &transaction,
             new_checkpoint.as_ref(),
