@@ -1,12 +1,24 @@
-[package]
-name = "seshat"
+[workspace]
+members = ["seshat-node"]
+
+[workspace.package]
 version = "4.0.1"
 authors = ["Damir Jelić <poljar@termina.org.uk>"]
 edition = "2018"
 license = "Apache-2.0"
+
+[workspace.dependencies]
+seshat = { path = "." }
+
+[package]
+name = "seshat"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
 description = "A matrix message logger with full text search support"
-readme="README.md"
-repository="https://github.com/matrix-org/seshat/"
+readme = "README.md"
+repository = "https://github.com/matrix-org/seshat/"
 
 [features]
 default = ["encryption"]
@@ -16,7 +28,6 @@ bundled-sqlcipher = ["encryption", "rusqlite/bundled-sqlcipher-vendored-openssl"
 
 [dependencies]
 tantivy = "0.12.0"
-tinysegmenter = "0.1.1"
 rusqlite = "0.31.0"
 fs_extra = "1.2.0"
 r2d2_sqlite = "0.24.0"
