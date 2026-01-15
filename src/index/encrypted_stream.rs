@@ -22,7 +22,7 @@
 use std::{
     cmp,
     convert::TryFrom,
-    io::{Error, ErrorKind, Read, Result, Seek, SeekFrom, Write},
+    io::{Error, Read, Result, Seek, SeekFrom, Write},
     ops::Neg,
 };
 
@@ -72,17 +72,13 @@ impl<E: StreamCipher + KeyIvInit, M: Mac + NewMac, W: Write> AesWriter<E, M, W> 
         let mut iv = vec![0u8; iv_size];
         let mut rng = thread_rng();
         rng.try_fill(&mut iv[0..iv_size / 2])
-            .map_err(|e| Error::new(ErrorKind::Other, format!("error generating iv: {:?}", e)))?;
+            .map_err(|e| Error::other(format!("error generating iv: {:?}", e)))?;
 
         let mac = M::new_from_slice(mac_key)
-            .map_err(|e| Error::new(ErrorKind::Other, format!("error creating mac: {:?}", e)))?;
+            .map_err(|e| Error::other(format!("error creating mac: {:?}", e)))?;
 
-        let enc = E::new_from_slices(key, &iv).map_err(|e| {
-            Error::new(
-                ErrorKind::Other,
-                format!("error initializing cipher: {:?}", e),
-            )
-        })?;
+        let enc = E::new_from_slices(key, &iv)
+            .map_err(|e| Error::other(format!("error initializing cipher: {:?}", e)))?;
         writer.write_all(&iv)?;
         Ok(AesWriter {
             writer,
@@ -99,18 +95,12 @@ impl<E: StreamCipher + KeyIvInit, M: Mac + NewMac, W: Write> AesWriter<E, M, W> 
     /// * `buf`: Plaintext to encrypt and write.
     fn encrypt_write(&mut self, buf: &mut [u8]) -> Result<usize> {
         if self.finalized {
-            return Err(Error::new(
-                ErrorKind::Other,
-                "File has been already finalized",
-            ));
+            return Err(Error::other("File has been already finalized"));
         }
 
-        self.enc.try_apply_keystream(buf).map_err(|_| {
-            Error::new(
-                ErrorKind::Other,
-                "Encryption error, reached end of the keystream.",
-            )
-        })?;
+        self.enc
+            .try_apply_keystream(buf)
+            .map_err(|_| Error::other("Encryption error, reached end of the keystream."))?;
         self.writer.write_all(buf)?;
         self.mac.update(buf);
 
@@ -202,16 +192,16 @@ impl<D: StreamCipher + KeyIvInit, R: Read + Seek + Clone> AesReader<D, R> {
         let iv_length = iv_size;
 
         let mut mac = M::new_from_slice(mac_key)
-            .map_err(|e| Error::new(ErrorKind::Other, format!("error creating mac: {:?}", e)))?;
+            .map_err(|e| Error::other(format!("error creating mac: {:?}", e)))?;
 
         let mac_length = mac_size;
 
-        let u_iv_length = u64::try_from(iv_length)
-            .map_err(|_| Error::new(ErrorKind::Other, "IV length is too big"))?;
-        let u_mac_length = u64::try_from(mac_length)
-            .map_err(|_| Error::new(ErrorKind::Other, "MAC length is too big"))?;
-        let i_mac_length = i64::try_from(mac_length)
-            .map_err(|_| Error::new(ErrorKind::Other, "MAC length is too big"))?;
+        let u_iv_length =
+            u64::try_from(iv_length).map_err(|_| Error::other("IV length is too big"))?;
+        let u_mac_length =
+            u64::try_from(mac_length).map_err(|_| Error::other("MAC length is too big"))?;
+        let i_mac_length =
+            i64::try_from(mac_length).map_err(|_| Error::other("MAC length is too big"))?;
 
         let mut iv = vec![0u8; iv_length];
         let mut expected_mac = vec![0u8; mac_length];
@@ -220,10 +210,7 @@ impl<D: StreamCipher + KeyIvInit, R: Read + Seek + Clone> AesReader<D, R> {
         let end = reader.seek(SeekFrom::End(0))?;
 
         if end < (u_iv_length + u_mac_length) {
-            return Err(Error::new(
-                ErrorKind::Other,
-                "File doesn't contain a valid IV or MAC",
-            ));
+            return Err(Error::other("File doesn't contain a valid IV or MAC"));
         }
 
         let seek_back = i_mac_length.neg();
@@ -246,16 +233,12 @@ impl<D: StreamCipher + KeyIvInit, R: Read + Seek + Clone> AesReader<D, R> {
         }
 
         if mac.verify(&expected_mac).is_err() {
-            return Err(Error::new(ErrorKind::Other, "Invalid MAC"));
+            return Err(Error::other("Invalid MAC"));
         }
 
         reader.seek(SeekFrom::Start(u_iv_length))?;
-        let dec = D::new_from_slices(key, &iv).map_err(|e| {
-            Error::new(
-                ErrorKind::Other,
-                format!("couldn't initialize cipher {:?}", e),
-            )
-        })?;
+        let dec = D::new_from_slices(key, &iv)
+            .map_err(|e| Error::other(format!("couldn't initialize cipher {:?}", e)))?;
 
         Ok(AesReader {
             reader,
@@ -303,12 +286,9 @@ impl<D: StreamCipher + KeyIvInit, R: Read + Seek + Clone> AesReader<D, R> {
     fn read_decrypt(&mut self, buf: &mut [u8]) -> Result<usize> {
         let read =
             AesReader::<D, R>::read_until_mac(buf, &mut self.reader, self.length, self.mac_length)?;
-        self.dec.try_apply_keystream(buf).map_err(|_| {
-            Error::new(
-                ErrorKind::Other,
-                "Decryption error, reached end of the keystream.",
-            )
-        })?;
+        self.dec
+            .try_apply_keystream(buf)
+            .map_err(|_| Error::other("Decryption error, reached end of the keystream."))?;
         Ok(read)
     }
 }
