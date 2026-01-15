@@ -199,11 +199,11 @@ impl EncryptedMmapDirectory {
         key_derivation_count: u32,
     ) -> Result<Self, OpenDirectoryError> {
         if passphrase.is_empty() {
-            return Err(IoError::new(ErrorKind::Other, "empty passphrase").into());
+            return Err(IoError::other("empty passphrase").into());
         }
 
         if key_derivation_count == 0 {
-            return Err(IoError::new(ErrorKind::Other, "invalid key derivation count").into());
+            return Err(IoError::other("invalid key derivation count").into());
         }
 
         let key_path = path.as_ref().join(KEYFILE);
@@ -245,7 +245,7 @@ impl EncryptedMmapDirectory {
     #[allow(dead_code)]
     pub fn open<P: AsRef<Path>>(path: P, passphrase: &str) -> Result<Self, OpenDirectoryError> {
         if passphrase.is_empty() {
-            return Err(IoError::new(ErrorKind::Other, "empty passphrase").into());
+            return Err(IoError::other("empty passphrase").into());
         }
 
         let key_path = path.as_ref().join(KEYFILE);
@@ -273,10 +273,10 @@ impl EncryptedMmapDirectory {
         new_key_derivation_count: u32,
     ) -> Result<(), OpenDirectoryError> {
         if old_passphrase.is_empty() || new_passphrase.is_empty() {
-            return Err(IoError::new(ErrorKind::Other, "empty passphrase").into());
+            return Err(IoError::other("empty passphrase").into());
         }
         if new_key_derivation_count == 0 {
-            return Err(IoError::new(ErrorKind::Other, "invalid key derivation count").into());
+            return Err(IoError::other("invalid key derivation count").into());
         }
 
         let key_path = path.as_ref().join(KEYFILE);
@@ -305,12 +305,8 @@ impl EncryptedMmapDirectory {
         let mut hkdf_result = Zeroizing::new([0u8; KEY_SIZE * 2]);
 
         let hkdf = Hkdf::<Sha512>::new(None, store_key);
-        hkdf.expand(&[], &mut *hkdf_result).map_err(|e| {
-            IoError::new(
-                ErrorKind::Other,
-                format!("unable to expand store key: {:?}", e),
-            )
-        })?;
+        hkdf.expand(&[], &mut *hkdf_result)
+            .map_err(|e| IoError::other(format!("unable to expand store key: {:?}", e)))?;
         let (key, hmac_key) = hkdf_result.split_at(KEY_SIZE);
         Ok((
             Zeroizing::new(Vec::from(key)),
@@ -346,7 +342,7 @@ impl EncryptedMmapDirectory {
             .read_to_end(&mut encrypted_key)?;
 
         if version[0] != VERSION {
-            return Err(IoError::new(ErrorKind::Other, "invalid index store version").into());
+            return Err(IoError::other("invalid index store version").into());
         }
 
         // Re-derive our key using the passphrase and salt.
@@ -362,23 +358,16 @@ impl EncryptedMmapDirectory {
         )?;
 
         if mac.verify(&expected_mac).is_err() {
-            return Err(IoError::new(ErrorKind::Other, "invalid MAC of the store key").into());
+            return Err(IoError::other("invalid MAC of the store key").into());
         }
 
-        let mut decryptor = Aes256Ctr::new_from_slices(&key, &iv).map_err(|e| {
-            IoError::new(
-                ErrorKind::Other,
-                format!("error initializing cipher {:?}", e),
-            )
-        })?;
+        let mut decryptor = Aes256Ctr::new_from_slices(&key, &iv)
+            .map_err(|e| IoError::other(format!("error initializing cipher {:?}", e)))?;
 
         let mut out = Zeroizing::new(encrypted_key);
-        decryptor.try_apply_keystream(&mut out).map_err(|_| {
-            IoError::new(
-                ErrorKind::Other,
-                "Decryption error, reached end of the keystream.",
-            )
-        })?;
+        decryptor
+            .try_apply_keystream(&mut out)
+            .map_err(|_| IoError::other("Decryption error, reached end of the keystream."))?;
 
         Ok((pbkdf_count, out))
     }
@@ -392,7 +381,7 @@ impl EncryptedMmapDirectory {
         hmac_key: &[u8],
     ) -> std::io::Result<Hmac<Sha256>> {
         let mut hmac = Hmac::<Sha256>::new_from_slice(hmac_key)
-            .map_err(|e| IoError::new(ErrorKind::Other, format!("error creating hmac: {:?}", e)))?;
+            .map_err(|e| IoError::other(format!("error creating hmac: {:?}", e)))?;
         hmac.update(&[version]);
         hmac.update(iv);
         hmac.update(salt);
@@ -439,12 +428,8 @@ impl EncryptedMmapDirectory {
     ) -> Result<(), OpenDirectoryError> {
         // Generate a random initialization vector for our AES encryptor.
         let iv = EncryptedMmapDirectory::generate_iv()?;
-        let mut encryptor = Aes256Ctr::new_from_slices(key, &iv).map_err(|e| {
-            IoError::new(
-                ErrorKind::Other,
-                format!("error initializing cipher: {:?}", e),
-            )
-        })?;
+        let mut encryptor = Aes256Ctr::new_from_slices(key, &iv)
+            .map_err(|e| IoError::other(format!("error initializing cipher: {:?}", e)))?;
 
         let mut encrypted_key = [0u8; KEY_SIZE];
         encrypted_key.copy_from_slice(store_key);
@@ -461,12 +446,7 @@ impl EncryptedMmapDirectory {
         // Encrypt our key.
         encryptor
             .try_apply_keystream(&mut encrypted_key)
-            .map_err(|e| {
-                IoError::new(
-                    ErrorKind::Other,
-                    format!("unable to encrypt store key: {:?}", e),
-                )
-            })?;
+            .map_err(|e| IoError::other(format!("unable to encrypt store key: {:?}", e)))?;
 
         // Calculate a MAC for our encrypted key and store it in the file before
         // the key.
@@ -487,7 +467,7 @@ impl EncryptedMmapDirectory {
         let mut iv = [0u8; IV_SIZE];
         let mut rng = thread_rng();
         rng.try_fill(&mut iv[..])
-            .map_err(|e| IoError::new(ErrorKind::Other, format!("error generating iv: {:?}", e)))?;
+            .map_err(|e| IoError::other(format!("error generating iv: {:?}", e)))?;
         Ok(iv)
     }
 
@@ -495,9 +475,8 @@ impl EncryptedMmapDirectory {
     fn generate_key() -> Result<KeyBuffer, OpenDirectoryError> {
         let mut key = Zeroizing::new(vec![0u8; KEY_SIZE]);
         let mut rng = thread_rng();
-        rng.try_fill(&mut key[..]).map_err(|e| {
-            IoError::new(ErrorKind::Other, format!("error generating key: {:?}", e))
-        })?;
+        rng.try_fill(&mut key[..])
+            .map_err(|e| IoError::other(format!("error generating key: {:?}", e)))?;
         Ok(key)
     }
 
@@ -521,9 +500,8 @@ impl EncryptedMmapDirectory {
     ) -> Result<InitialKeyDerivationResult, OpenDirectoryError> {
         let mut rng = thread_rng();
         let mut salt = vec![0u8; SALT_SIZE];
-        rng.try_fill(&mut salt[..]).map_err(|e| {
-            IoError::new(ErrorKind::Other, format!("error generating salt: {:?}", e))
-        })?;
+        rng.try_fill(&mut salt[..])
+            .map_err(|e| IoError::other(format!("error generating salt: {:?}", e)))?;
 
         let (key, hmac_key) = EncryptedMmapDirectory::rederive_key(passphrase, &salt, pbkdf_count);
         Ok((key, hmac_key, salt))

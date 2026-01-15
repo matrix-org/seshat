@@ -7,10 +7,7 @@ use std::{
     },
 };
 
-use std::{
-    convert::TryInto,
-    io::{Error as IoError, ErrorKind},
-};
+use std::{convert::TryInto, io::Error as IoError};
 
 use r2d2::PooledConnection;
 use r2d2_sqlite::SqliteConnectionManager;
@@ -174,42 +171,42 @@ impl RecoveryDatabase {
             "m.room.message" => EventType::Message,
             "m.room.name" => EventType::Name,
             "m.room.topic" => EventType::Topic,
-            _ => return Err(IoError::new(ErrorKind::Other, "Invalid event type.")),
+            _ => return Err(IoError::other("Invalid event type.")),
         };
 
         let (content_value, msgtype) = match event_type {
             EventType::Message => (
                 content["body"]
                     .as_str()
-                    .ok_or_else(|| IoError::new(ErrorKind::Other, "No content value found"))?,
+                    .ok_or_else(|| IoError::other("No content value found"))?,
                 Some("m.text"),
             ),
             EventType::Topic => (
                 content["topic"]
                     .as_str()
-                    .ok_or_else(|| IoError::new(ErrorKind::Other, "No content value found"))?,
+                    .ok_or_else(|| IoError::other("No content value found"))?,
                 None,
             ),
             EventType::Name => (
                 content["name"]
                     .as_str()
-                    .ok_or_else(|| IoError::new(ErrorKind::Other, "No content value found"))?,
+                    .ok_or_else(|| IoError::other("No content value found"))?,
                 None,
             ),
         };
 
         let event_id = object["event_id"]
             .as_str()
-            .ok_or_else(|| IoError::new(ErrorKind::Other, "No event id found"))?;
+            .ok_or_else(|| IoError::other("No event id found"))?;
         let sender = object["sender"]
             .as_str()
-            .ok_or_else(|| IoError::new(ErrorKind::Other, "No sender found"))?;
+            .ok_or_else(|| IoError::other("No sender found"))?;
         let server_ts = object["origin_server_ts"]
             .as_u64()
-            .ok_or_else(|| IoError::new(ErrorKind::Other, "No server timestamp found"))?;
+            .ok_or_else(|| IoError::other("No server timestamp found"))?;
         let room_id = object["room_id"]
             .as_str()
-            .ok_or_else(|| IoError::new(ErrorKind::Other, "No room id found"))?;
+            .ok_or_else(|| IoError::other("No room id found"))?;
 
         Ok(Event::new(
             event_type,
@@ -217,9 +214,9 @@ impl RecoveryDatabase {
             msgtype,
             event_id,
             sender,
-            server_ts.try_into().map_err(|_e| {
-                IoError::new(ErrorKind::Other, "Server timestamp out of valid range")
-            })?,
+            server_ts
+                .try_into()
+                .map_err(|_e| IoError::other("Server timestamp out of valid range"))?,
             room_id,
             event_source,
         ))
