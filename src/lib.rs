@@ -70,7 +70,7 @@ pub use database::{
 
 pub use error::{Error, Result};
 
-pub use config::{Config, Language, LoadConfig, LoadDirection, SearchConfig};
+pub use config::{Config, Language, LoadConfig, LoadDirection, SearchConfig, TokenizerMode};
 pub use events::{CheckpointDirection, CrawlerCheckpoint, Event, EventType, Profile};
 
 pub use std::sync::mpsc::Receiver;

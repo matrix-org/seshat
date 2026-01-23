@@ -146,12 +146,20 @@ class Seshat {
      * @param {string} path The path where the database should be stored. If a
      * database already exist in the given folder the database will be reused.
      * @param {object} config Additional configuration for the database.
-     * database already exist in the given folder the database will be reused.
-     * @param  {string} config.language The language that the database should
+     * @param {string} config.language The language that the database should
      * use for indexing. Picking the correct indexing language may improve the
-     * search.  @param  {string} config.passphrase The passphrase that should be
-     * used to encrypt the database. The database is left unencrypted it no
-     * passphrase is set.
+     * search.
+     * @param {string} config.passphrase The passphrase that should be used to
+     * encrypt the database. The database is left unencrypted if no passphrase
+     * is set.
+     * @param {string} config.tokenizerMode The tokenizer mode to use for
+     * indexing. Can be "ngram" or "language" (default). The "ngram" mode is
+     * useful for languages without clear word boundaries (e.g., Japanese,
+     * Chinese).
+     * @param {number} config.ngramMinSize The minimum n-gram size when using
+     * "ngram" tokenizer mode. Defaults to 2.
+     * @param {number} config.ngramMaxSize The maximum n-gram size when using
+     * "ngram" tokenizer mode. Defaults to 4.
      *
      * @constructor
      *
@@ -529,12 +537,19 @@ class Seshat {
  * @param {string} path The path where the database should be stored. If a
  * database already exist in the given folder the database will be reused.
  * @param {object} config Additional configuration for the database.
- * database already exist in the given folder the database will be reused.
- * @param  {string} config.language The language that the database should use
+ * @param {string} config.language The language that the database should use
  * for indexing. Picking the correct indexing language may improve the search.
- * @param  {string} config.passphrase The passphrase that should be used to
- * encrypt the database. The database is left unencrypted it no passphrase is
+ * @param {string} config.passphrase The passphrase that should be used to
+ * encrypt the database. The database is left unencrypted if no passphrase is
  * set.
+ * @param {string} config.tokenizerMode The tokenizer mode to use for
+ * indexing. Can be "ngram" or "language" (default). The "ngram" mode is
+ * useful for languages without clear word boundaries (e.g., Japanese,
+ * Chinese).
+ * @param {number} config.ngramMinSize The minimum n-gram size when using
+ * "ngram" tokenizer mode. Defaults to 2.
+ * @param {number} config.ngramMaxSize The maximum n-gram size when using
+ * "ngram" tokenizer mode. Defaults to 4.
  *
  * @constructor
  *
