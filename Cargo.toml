@@ -9,7 +9,7 @@ readme="README.md"
 repository="https://github.com/matrix-org/seshat/"
 
 [features]
-default = ["encryption"]
+default = ["bundled-sqlcipher"]
 encryption = ["rusqlite/sqlcipher", "aes", "hmac", "sha2",
               "hkdf", "pbkdf2", "rand", "zeroize", "byteorder", "ctr"]
 bundled-sqlcipher = ["encryption", "rusqlite/bundled-sqlcipher-vendored-openssl"]
