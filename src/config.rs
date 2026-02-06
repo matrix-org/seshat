@@ -219,12 +219,13 @@ impl From<&str> for Language {
 /// Tokenizer mode for the search index.
 ///
 /// This determines how text is tokenized for indexing and searching.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Default)]
 pub enum TokenizerMode {
     /// Language-based tokenizer using stemming (default).
     ///
     /// Uses SimpleTokenizer with language-specific stemming.
     /// Best for languages with word boundaries (e.g., English, German).
+    #[default]
     LanguageBased,
     /// N-gram tokenizer for multi-language support.
     ///
@@ -236,12 +237,6 @@ pub enum TokenizerMode {
         /// Maximum n-gram size (default: 4)
         max_gram: usize,
     },
-}
-
-impl Default for TokenizerMode {
-    fn default() -> Self {
-        TokenizerMode::LanguageBased
-    }
 }
 
 impl TokenizerMode {
