@@ -415,17 +415,21 @@ impl Index {
         // Register tokenizer based on mode
         match &config.tokenizer_mode {
             TokenizerMode::Ngram { min_gram, max_gram } => {
-                let ngram_tokenizer = tv::tokenizer::NgramTokenizer::new(*min_gram, *max_gram, false);
-                index.tokenizers().register(&tokenizer_name, ngram_tokenizer);
+                let ngram_tokenizer =
+                    tv::tokenizer::NgramTokenizer::new(*min_gram, *max_gram, false);
+                index
+                    .tokenizers()
+                    .register(&tokenizer_name, ngram_tokenizer);
             }
             TokenizerMode::LanguageBased => {
                 match config.language {
                     Language::Unknown => (), // Use default tokenizer
                     _ => {
-                        let tokenizer = tv::tokenizer::TextAnalyzer::from(tv::tokenizer::SimpleTokenizer)
-                            .filter(tv::tokenizer::RemoveLongFilter::limit(40))
-                            .filter(tv::tokenizer::LowerCaser)
-                            .filter(tv::tokenizer::Stemmer::new(config.language.as_tantivy()));
+                        let tokenizer =
+                            tv::tokenizer::TextAnalyzer::from(tv::tokenizer::SimpleTokenizer)
+                                .filter(tv::tokenizer::RemoveLongFilter::limit(40))
+                                .filter(tv::tokenizer::LowerCaser)
+                                .filter(tv::tokenizer::Stemmer::new(config.language.as_tantivy()));
                         index.tokenizers().register(&tokenizer_name, tokenizer);
                     }
                 }
@@ -728,10 +732,7 @@ fn ngram_tokenizer_mode() {
     let searcher = index.get_searcher();
 
     // Search with partial text (ngram should match)
-    let result = searcher
-        .search("est", &Default::default())
-        .unwrap()
-        .results;
+    let result = searcher.search("est", &Default::default()).unwrap().results;
 
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].1, EVENT.event_id);
@@ -775,7 +776,10 @@ fn schema_mismatch_on_ngram_size_change() {
     {
         let config = Config::new().use_ngram_tokenizer(3, 5);
         let result = Index::new(&tmpdir, &config);
-        assert!(result.is_err(), "Different ngram sizes should cause schema mismatch");
+        assert!(
+            result.is_err(),
+            "Different ngram sizes should cause schema mismatch"
+        );
     }
 
     // Reopen with same ngram size - should succeed
@@ -827,7 +831,11 @@ fn ngram_tokenizer_japanese() {
         .unwrap()
         .results;
     println!("Result count: {}", result.len());
-    assert_eq!(result.len(), 1, "4-gram partial search 'トフォリ' should match");
+    assert_eq!(
+        result.len(),
+        1,
+        "4-gram partial search 'トフォリ' should match"
+    );
 
     // Test 3: Partial search with 2-gram (should match)
     println!("Test 3: Searching for 'リゲ'");
@@ -845,5 +853,9 @@ fn ngram_tokenizer_japanese() {
         .unwrap()
         .results;
     println!("Result count: {}", result.len());
-    assert_eq!(result.len(), 1, "3-gram partial search 'ゲート' should match");
+    assert_eq!(
+        result.len(),
+        1,
+        "3-gram partial search 'ゲート' should match"
+    );
 }
