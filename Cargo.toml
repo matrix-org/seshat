@@ -2,7 +2,7 @@
 members = ["seshat-node"]
 
 [workspace.package]
-version = "4.0.1"
+version = "4.1.0"
 authors = ["Damir Jelić <poljar@termina.org.uk>"]
 edition = "2018"
 license = "Apache-2.0"
