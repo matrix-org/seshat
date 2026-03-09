@@ -3,7 +3,7 @@ name: CI
 on:
   push:
   pull_request:
-    branches: [ master ]
+    branches: [master]
 
 env:
   CARGO_TERM_COLOR: always
@@ -14,18 +14,18 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout the repo
-      uses: actions/checkout@v4
+      - name: Checkout the repo
+        uses: actions/checkout@v4
 
-    - name: Install rust
-      uses: dtolnay/rust-toolchain@stable
-      with:
-        toolchain: stable
-        components: rustfmt
+      - name: Install rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          components: rustfmt
 
-    - name: Cargo fmt
-      run: |
-        cargo fmt -- --check
+      - name: Cargo fmt
+        run: |
+          cargo fmt -- --check
 
   clippy:
     name: Run clippy
@@ -33,18 +33,18 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout the repo
-      uses: actions/checkout@v4
+      - name: Checkout the repo
+        uses: actions/checkout@v4
 
-    - name: Install rust
-      uses: dtolnay/rust-toolchain@stable
-      with:
-        toolchain: stable
-        components: clippy
+      - name: Install rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          components: clippy
 
-    - name: Clippy
-      run: |
-        cargo clippy --all-targets -- -D warnings
+      - name: Clippy
+        run: |
+          cargo clippy --all-targets -- -D warnings
 
   build-test:
     name: ${{ matrix.name }}
@@ -92,7 +92,7 @@ jobs:
       - name: Install node
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: "18"
 
       - name: Install node build dependencies
         run: cd seshat-node && yarn install
