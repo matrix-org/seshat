@@ -20,10 +20,10 @@ jobs:
           persist-credentials: false
 
       - name: Install rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: stable
-          components: rustfmt
+        run: |
+          rustup install stable
+          rustup default stable
+          rustup component add rustfmt
 
       - name: Cargo fmt
         run: |
@@ -41,10 +41,10 @@ jobs:
           persist-credentials: false
 
       - name: Install rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: stable
-          components: clippy
+        run: |
+          rustup install stable
+          rustup default stable
+          rustup component add clippy
 
       - name: Clippy
         run: |
@@ -78,10 +78,9 @@ jobs:
           persist-credentials: false
 
       - name: Install rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: ${{ matrix.rust || 'stable' }}
-          target: ${{ matrix.target }}
+        run: |
+          rustup install ${{ matrix.rust || 'stable' }}
+          rustup default ${{ matrix.rust || 'stable' }}
 
       - name: Build Rust
         run: |
