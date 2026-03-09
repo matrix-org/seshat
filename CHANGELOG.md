@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 4.1.0 - 2026-02-26
+
+### Added
+
+- Add N-gram tokenizer mode for CJK (Japanese, Chinese, Korean) language support.
+  Users can now choose between language-based and N-gram tokenization when
+  initializing the search index.
+  [[#150](https://github.com/matrix-org/seshat/pull/150)]
+
+- Handle `m.replace` edit events to remove original messages from search index,
+  preventing edited messages from appearing in search results with stale content.
+  [[#148](https://github.com/matrix-org/seshat/pull/148)]
+
+### Fixed
+
+- Delete from `uncommitted_events` before `events` table to respect foreign key
+  constraints.
+  [[#148](https://github.com/matrix-org/seshat/pull/148)]
+
+- Make `delete_event_by_id` atomic with `SAVEPOINT` to ensure database
+  consistency.
+  [[#148](https://github.com/matrix-org/seshat/pull/148)]
+
+### Changed
+
+- Convert to Cargo workspace and cleanup dependencies.
+  [[#150](https://github.com/matrix-org/seshat/pull/150)]
+
 ## 4.0.1 - 2025-02-18
 
 - Update the used OpenSSL version for improved ARM64 compatibility.
