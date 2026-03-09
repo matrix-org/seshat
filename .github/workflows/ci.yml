@@ -1,9 +1,11 @@
 name: CI
 
+permissions: {}
+
 on:
   push:
   pull_request:
-    branches: [ master ]
+    branches: [master]
 
 env:
   CARGO_TERM_COLOR: always
@@ -14,18 +16,20 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout the repo
-      uses: actions/checkout@v4
+      - name: Checkout the repo
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
 
-    - name: Install rust
-      uses: dtolnay/rust-toolchain@stable
-      with:
-        toolchain: stable
-        components: rustfmt
+      - name: Install rust
+        run: |
+          rustup install stable
+          rustup default stable
+          rustup component add rustfmt
 
-    - name: Cargo fmt
-      run: |
-        cargo fmt -- --check
+      - name: Cargo fmt
+        run: |
+          cargo fmt -- --check
 
   clippy:
     name: Run clippy
@@ -33,18 +37,20 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout the repo
-      uses: actions/checkout@v4
+      - name: Checkout the repo
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
 
-    - name: Install rust
-      uses: dtolnay/rust-toolchain@stable
-      with:
-        toolchain: stable
-        components: clippy
+      - name: Install rust
+        run: |
+          rustup install stable
+          rustup default stable
+          rustup component add clippy
 
-    - name: Clippy
-      run: |
-        cargo clippy --all-targets -- -D warnings
+      - name: Clippy
+        run: |
+          cargo clippy --all-targets -- -D warnings
 
   build-test:
     name: ${{ matrix.name }}
@@ -69,13 +75,14 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
 
       - name: Install rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: ${{ matrix.rust || 'stable' }}
-          target: ${{ matrix.target }}
+        run: |
+          rustup install ${{ matrix.rust || 'stable' }}
+          rustup default ${{ matrix.rust || 'stable' }}
 
       - name: Build Rust
         run: |
@@ -87,12 +94,14 @@ jobs:
 
       # Checkout again to reset the test DB state
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
 
       - name: Install node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         with:
-          node-version: '18'
+          node-version: "18"
 
       - name: Install node build dependencies
         run: cd seshat-node && yarn install
