@@ -48,21 +48,25 @@ pub trait Task: Send + Sized + 'static {
         std::thread::spawn(move || {
             let result = self.perform();
 
-            queue.send(move |mut cx| {
-                let result =
-                    cx.try_catch(|cx| cx.compute_scoped(move |cx| self.complete(cx, result)));
+            queue
+                .try_send(move |mut cx| {
+                    let result =
+                        cx.try_catch(|cx| cx.compute_scoped(move |cx| self.complete(cx, result)));
 
-                let callback = callback.into_inner(&mut cx);
-                let this = cx.undefined();
+                    let callback = callback.into_inner(&mut cx);
+                    let this = cx.undefined();
 
-                let args = match result {
-                    Ok(v) => vec![cx.null().upcast(), v.as_value(&mut cx)],
-                    Err(e) => vec![e.upcast()],
-                };
+                    let args = match result {
+                        Ok(v) => vec![cx.null().upcast(), v.as_value(&mut cx)],
+                        Err(e) => vec![e.upcast()],
+                    };
 
-                callback.call(&mut cx, this, args)?;
-                Ok(())
-            });
+                    callback.call(&mut cx, this, args)?;
+                    Ok(())
+                })
+                .expect(
+                    "closure couldn't be scheduled on the JavaScrip thread, is node shutting down?",
+                );
         });
 
         Ok(cx.undefined())
