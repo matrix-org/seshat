@@ -65,7 +65,7 @@ pub trait Task: Send + Sized + 'static {
                     Ok(())
                 })
                 .expect(
-                    "closure couldn't be scheduled on the JavaScrip thread, is node shutting down?",
+                    "closure couldn't be scheduled on the JavaScript thread, is node shutting down?",
                 );
         });
 
