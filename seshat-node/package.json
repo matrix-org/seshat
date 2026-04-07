@@ -12,6 +12,12 @@
     "jest": "^27.4.0",
     "jsdoc": "^3.6.3"
   },
+  "files": [
+    "Cargo.toml",
+    "src/",
+    "index.js",
+    "README.md"
+  ],
   "scripts": {
     "build": "cargo-cp-artifact -nc index.node -- cargo build --message-format=json-render-diagnostics --release",
     "build-bundled": "yarn run build --features=bundled-sqlcipher",

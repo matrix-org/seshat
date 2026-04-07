@@ -5,6 +5,7 @@ seshat-node/**/*~
 seshat-node/**/node_modules
 seshat-node/**/.DS_Store
 seshat-node/coverage
+seshat-node/index.node
 .gdb_history
 target
 /Cargo.lock
