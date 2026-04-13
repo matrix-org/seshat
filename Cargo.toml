@@ -2,13 +2,10 @@
 members = ["seshat-node"]
 
 [workspace.package]
-version = "4.0.1"
+version = "4.1.0"
 authors = ["Damir Jelić <poljar@termina.org.uk>"]
 edition = "2018"
 license = "Apache-2.0"
-
-[workspace.dependencies]
-seshat = { path = "." }
 
 [package]
 name = "seshat"
@@ -60,3 +57,10 @@ thiserror = "1.0.26"
 tempfile = "3.2.0"
 lazy_static = "1.4.0"
 fake = "2.4.3"
+
+[patch.crates-io]
+# Ensure that seshat-node uses the local seshat version.
+#
+# The Cargo.toml file in the seshat-node directory needs to point to a published
+# version as we're packaging and publishing this Cargo.toml file as is.
+seshat = { path = "./" }
