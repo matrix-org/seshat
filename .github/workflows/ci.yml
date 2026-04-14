@@ -84,13 +84,18 @@ jobs:
           rustup install ${{ matrix.rust || 'stable' }}
           rustup default ${{ matrix.rust || 'stable' }}
 
+      - name: Install nextest
+        uses: taiki-e/install-action@85b24a67ef0c632dfefad70b9d5ce8fddb040754 # v 2.75.10
+        with:
+          tool: nextest
+
       - name: Build Rust
         run: |
           cargo build --features=bundled-sqlcipher
 
       - name: Test Rust
         run: |
-          cargo test --features=bundled-sqlcipher
+          cargo nextest run --features=bundled-sqlcipher
 
       # Checkout again to reset the test DB state
       - name: Checkout
