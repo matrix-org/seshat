@@ -17,6 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   preventing edited messages from appearing in search results with stale content.
   [[#151](https://github.com/matrix-org/seshat/pull/151)]
 
+### Changed
+
+- Panics that occur while enqueuing a task on the JavaScript queue in the Node
+  bindings will now generate a clearer error message.
+  [[#162](https://github.com/matrix-org/seshat/pull/162)]
+
 ## 4.0.1 - 2025-02-18
 
 - Update the used OpenSSL version for improved ARM64 compatibility.
