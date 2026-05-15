@@ -284,7 +284,7 @@ impl IndexSearcher {
                 None => continue,
             };
 
-            // Skip results that were already returne in a previous search.
+            // Skip results that were already returned in a previous search.
             if previous_results.contains(&event_id) {
                 continue;
             }
