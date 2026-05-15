@@ -335,26 +335,34 @@ impl Database {
                             loaded_unprocessed = true;
 
                             if ret.is_err() {
-                                sender.send(ret).unwrap_or(());
+                                // It's fine to ignore the send error, this means that the caller
+                                // just dropped the receiver and isn't interested in the result
+                                // anymore.
+                                let _e = sender.send(ret);
                                 continue;
                             }
                         }
                         let ret = writer.write_queued_events(force_commit);
                         // Notify that we are done with the write.
-                        sender.send(ret).unwrap_or(());
+                        //
+                        // Same as the previous one, fine to ignore the error on the send.
+                        let _e = sender.send(ret);
                     }
                     ThreadMessage::HistoricEvents(m) => {
                         let (check, old_check, events, sender) = m;
                         let ret = writer.write_historic_events(check, old_check, events, true);
-                        sender.send(ret).unwrap_or(());
+                        // Same as the previous one, fine to ignore the error on the send.
+                        let _e = sender.send(ret);
                     }
                     ThreadMessage::Delete(sender, event_id) => {
                         let ret = writer.delete_event(event_id);
-                        sender.send(ret).unwrap_or(());
+                        // Same as the previous one, fine to ignore the error on the send.
+                        let _e = sender.send(ret);
                     }
                     ThreadMessage::ShutDown(sender) => {
                         let ret = writer.shutdown();
-                        sender.send(ret).unwrap_or(());
+                        // Same as the previous one, fine to ignore the error on the send.
+                        let _e = sender.send(ret);
                         return;
                     }
                 };
@@ -375,7 +383,9 @@ impl Database {
     /// only when the user calls the `commit()` method.
     pub fn add_event(&self, event: Event, profile: Profile) {
         let message = ThreadMessage::Event((event, profile));
-        self.tx.send(message).unwrap();
+        self.tx
+            .send(message)
+            .expect("Couldn't add an event, the writer thread died?");
     }
 
     /// Delete an event from the database.
@@ -391,13 +401,17 @@ impl Database {
     pub fn delete_event(&self, event_id: &str) -> Receiver<Result<bool>> {
         let (sender, receiver): (_, Receiver<Result<bool>>) = channel();
         let message = ThreadMessage::Delete(sender, event_id.to_owned());
-        self.tx.send(message).unwrap();
+        self.tx
+            .send(message)
+            .expect("Couldn't delete an event, the writer thread died?");
         receiver
     }
 
     fn commit_helper(&mut self, force: bool) -> Receiver<Result<()>> {
         let (sender, receiver): (_, Receiver<Result<()>>) = channel();
-        self.tx.send(ThreadMessage::Write(sender, force)).unwrap();
+        self.tx
+            .send(ThreadMessage::Write(sender, force))
+            .expect("Couldn't commit a queued write, the writer thread died?");
         receiver
     }
 
@@ -469,7 +483,9 @@ impl Database {
         let (sender, receiver): (_, Receiver<Result<bool>>) = channel();
         let payload = (new_checkpoint, old_checkpoint, events, sender);
         let message = ThreadMessage::HistoricEvents(payload);
-        self.tx.send(message).unwrap();
+        self.tx
+            .send(message)
+            .expect("Couldn't add a historic event, is the writer thread dead?");
 
         receiver
     }
@@ -514,7 +530,9 @@ impl Database {
     pub fn shutdown(self) -> Receiver<Result<()>> {
         let (sender, receiver): (_, Receiver<Result<()>>) = channel();
         let message = ThreadMessage::ShutDown(sender);
-        self.tx.send(message).unwrap();
+        self.tx
+            .send(message)
+            .expect("Couldn't shutdown, is the writer thread dead?");
         receiver
     }
 

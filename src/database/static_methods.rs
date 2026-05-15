@@ -793,7 +793,7 @@ impl Database {
         }
     }
 
-    /// Load events surounding the given event.
+    /// Load events surrounding the given event.
     pub(crate) fn load_event_context(
         connection: &rusqlite::Connection,
         event: &Event,
