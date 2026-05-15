@@ -317,59 +317,68 @@ impl Database {
         let (tx, rx): (_, Receiver<ThreadMessage>) = channel();
 
         let t_handle = thread::spawn(move || {
-            let mut writer = Writer::new(connection, index_writer, replaced_event_ids);
-            let mut loaded_unprocessed = false;
-
-            while let Ok(message) = rx.recv() {
-                match message {
-                    ThreadMessage::Event((event, profile)) => writer.add_event(event, profile),
-                    ThreadMessage::Write(sender, force_commit) => {
-                        // We may have events that aren't deleted or committed
-                        // to the index but are stored in the db, let us load
-                        // them from the db and commit them to the index now.
-                        // They will later be marked as committed in the
-                        // database as part of a normal write.
-                        if !loaded_unprocessed {
-                            let ret = writer.load_unprocessed_events();
-
-                            loaded_unprocessed = true;
-
-                            if ret.is_err() {
-                                // It's fine to ignore the send error, this means that the caller
-                                // just dropped the receiver and isn't interested in the result
-                                // anymore.
-                                let _e = sender.send(ret);
-                                continue;
-                            }
-                        }
-                        let ret = writer.write_queued_events(force_commit);
-                        // Notify that we are done with the write.
-                        //
-                        // Same as the previous one, fine to ignore the error on the send.
-                        let _e = sender.send(ret);
-                    }
-                    ThreadMessage::HistoricEvents(m) => {
-                        let (check, old_check, events, sender) = m;
-                        let ret = writer.write_historic_events(check, old_check, events, true);
-                        // Same as the previous one, fine to ignore the error on the send.
-                        let _e = sender.send(ret);
-                    }
-                    ThreadMessage::Delete(sender, event_id) => {
-                        let ret = writer.delete_event(event_id);
-                        // Same as the previous one, fine to ignore the error on the send.
-                        let _e = sender.send(ret);
-                    }
-                    ThreadMessage::ShutDown(sender) => {
-                        let ret = writer.shutdown();
-                        // Same as the previous one, fine to ignore the error on the send.
-                        let _e = sender.send(ret);
-                        return;
-                    }
-                };
-            }
+            Self::writer_thread_body(connection, index_writer, replaced_event_ids, rx)
         });
 
         (t_handle, tx)
+    }
+
+    fn writer_thread_body(
+        connection: PooledConnection<SqliteConnectionManager>,
+        index_writer: IndexWriter,
+        replaced_event_ids: HashSet<EventId>,
+        rx: Receiver<ThreadMessage>,
+    ) {
+        let mut writer = Writer::new(connection, index_writer, replaced_event_ids);
+        let mut loaded_unprocessed = false;
+
+        while let Ok(message) = rx.recv() {
+            match message {
+                ThreadMessage::Event((event, profile)) => writer.add_event(event, profile),
+                ThreadMessage::Write(sender, force_commit) => {
+                    // We may have events that aren't deleted or committed
+                    // to the index but are stored in the db, let us load
+                    // them from the db and commit them to the index now.
+                    // They will later be marked as committed in the
+                    // database as part of a normal write.
+                    if !loaded_unprocessed {
+                        let ret = writer.load_unprocessed_events();
+
+                        loaded_unprocessed = true;
+
+                        if ret.is_err() {
+                            // It's fine to ignore the send error, this means that the caller
+                            // just dropped the receiver and isn't interested in the result
+                            // anymore.
+                            let _e = sender.send(ret);
+                            continue;
+                        }
+                    }
+                    let ret = writer.write_queued_events(force_commit);
+                    // Notify that we are done with the write.
+                    //
+                    // Same as the previous one, fine to ignore the error on the send.
+                    let _e = sender.send(ret);
+                }
+                ThreadMessage::HistoricEvents(m) => {
+                    let (check, old_check, events, sender) = m;
+                    let ret = writer.write_historic_events(check, old_check, events, true);
+                    // Same as the previous one, fine to ignore the error on the send.
+                    let _e = sender.send(ret);
+                }
+                ThreadMessage::Delete(sender, event_id) => {
+                    let ret = writer.delete_event(event_id);
+                    // Same as the previous one, fine to ignore the error on the send.
+                    let _e = sender.send(ret);
+                }
+                ThreadMessage::ShutDown(sender) => {
+                    let ret = writer.shutdown();
+                    // Same as the previous one, fine to ignore the error on the send.
+                    let _e = sender.send(ret);
+                    return;
+                }
+            };
+        }
     }
 
     /// Add an event with the given profile to the database.
