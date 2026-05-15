@@ -28,8 +28,12 @@ pub trait Task: Send + Sized + 'static {
     type Error: Send + 'static;
     type JsEvent: Value;
 
+    /// Perform this task. Runs on a background thread.
     fn perform(&self) -> Result<Self::Output, Self::Error>;
 
+    /// Complete this task by mapping the Rust result into a Javascript value.
+    ///
+    /// Runs on the main javascript thread.
     fn complete<'a, 'b>(
         self,
         cx: ComputeContext<'a, 'b>,
@@ -38,7 +42,10 @@ pub trait Task: Send + Sized + 'static {
 
     /// Schedule the task to be executed on a background thread.
     ///
-    /// The last argument of the `FunctionContext` needs to be a `JsFunction`.
+    /// The last argument of the `FunctionContext` must be a `JsFunction`; it should be a `callback`
+    /// that follows the Node.js [convention] of accepting an `Error` as its first parameter.
+    ///
+    /// [convention]: https://nodejs.org/api/errors.html#error-propagation-and-interception
     fn schedule(self, mut cx: FunctionContext) -> JsResult<JsUndefined> {
         let callback = cx
             .argument::<JsFunction>(cx.len().saturating_sub(1))?
@@ -46,16 +53,22 @@ pub trait Task: Send + Sized + 'static {
         let queue = cx.channel();
 
         std::thread::spawn(move || {
+            // Run the task on our background thread.
             let result = self.perform();
 
+            // Send the result back to JavaScript, in the main thread.
             queue
                 .try_send(move |mut cx| {
+                    // Map the Rust result into a Javascript value.
                     let result =
                         cx.try_catch(|cx| cx.compute_scoped(move |cx| self.complete(cx, result)));
 
+                    // Call the callback.
                     let callback = callback.into_inner(&mut cx);
                     let this = cx.undefined();
 
+                    // If the result is an error, pass it as the first argument of the callback.
+                    // Otherwise, pass the result as the second argument.
                     let args = match result {
                         Ok(v) => vec![cx.null().upcast(), v.as_value(&mut cx)],
                         Err(e) => vec![e.upcast()],
