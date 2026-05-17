@@ -72,12 +72,26 @@ pub(crate) enum ThreadMessage {
     ShutDown(Sender<Result<()>>),
 }
 
+impl ThreadMessage {
+    /// Return a string representation of the message type.
+    pub fn message_type(&self) -> &'static str {
+        match self {
+            ThreadMessage::Event(_) => "Event",
+            ThreadMessage::HistoricEvents(_) => "HistoricEvents",
+            ThreadMessage::Write(_, _) => "Write",
+            ThreadMessage::Delete(_, _) => "Delete",
+            ThreadMessage::ShutDown(_) => "ShutDown",
+        }
+    }
+}
+
 /// The Seshat database.
 pub struct Database {
     path: PathBuf,
     connection: Arc<Mutex<PooledConnection<SqliteConnectionManager>>>,
     pool: r2d2::Pool<SqliteConnectionManager>,
-    _write_thread: JoinHandle<()>,
+
+    write_thread: JoinHandle<()>,
     /// If the write thread panicked, the message it panicked with.
     write_thread_panic_message: Arc<Mutex<Option<String>>>,
     /// Whether a shutdown message has been sent to the writer thread.
@@ -164,7 +178,7 @@ impl Database {
             path: path.into(),
             connection: Arc::new(Mutex::new(connection)),
             pool,
-            _write_thread: t_handle,
+            write_thread: t_handle,
             write_thread_panic_message,
             shutdown_sent: AtomicBool::new(false),
             tx,
@@ -420,6 +434,38 @@ impl Database {
         }
     }
 
+    /// Send a ThreadMessage to the writer thread.
+    ///
+    /// If sending the message fails (likely because the writer thread has shut down), panics, with
+    /// a message including the reason the writer thread exited, if known.
+    fn send_message_to_writer(&self, message: ThreadMessage) {
+        self.tx.send(message).unwrap_or_else(|e| {
+            // Send can only fail if the receiver has disconnected, meaning the writer thread has
+            // exited. If it panicked, report the panic message.
+            let msg = if let Some(panic_message) = self
+                .write_thread_panic_message
+                .lock()
+                .unwrap()
+                .as_ref()
+                .cloned()
+            {
+                format!("Writer thread panicked with message: {}", panic_message)
+            } else if self.shutdown_sent.load(Ordering::Relaxed) {
+                "Shutdown message was sent".to_string()
+            } else if self.write_thread.is_finished() {
+                "Writer thread exited without panicking".to_string()
+            } else {
+                "Writer thread is still running".to_string()
+            };
+
+            panic!(
+                "Could not send message of type {} to writer thread: {}",
+                e.0.message_type(),
+                msg
+            );
+        });
+    }
+
     /// Add an event with the given profile to the database.
     /// # Arguments
     ///
@@ -431,9 +477,7 @@ impl Database {
     /// only when the user calls the `commit()` method.
     pub fn add_event(&self, event: Event, profile: Profile) {
         let message = ThreadMessage::Event((event, profile));
-        self.tx
-            .send(message)
-            .expect("Couldn't add an event, the writer thread died?");
+        self.send_message_to_writer(message);
     }
 
     /// Delete an event from the database.
@@ -449,17 +493,13 @@ impl Database {
     pub fn delete_event(&self, event_id: &str) -> Receiver<Result<bool>> {
         let (sender, receiver): (_, Receiver<Result<bool>>) = channel();
         let message = ThreadMessage::Delete(sender, event_id.to_owned());
-        self.tx
-            .send(message)
-            .expect("Couldn't delete an event, the writer thread died?");
+        self.send_message_to_writer(message);
         receiver
     }
 
     fn commit_helper(&mut self, force: bool) -> Receiver<Result<()>> {
         let (sender, receiver): (_, Receiver<Result<()>>) = channel();
-        self.tx
-            .send(ThreadMessage::Write(sender, force))
-            .expect("Couldn't commit a queued write, the writer thread died?");
+        self.send_message_to_writer(ThreadMessage::Write(sender, force));
         receiver
     }
 
@@ -531,10 +571,7 @@ impl Database {
         let (sender, receiver): (_, Receiver<Result<bool>>) = channel();
         let payload = (new_checkpoint, old_checkpoint, events, sender);
         let message = ThreadMessage::HistoricEvents(payload);
-        self.tx
-            .send(message)
-            .expect("Couldn't add a historic event, is the writer thread dead?");
-
+        self.send_message_to_writer(message);
         receiver
     }
 
@@ -579,9 +616,7 @@ impl Database {
         let (sender, receiver): (_, Receiver<Result<()>>) = channel();
         let message = ThreadMessage::ShutDown(sender);
         self.shutdown_sent.store(true, Ordering::Relaxed);
-        self.tx
-            .send(message)
-            .expect("Couldn't shutdown, is the writer thread dead?");
+        self.send_message_to_writer(message);
         receiver
     }
 
