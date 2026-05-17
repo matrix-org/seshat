@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Panics that occur when applications attempt to communicate with the writer
 thread (when adding, removing, and committing events) will now generate a
 clearer error message.
-[[#174](https://github.com/matrix-org/seshat/pull/174)]
+[[#174](https://github.com/matrix-org/seshat/pull/174), [#176](https://github.com/matrix-org/seshat/pull/176)]
 
 ## 4.2.0 - 2026-04-14
 
