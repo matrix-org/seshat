@@ -22,6 +22,7 @@ use fs_extra::dir;
 use r2d2::{Pool, PooledConnection};
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::ToSql;
+use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::{
     collections::HashSet,
     fs,
@@ -76,6 +77,8 @@ pub struct Database {
     connection: Arc<Mutex<PooledConnection<SqliteConnectionManager>>>,
     pool: r2d2::Pool<SqliteConnectionManager>,
     _write_thread: JoinHandle<()>,
+    /// If the write thread panicked, the message it panicked with.
+    write_thread_panic_message: Arc<Mutex<Option<String>>>,
     tx: Sender<ThreadMessage>,
     index: Index,
     config: Config,
@@ -144,13 +147,21 @@ impl Database {
         // Load the set of event IDs that have been replaced by edit events.
         let replaced_event_ids = Database::load_replaced_event_ids(&writer_connection);
 
-        let (t_handle, tx) = Database::spawn_writer(writer_connection, writer, replaced_event_ids);
+        let write_thread_panic_message = Arc::new(Mutex::new(None));
+
+        let (t_handle, tx) = Database::spawn_writer(
+            writer_connection,
+            writer,
+            replaced_event_ids,
+            write_thread_panic_message.clone(),
+        );
 
         Ok(Database {
             path: path.into(),
             connection: Arc::new(Mutex::new(connection)),
             pool,
             _write_thread: t_handle,
+            write_thread_panic_message,
             tx,
             index,
             config: config.clone(),
@@ -309,15 +320,38 @@ impl Database {
         replaced
     }
 
+    /// Start a writer thread.
+    ///
+    /// If the thread panics, the panic message will be stored in `panic_message_receiver`.
     fn spawn_writer(
         connection: PooledConnection<SqliteConnectionManager>,
         index_writer: IndexWriter,
         replaced_event_ids: HashSet<EventId>,
+        panic_message_receiver: Arc<Mutex<Option<String>>>,
     ) -> WriterRet {
         let (tx, rx): (_, Receiver<ThreadMessage>) = channel();
 
         let t_handle = thread::spawn(move || {
-            Self::writer_thread_body(connection, index_writer, replaced_event_ids, rx)
+            let thread_result = catch_unwind(AssertUnwindSafe(|| {
+                Self::writer_thread_body(connection, index_writer, replaced_event_ids, rx)
+            }));
+
+            // If the thread panicked, we store the panic message for later reporting. (In theory
+            // we could also do this by calling `JoinHandle.join` but, since that blocks and takes
+            // ownership of the `JoinHandle`, it ends up being a being more fiddly than it's worth.)
+            if let Err(panic) = thread_result {
+                let panic_message: &str = if let Some(string) = panic.downcast_ref::<String>() {
+                    string
+                } else if let Some(str) = panic.downcast_ref::<&str>() {
+                    str
+                } else {
+                    "Unknown message"
+                };
+                panic_message_receiver
+                    .lock()
+                    .unwrap()
+                    .replace(panic_message.to_owned());
+            };
         });
 
         (t_handle, tx)
