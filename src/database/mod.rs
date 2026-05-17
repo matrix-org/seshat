@@ -23,6 +23,7 @@ use r2d2::{Pool, PooledConnection};
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::ToSql;
 use std::panic::{catch_unwind, AssertUnwindSafe};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::{
     collections::HashSet,
     fs,
@@ -79,6 +80,9 @@ pub struct Database {
     _write_thread: JoinHandle<()>,
     /// If the write thread panicked, the message it panicked with.
     write_thread_panic_message: Arc<Mutex<Option<String>>>,
+    /// Whether a shutdown message has been sent to the writer thread.
+    shutdown_sent: AtomicBool,
+
     tx: Sender<ThreadMessage>,
     index: Index,
     config: Config,
@@ -162,6 +166,7 @@ impl Database {
             pool,
             _write_thread: t_handle,
             write_thread_panic_message,
+            shutdown_sent: AtomicBool::new(false),
             tx,
             index,
             config: config.clone(),
@@ -573,6 +578,7 @@ impl Database {
     pub fn shutdown(self) -> Receiver<Result<()>> {
         let (sender, receiver): (_, Receiver<Result<()>>) = channel();
         let message = ThreadMessage::ShutDown(sender);
+        self.shutdown_sent.store(true, Ordering::Relaxed);
         self.tx
             .send(message)
             .expect("Couldn't shutdown, is the writer thread dead?");
