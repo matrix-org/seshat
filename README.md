@@ -15,6 +15,16 @@ Its main use is to be used as a full text search backend for Matrix clients.
 Seshat provides JavaScript bindings which can be found in the
 [seshat-node](seshat-node) subdir.
 
+### Building the native module (with hardware crypto)
+
+```sh
+cd seshat-node
+
+# N.B. aarch64 requires you to explicitly enable hardware AES via RUSTFLAGS
+# otherwise seshat uses 10-20x more CPU than it should.
+RUSTFLAGS="--cfg aes_armv8" npm run build-bundled
+```
+
 ## Usage
 
 There are two modes of operation for Seshat, adding live events as they
