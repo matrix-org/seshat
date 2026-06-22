@@ -415,7 +415,14 @@ impl Database {
                 }
                 ThreadMessage::HistoricEvents(m) => {
                     let (check, old_check, events, sender) = m;
-                    let ret = writer.write_historic_events(check, old_check, events, true);
+                    // Don't force a Tantivy commit for every history batch.
+                    // The crawler checkpoint and the events are persisted to
+                    // SQLite transactionally regardless of this flag, so backfill
+                    // progress is never lost; the index commit is instead
+                    // throttled (COMMIT_RATE / COMMIT_TIME), which lets many
+                    // batches coalesce into one commit and avoids a
+                    // merge/decrypt storm during history backfill.
+                    let ret = writer.write_historic_events(check, old_check, events, false);
                     // Same as the previous one, fine to ignore the error on the send.
                     let _e = sender.send(ret);
                 }

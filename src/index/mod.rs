@@ -19,7 +19,10 @@ mod encrypted_stream;
 
 use std::{
     path::Path,
-    sync::{Arc, RwLock},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, RwLock,
+    },
     time::Duration,
 };
 
@@ -95,6 +98,11 @@ pub(crate) struct Index {
     date_field: tv::schema::Field,
     room_id_field: tv::schema::Field,
     search_cache: Arc<RwLock<LruCache<Uuid, Search>>>,
+    // Set by the writer whenever it commits, cleared when the reader is
+    // reloaded. Lets `get_searcher()` reload lazily (see below) instead of
+    // relying on Tantivy's `OnCommit` policy, which re-opens and decrypts every
+    // segment on every commit even while nobody is searching.
+    reload_needed: Arc<AtomicBool>,
 }
 
 #[derive(Clone)]
@@ -122,6 +130,9 @@ pub(crate) struct Writer {
     added_events: usize,
     commit_timestamp: std::time::Instant,
     room_id_field: tv::schema::Field,
+    // Shared with the `Index`; flipped to `true` after every commit so the
+    // searcher knows it needs to reload before serving the next search.
+    reload_needed: Arc<AtomicBool>,
 }
 
 impl Writer {
@@ -136,6 +147,7 @@ impl Writer {
                 || self.commit_timestamp.elapsed() >= COMMIT_TIME)
         {
             self.inner.commit()?;
+            self.reload_needed.store(true, Ordering::Release);
             self.added_events = 0;
             self.commit_timestamp = std::time::Instant::now();
             Ok(true)
@@ -172,6 +184,7 @@ impl Writer {
         let term = Term::from_field_text(self.event_id_field, event_id);
         self.inner.delete_term(term);
         self.inner.commit().unwrap();
+        self.reload_needed.store(true, Ordering::Release);
     }
 
     pub fn wait_merging_threads(self) -> Result<(), tv::TantivyError> {
@@ -410,7 +423,15 @@ impl Index {
         let schema = schemabuilder.build();
 
         let index = Index::open_index(path, config, schema)?;
-        let reader = index.reader()?;
+        // Use a manual reload policy and reload lazily from `get_searcher()`.
+        // Tantivy's default `OnCommit` policy spawns a watcher that reloads the
+        // reader on every commit, which re-opens (and decrypts) every segment -
+        // very expensive for a large encrypted index that is being bulk-indexed
+        // while no searches are happening.
+        let reader = index
+            .reader_builder()
+            .reload_policy(tv::ReloadPolicy::Manual)
+            .try_into()?;
 
         // Register tokenizer based on mode
         match &config.tokenizer_mode {
@@ -447,6 +468,7 @@ impl Index {
             date_field,
             room_id_field,
             search_cache: Arc::new(RwLock::new(LruCache::new(SEARCH_CACHE_SIZE))),
+            reload_needed: Arc::new(AtomicBool::new(false)),
         })
     }
 
@@ -501,6 +523,13 @@ impl Index {
     }
 
     pub fn get_searcher(&self) -> IndexSearcher {
+        // Lazily reload the reader, but only if a commit has happened since the
+        // last reload. During bulk indexing (no searches) this never fires, so
+        // we avoid re-decrypting every segment on every commit. A reload error
+        // is non-fatal: keep serving the previous generation and retry next time.
+        if self.reload_needed.swap(false, Ordering::Acquire) && self.reader.reload().is_err() {
+            self.reload_needed.store(true, Ordering::Release);
+        }
         let searcher = self.reader.searcher();
         let schema = self.index.schema();
         let tokenizer = self.index.tokenizers().clone();
@@ -521,6 +550,7 @@ impl Index {
     }
 
     pub fn reload(&self) -> Result<(), tv::TantivyError> {
+        self.reload_needed.store(false, Ordering::Release);
         self.reader.reload()
     }
 
@@ -538,6 +568,7 @@ impl Index {
             date_field: self.date_field,
             added_events: 0,
             commit_timestamp: std::time::Instant::now(),
+            reload_needed: self.reload_needed.clone(),
         })
     }
 }
