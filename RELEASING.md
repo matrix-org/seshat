@@ -13,7 +13,7 @@ git switch -c release-5.x.x
    - The Cargo.toml, Cargo.lock, and package.json file of the Node bindings
    - The CHANGELOG.md file
 
-3. Commit the version bump and create a tag for this commit.
+3. Commit the version bump and create a tag (`x.x.x`) for this commit.
 4. After the PR was approved, merge it using a merge commit. Update the tag if
    necessary.
 5. Use `cargo publish` in the root folder to publish the Rust crate, you can use
@@ -21,4 +21,5 @@ git switch -c release-5.x.x
 6. Switch to the node bindings folder and use `pnpm pack` to create a package
    and `pnpm publish` to publish the package.
 7. Push the tag.
-8. Create a release on Github and copy the changelog for the current release.
+8. CI will create a draft release on GitHub with the built artifacts, add latest
+   changes to the changelog and publish.
