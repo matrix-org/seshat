@@ -161,6 +161,10 @@ impl Database {
         let writer_connection = pool.get()?;
         Database::unlock(&writer_connection, config)?;
         Database::set_pragmas(&writer_connection)?;
+        // Establish WAL mode (persistent) and truncate the WAL once at startup,
+        // on the writer connection only - these take a database lock so must not
+        // run per connection acquisition.
+        Database::init_pragmas(&writer_connection)?;
 
         // Load the set of event IDs that have been replaced by edit events.
         let replaced_event_ids = Database::load_replaced_event_ids(&writer_connection);
@@ -230,10 +234,34 @@ impl Database {
         }
     }
 
+    /// Apply the per-connection PRAGMAs. These are connection-scoped settings
+    /// that are cheap and take no database lock, so they must run on every
+    /// connection (the writer and every pooled reader acquired via
+    /// `get_connection`).
+    ///
+    /// Note: this deliberately does NOT set `journal_mode` or run
+    /// `wal_checkpoint`. Both of those take a database-level lock and contend
+    /// with the writer; running them on every reader acquisition was a major
+    /// source of "database is locked" errors (every search / isRoomIndexed
+    /// would briefly fight the writer). `journal_mode=WAL` is persistent in the
+    /// database file, so it only needs to be set once - see `init_pragmas`.
     fn set_pragmas(connection: &rusqlite::Connection) -> Result<()> {
         connection.pragma_update(None, "foreign_keys", &1 as &dyn ToSql)?;
-        connection.pragma_update(None, "journal_mode", "WAL")?;
         connection.pragma_update(None, "synchronous", "NORMAL")?;
+        // Wait for locks instead of failing immediately with "database is
+        // locked". With the default (0), any momentary contention makes the
+        // operation fail instantly, which wedges the crawler.
+        connection.busy_timeout(std::time::Duration::from_secs(5))?;
+        Ok(())
+    }
+
+    /// One-time, database-level initialisation run once at startup on the writer
+    /// connection. These operations take a database lock, so they must NOT run
+    /// on every connection acquisition. `journal_mode=WAL` is persistent in the
+    /// database file (it applies to all subsequent connections automatically),
+    /// and the WAL is truncated once here rather than on every read.
+    fn init_pragmas(connection: &rusqlite::Connection) -> Result<()> {
+        connection.pragma_update(None, "journal_mode", "WAL")?;
         connection.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);")?;
         Ok(())
     }
