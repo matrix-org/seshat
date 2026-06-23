@@ -62,18 +62,39 @@ const TANTIVY_WRITER_HEAP_SIZE: usize = 50_000_000;
 // the number of spawned threads keeps on increasing.
 //
 // To mitigate this we limit the commit rate using the following constants. We
-// either wait for 500 events to be queued up or wait 5 seconds.
+// either wait for COMMIT_RATE events to be queued up or wait COMMIT_TIME.
 //
-// Those constants have been picked empirically by running the database example.
-// The COMMIT_TIME is fairly conservative. This does mean that users will have
-// to wait 5 seconds before they will manage to see search results for newly
-// added events.
+// COMMIT_TIME is the upper bound on how long background indexing waits before
+// flushing accumulated events into searchable segments. It's deliberately coarse
+// (a minute) so that during idle/backfill we commit in occasional bursts rather
+// than a constant trickle - far fewer fsyncs and segment merges, letting the CPU
+// race to idle for better battery life. This does NOT make recently-indexed
+// events take up to a minute to appear in searches: the search path issues a
+// `force_commit` first (see Database::search / the `commit` binding), so opening
+// search always flushes pending events immediately. The wait is purely how long
+// we let events batch while nobody is looking.
+//
+// COMMIT_RATE bounds how big a batch we'll accumulate before committing during a
+// high-volume backfill - a larger value means fewer, bigger segments (and far
+// fewer merges) while the crawler is busy. It also caps how many uncommitted
+// events have to be replayed from SQLite after a crash, so the COMMIT_TIME wait
+// can't let an unbounded backlog build up.
+//
+// It's set high enough that during normal (network-paced) backfill the COMMIT_TIME
+// timer is what actually triggers commits, not this count: at ~hundreds of events
+// per second from /messages, a low cap (e.g. 2000) fired every few seconds and
+// produced ~15 small segments per minute, each carrying its own AES + HMAC-SHA256
+// finalization, file opens and eventual merge. Letting ~a minute's worth of events
+// coalesce into one segment cuts that per-segment overhead by ~10x. The value sits
+// comfortably within TANTIVY_WRITER_HEAP_SIZE (Tantivy self-flushes a segment if
+// the heap fills first, so this can't overrun memory).
 
 /// How many events should we add to the index before we are allowed to commit.
-const COMMIT_RATE: usize = 500;
+const COMMIT_RATE: usize = 20000;
 /// How long should we wait between commits if there aren't enough events
-/// committed.
-const COMMIT_TIME: Duration = Duration::from_secs(5);
+/// committed. Coarse on purpose to batch background indexing; the search path
+/// force-commits, so this never delays search freshness.
+const COMMIT_TIME: Duration = Duration::from_secs(60);
 
 /// How many searches should be cached so pagination is supported.
 const SEARCH_CACHE_SIZE: usize = 100;
