@@ -11,7 +11,6 @@ use std::{convert::TryInto, io::Error as IoError};
 
 use r2d2::PooledConnection;
 use r2d2_sqlite::SqliteConnectionManager;
-use rusqlite::ToSql;
 
 use crate::{
     config::Config,
@@ -94,9 +93,8 @@ impl RecoveryDatabase {
         let db_path = path.as_ref().join(EVENTS_DB_NAME);
         let pool = Database::get_pool(&db_path, config)?;
 
+        // Keyed + per-connection pragmas already applied by the pool init hook.
         let mut connection = pool.get()?;
-        Database::unlock(&connection, config)?;
-        connection.pragma_update(None, "foreign_keys", &1 as &dyn ToSql)?;
 
         let (version, _) = match Database::get_version(&mut connection) {
             Ok(ret) => ret,
@@ -285,9 +283,8 @@ impl RecoveryDatabase {
     ///
     /// Note that this connection should only be used for reading.
     pub fn get_connection(&self) -> Result<Connection> {
+        // Already keyed + pragma'd by the pool's init hook (see `build_manager`).
         let connection = self.pool.get()?;
-        Database::unlock(&connection, &self.config)?;
-        Database::set_pragmas(&connection)?;
 
         Ok(Connection {
             inner: connection,

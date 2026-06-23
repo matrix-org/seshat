@@ -131,10 +131,9 @@ impl Database {
         let db_path = path.as_ref().join(EVENTS_DB_NAME);
         let pool = Self::get_pool(&db_path, config)?;
 
+        // Connections from the pool are already keyed and have their per-connection
+        // pragmas applied by the manager's init hook (see `build_manager`).
         let mut connection = pool.get()?;
-
-        Database::unlock(&connection, config)?;
-        Database::set_pragmas(&connection)?;
 
         let (version, reindex_needed) = match Database::get_version(&mut connection) {
             Ok(ret) => ret,
@@ -159,8 +158,7 @@ impl Database {
         // a new database and we'll end up with two connections using differing
         // keys and writes/reads to one of the connections might fail.
         let writer_connection = pool.get()?;
-        Database::unlock(&writer_connection, config)?;
-        Database::set_pragmas(&writer_connection)?;
+        // Keyed + per-connection pragmas already applied by the pool init hook.
         // Establish WAL mode (persistent) and truncate the WAL once at startup,
         // on the writer connection only - these take a database lock so must not
         // run per connection acquisition.
@@ -191,61 +189,111 @@ impl Database {
         })
     }
 
-    fn get_pool(db_path: &PathBuf, config: &Config) -> Result<Pool<SqliteConnectionManager>> {
-        let manager = SqliteConnectionManager::file(db_path);
-        let pool = r2d2::Pool::new(manager)?;
-        let connection = pool.get()?;
+    /// Build the connection manager for the events DB pool.
+    ///
+    /// The `with_init` hook runs once per *physical* connection (r2d2 pools and
+    /// reuses connections), so the expensive SQLCipher `PRAGMA key` - which runs
+    /// PBKDF2 with ~256k iterations - happens once per connection rather than on
+    /// every checkout. Keying on every `get_connection` instead made startup burn
+    /// seconds of CPU re-deriving the key for each `isRoomIndexed`/search during
+    /// the reconciliation scan.
+    fn build_manager(db_path: &Path, config: &Config) -> SqliteConnectionManager {
+        #[cfg(feature = "encryption")]
+        let passphrase = config.passphrase.clone();
+        #[cfg(not(feature = "encryption"))]
+        let _ = config;
 
-        // Try to unlock a single connection.
-        match Database::unlock(&connection, config) {
-            // We're fine, the connection was returned successfully, we can return the pool.
-            Ok(_) => Ok(pool),
-            Err(_) => {
-                let Some(passphrase) = &config.passphrase else {
-                    // No passphrase was provided, and we failed to unlock a connection, return an
-                    // error.
-                    return Err(Error::DatabaseUnlockError("Invalid passphrase".to_owned()));
-                };
-
-                // Ok, let's see if the unlock of the connection failed because of new default
-                // settings for the cipher settings, let's see if we can migrate the cipher settings.
-                // Take a look at the documentation of cipher_migrate[1] for more info.
-                //
-                // [1]: https://www.zetetic.net/sqlcipher/sqlcipher-api/#cipher_migrate
-                let connection = pool.get()?;
+        SqliteConnectionManager::file(db_path).with_init(move |connection| {
+            #[cfg(feature = "encryption")]
+            if let Some(ref passphrase) = passphrase {
                 connection.pragma_update(None, "key", &passphrase.as_str() as &dyn ToSql)?;
-
-                let mut statement = connection.prepare("PRAGMA cipher_migrate")?;
-                let result = statement.query_row([], |row| row.get::<usize, String>(0))?;
-
-                // The cipher_migrate pragma returns a single row/column with the value set to `0`
-                // if we succeeded.
-                if result == "0" {
-                    // In this case the migration was successful and we can now recreate the pool
-                    // so the new settings come into play.
-                    let manager = SqliteConnectionManager::file(db_path);
-                    let pool = r2d2::Pool::new(manager)?;
-
-                    Ok(pool)
-                } else {
-                    Err(Error::DatabaseUnlockError("Invalid passphrase".to_owned()))
-                }
             }
+            Database::set_pragmas(connection)
+        })
+    }
+
+    fn get_pool(db_path: &Path, config: &Config) -> Result<Pool<SqliteConnectionManager>> {
+        // Ensure the database opens under the current cipher settings, migrating it
+        // on a bare connection if it predates them. This must happen BEFORE we open
+        // the init-hook pool below: that pool keys every connection at connect time,
+        // and keying a connection against an older-cipher database and holding it
+        // open while we migrate corrupts the in-place `cipher_migrate` (after which
+        // no connection can decrypt the database).
+        Self::migrate_cipher_settings_if_needed(db_path, config)?;
+
+        Ok(r2d2::Pool::new(Self::build_manager(db_path, config))?)
+    }
+
+    /// Open the database on a bare (non-init-hook) connection and, if it was
+    /// created with older SQLCipher cipher defaults, migrate it in place to the
+    /// current ones so the init-hook pool can subsequently key it normally.
+    ///
+    /// [1]: https://www.zetetic.net/sqlcipher/sqlcipher-api/#cipher_migrate
+    #[cfg(feature = "encryption")]
+    fn migrate_cipher_settings_if_needed(db_path: &Path, config: &Config) -> Result<()> {
+        let Some(passphrase) = config.passphrase.as_ref() else {
+            return Ok(());
+        };
+
+        let bare = r2d2::Pool::new(SqliteConnectionManager::file(db_path))?;
+
+        // Probe on one connection: key it and see if it decrypts the database.
+        let probe = bare.get()?;
+
+        let mut statement = probe.prepare("PRAGMA cipher_version")?;
+        let results = statement.query_map([], |row| row.get::<usize, String>(0))?;
+        if results.count() != 1 {
+            return Err(Error::SqlCipherError(
+                "Sqlcipher support is missing".to_string(),
+            ));
+        }
+
+        probe.pragma_update(None, "key", &passphrase.as_str() as &dyn ToSql)?;
+
+        // If we can read the schema the database already uses the current cipher
+        // settings and there's nothing to migrate.
+        let unlocked = probe
+            .query_row("SELECT COUNT(*) FROM sqlite_master", [], |row| {
+                row.get::<usize, i64>(0)
+            })
+            .is_ok();
+        if unlocked {
+            return Ok(());
+        }
+
+        // Otherwise it was created with older cipher defaults; migrate it in place.
+        // `cipher_migrate` has to run on a connection whose only prior operation is
+        // `PRAGMA key` - the failed read above would break it - so do it on a fresh
+        // connection. The `probe` connection is still checked out, so this is a
+        // distinct physical connection. cipher_migrate returns "0" on success.
+        let connection = bare.get()?;
+        connection.pragma_update(None, "key", &passphrase.as_str() as &dyn ToSql)?;
+        let mut statement = connection.prepare("PRAGMA cipher_migrate")?;
+        let result = statement.query_row([], |row| row.get::<usize, String>(0))?;
+        if result == "0" {
+            Ok(())
+        } else {
+            Err(Error::DatabaseUnlockError("Invalid passphrase".to_owned()))
         }
     }
 
-    /// Apply the per-connection PRAGMAs. These are connection-scoped settings
-    /// that are cheap and take no database lock, so they must run on every
-    /// connection (the writer and every pooled reader acquired via
-    /// `get_connection`).
+    #[cfg(not(feature = "encryption"))]
+    fn migrate_cipher_settings_if_needed(_: &Path, _: &Config) -> Result<()> {
+        Ok(())
+    }
+
+    /// Apply the cheap, connection-scoped PRAGMAs. Run once per *physical*
+    /// connection from the pool's init hook (see `build_manager`), since these
+    /// settings persist for the connection's lifetime - there's no need to
+    /// re-apply them on every pool checkout.
     ///
     /// Note: this deliberately does NOT set `journal_mode` or run
     /// `wal_checkpoint`. Both of those take a database-level lock and contend
-    /// with the writer; running them on every reader acquisition was a major
-    /// source of "database is locked" errors (every search / isRoomIndexed
-    /// would briefly fight the writer). `journal_mode=WAL` is persistent in the
-    /// database file, so it only needs to be set once - see `init_pragmas`.
-    fn set_pragmas(connection: &rusqlite::Connection) -> Result<()> {
+    /// with the writer; running them on every connection was a major source of
+    /// "database is locked" errors (every search / isRoomIndexed would briefly
+    /// fight the writer). `journal_mode=WAL` is persistent in the database file,
+    /// so it only needs to be set once - see `init_pragmas`.
+    fn set_pragmas(connection: &rusqlite::Connection) -> std::result::Result<(), rusqlite::Error> {
         connection.pragma_update(None, "foreign_keys", &1 as &dyn ToSql)?;
         connection.pragma_update(None, "synchronous", "NORMAL")?;
         // Wait for locks instead of failing immediately with "database is
@@ -295,39 +343,6 @@ impl Database {
         let receiver = self.shutdown();
         receiver.recv().unwrap()?;
 
-        Ok(())
-    }
-
-    #[cfg(feature = "encryption")]
-    fn unlock(connection: &rusqlite::Connection, config: &Config) -> Result<()> {
-        let passphrase: &String = if let Some(ref p) = config.passphrase {
-            p
-        } else {
-            return Ok(());
-        };
-
-        let mut statement = connection.prepare("PRAGMA cipher_version")?;
-        let results = statement.query_map([], |row| row.get::<usize, String>(0))?;
-
-        if results.count() != 1 {
-            return Err(Error::SqlCipherError(
-                "Sqlcipher support is missing".to_string(),
-            ));
-        }
-
-        connection.pragma_update(None, "key", passphrase as &dyn ToSql)?;
-
-        let count: std::result::Result<i64, rusqlite::Error> =
-            connection.query_row("SELECT COUNT(*) FROM sqlite_master", [], |row| row.get(0));
-
-        match count {
-            Ok(_) => Ok(()),
-            Err(_) => Err(Error::DatabaseUnlockError("Invalid passphrase".to_owned())),
-        }
-    }
-
-    #[cfg(not(feature = "encryption"))]
-    fn unlock(_: &rusqlite::Connection, _: &Config) -> Result<()> {
         Ok(())
     }
 
@@ -626,9 +641,9 @@ impl Database {
     /// Get a database connection.
     /// Note that this connection should only be used for reading.
     pub fn get_connection(&self) -> Result<Connection> {
+        // Already keyed + pragma'd by the pool's init hook (see `build_manager`).
+        // Crucially this means no per-checkout SQLCipher key derivation (PBKDF2).
         let connection = self.pool.get()?;
-        Database::unlock(&connection, &self.config)?;
-        Database::set_pragmas(&connection)?;
 
         Ok(Connection {
             inner: connection,
