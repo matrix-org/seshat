@@ -4,12 +4,16 @@ Node.js bindings for the Matrix message database/indexer Seshat.
 
 ## Installation
 
-To install the bindings rust and yarn are needed:
+Binaries for common platforms are build for each release, check
+the releases page to see if your platform is supported.
 
-    $ yarn && yarn run build-bundled
+To install for a supported platform, you only need yarn. Otherwise
+you will also need to install rust.
+
+    $ yarn
 
 The above command will compile all the necessary rust libraries, install
-javascript dependencies and build a node module.
+javascript dependencies and build a node module (unless a prebuilt is available).
 
 This will build a fully static version, with SQLCipher and OpenSSL statically
 built and linked by cargo.
