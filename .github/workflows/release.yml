@@ -126,12 +126,16 @@ jobs:
           mkdir -p dist
           find artifacts/ -name "*.node" -exec mv {} dist/ \;
 
+      - name: Generate checksums
+        run: sha256sum dist/*.node > dist/checksums.txt
+
       - name: Create draft GitHub Release
         run: |
           gh release create "${{ github.ref_name }}" \
             --draft \
             --generate-notes \
             --title "${{ github.ref_name }}" \
-            dist/*.node
+            dist/*.node \
+            dist/checksums.txt
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

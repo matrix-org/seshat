@@ -22,6 +22,8 @@
   "scripts": {
     "build": "cargo-cp-artifact -nc index.node -- cargo build --message-format=json-render-diagnostics --release",
     "build-bundled": "yarn run build --features=bundled-sqlcipher",
+    "download": "node scripts/download.js",
+    "postinstall": "yarn download",
     "test": "jest",
     "lint": "eslint lib/index.js"
   }
