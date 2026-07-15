@@ -363,7 +363,7 @@ describe('Database', function() {
     it('should not barf on nul bytes in the event', async function() {
         const db = createDb();
         const events = [{event: nulByteEvent, profile: matrixProfileOnlyDisplayName}];
-        db.addHistoricEvents(events);
+        await db.addHistoricEvents(events);
         await db.commit(true);
         db.reload();
     });
