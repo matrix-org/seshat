@@ -25,14 +25,14 @@ use seshat::{Database, Event, Profile};
 use tempfile::tempdir;
 
 let tmpdir = tempdir().unwrap();
-let mut db = Database::new(tmpdir.path()).unwrap();
+let db = Database::new(tmpdir.path()).unwrap();
 
 /// Method to call for every live event that gets received during a sync.
 fn add_live_event(event: Event, profile: Profile, database: &Database) {
     database.add_event(event, profile);
 }
 /// Method to call on every successful sync after live events were added.
-fn on_sync(database: &mut Database) {
+fn on_sync(database: &Database) {
     database.commit().unwrap();
 }
 ```
