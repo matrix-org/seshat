@@ -279,7 +279,7 @@ fn save_and_search_historic_events() {
 #[test]
 fn get_size() {
     let tmpdir = tempdir().unwrap();
-    let mut db = Database::new(tmpdir.path()).unwrap();
+    let db = Database::new(tmpdir.path()).unwrap();
 
     let profile = Profile::new("Alice", "");
 

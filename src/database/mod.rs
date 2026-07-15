@@ -497,7 +497,7 @@ impl Database {
         receiver
     }
 
-    fn commit_helper(&mut self, force: bool) -> Receiver<Result<()>> {
+    fn commit_helper(&self, force: bool) -> Receiver<Result<()>> {
         let (sender, receiver): (_, Receiver<Result<()>>) = channel();
         self.send_message_to_writer(ThreadMessage::Write(sender, force));
         receiver
@@ -506,7 +506,7 @@ impl Database {
     /// Commit the currently queued up events. This method will block. A
     /// non-blocking version of this method exists in the `commit_no_wait()`
     /// method.
-    pub fn commit(&mut self) -> Result<()> {
+    pub fn commit(&self) -> Result<()> {
         self.commit_helper(false).recv().unwrap()
     }
 
@@ -519,7 +519,7 @@ impl Database {
     /// the `force_commit_no_wait()` method.
     ///
     /// This should only be used for testing purposes.
-    pub fn force_commit(&mut self) -> Result<()> {
+    pub fn force_commit(&self) -> Result<()> {
         self.commit_helper(true).recv().unwrap()
     }
 
@@ -536,7 +536,7 @@ impl Database {
     ///
     /// Returns a receiver that will receive an empty message once the commit is
     /// done.
-    pub fn commit_no_wait(&mut self) -> Receiver<Result<()>> {
+    pub fn commit_no_wait(&self) -> Receiver<Result<()>> {
         self.commit_helper(false)
     }
 
@@ -549,7 +549,7 @@ impl Database {
     ///
     /// Returns a receiver that will receive an empty message once the commit is
     /// done.
-    pub fn force_commit_no_wait(&mut self) -> Receiver<Result<()>> {
+    pub fn force_commit_no_wait(&self) -> Receiver<Result<()>> {
         self.commit_helper(true)
     }
 
@@ -735,7 +735,7 @@ fn load_event() {
 #[test]
 fn commit_a_write() {
     let tmpdir = tempdir().unwrap();
-    let mut db = Database::new(tmpdir.path()).unwrap();
+    let db = Database::new(tmpdir.path()).unwrap();
     db.commit().unwrap();
 }
 
@@ -783,7 +783,7 @@ fn load_a_profile() {
 #[test]
 fn load_event_context() {
     let tmpdir = tempdir().unwrap();
-    let mut db = Database::new(tmpdir.path()).unwrap();
+    let db = Database::new(tmpdir.path()).unwrap();
     let profile = Profile::new("Alice", "");
 
     db.add_event(EVENT.clone(), profile.clone());
@@ -919,7 +919,7 @@ fn duplicate_empty_profiles() {
 #[test]
 fn is_empty() {
     let tmpdir = tempdir().unwrap();
-    let mut db = Database::new(tmpdir.path()).unwrap();
+    let db = Database::new(tmpdir.path()).unwrap();
     let connection = db.get_connection().unwrap();
     assert!(connection.is_empty().unwrap());
 
@@ -934,7 +934,7 @@ fn is_empty() {
 fn encrypted_db() {
     let tmpdir = tempdir().unwrap();
     let db_config = Config::new().set_passphrase("test");
-    let mut db = match Database::new_with_config(tmpdir.path(), &db_config) {
+    let db = match Database::new_with_config(tmpdir.path(), &db_config) {
         Ok(db) => db,
         Err(e) => panic!("Coulnd't open encrypted database {}", e),
     };
@@ -975,7 +975,7 @@ fn encrypted_db() {
 fn change_passphrase() {
     let tmpdir = tempdir().unwrap();
     let db_config = Config::new().set_passphrase("test");
-    let mut db = match Database::new_with_config(tmpdir.path(), &db_config) {
+    let db = match Database::new_with_config(tmpdir.path(), &db_config) {
         Ok(db) => db,
         Err(e) => panic!("Coulnd't open encrypted database {}", e),
     };
@@ -1093,7 +1093,7 @@ fn resume_committing() {
 #[test]
 fn delete_uncommitted() {
     let tmpdir = tempdir().unwrap();
-    let mut db = Database::new(tmpdir.path()).unwrap();
+    let db = Database::new(tmpdir.path()).unwrap();
     let profile = Profile::new("Alice", "");
 
     for i in 1..1000 {
@@ -1117,7 +1117,7 @@ fn delete_uncommitted() {
 #[test]
 fn stats_getting() {
     let tmpdir = tempdir().unwrap();
-    let mut db = Database::new(tmpdir.path()).unwrap();
+    let db = Database::new(tmpdir.path()).unwrap();
     let profile = Profile::new("Alice", "");
 
     for i in 0..1000 {
@@ -1209,7 +1209,7 @@ fn database_upgrade_v1_2() {
 #[test]
 fn delete_an_event() {
     let tmpdir = tempdir().unwrap();
-    let mut db = Database::new(tmpdir.path()).unwrap();
+    let db = Database::new(tmpdir.path()).unwrap();
     let profile = Profile::new("Alice", "");
 
     db.add_event(EVENT.clone(), profile.clone());
@@ -1235,7 +1235,7 @@ fn delete_an_event() {
 
     drop(db);
 
-    let mut db = Database::new(tmpdir.path()).unwrap();
+    let db = Database::new(tmpdir.path()).unwrap();
     assert_eq!(
         Database::load_pending_deletion_events(&db.connection.lock().unwrap())
             .unwrap()
@@ -1285,7 +1285,7 @@ fn add_events_with_null_byte() {
 #[test]
 fn is_room_indexed() {
     let tmpdir = tempdir().unwrap();
-    let mut db = Database::new(tmpdir.path()).unwrap();
+    let db = Database::new(tmpdir.path()).unwrap();
 
     let connection = db.get_connection().unwrap();
 
