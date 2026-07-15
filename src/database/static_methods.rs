@@ -126,7 +126,7 @@ impl Database {
             let mut stmt = transaction.prepare(&format!(
                 "DELETE from pending_deletion_events
                      WHERE event_id IN (?{})",
-                &parameter_str
+                parameter_str
             ))?;
 
             stmt.execute(params_from_iter(chunk))?;
@@ -154,7 +154,7 @@ impl Database {
             let mut stmt = transaction.prepare(&format!(
                 "DELETE from uncommitted_events
                      WHERE id IN (?{})",
-                &parameter_str
+                parameter_str
             ))?;
 
             stmt.execute(params_from_iter(chunk))?;
@@ -946,7 +946,7 @@ impl Database {
                  WHERE event_id IN (?{})
                  ORDER BY server_ts DESC
                  ",
-                &parameter_str
+                parameter_str
             ))?
         } else {
             connection.prepare(&format!(
@@ -957,7 +957,7 @@ impl Database {
                  INNER JOIN rooms on rooms.id = events.room_id
                  WHERE event_id IN (?{})
                  ",
-                &parameter_str
+                parameter_str
             ))?
         };
 

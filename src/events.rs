@@ -118,7 +118,7 @@ impl<T> Dummy<T> for Event {
             EventType::Message,
             "Hello world",
             Some("m.text"),
-            &format!("${}:{}", (0..u64::MAX).fake::<u64>(), &domain),
+            &format!("${}:{}", (0..u64::MAX).fake::<u64>(), domain),
             &format!(
                 "@{}:{}",
                 Username(EN).fake::<String>(),
