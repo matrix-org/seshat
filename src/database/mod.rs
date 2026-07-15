@@ -70,6 +70,7 @@ pub(crate) enum ThreadMessage {
     Write(Sender<Result<()>>, bool),
     Delete(Sender<Result<bool>>, EventId),
     ShutDown(Sender<Result<()>>),
+    Reload(Sender<Result<()>>),
 }
 
 impl ThreadMessage {
@@ -81,6 +82,7 @@ impl ThreadMessage {
             ThreadMessage::Write(_, _) => "Write",
             ThreadMessage::Delete(_, _) => "Delete",
             ThreadMessage::ShutDown(_) => "ShutDown",
+            ThreadMessage::Reload(_) => "Reload",
         }
     }
 }
@@ -430,6 +432,13 @@ impl Database {
                     let _e = sender.send(ret);
                     return;
                 }
+                ThreadMessage::Reload(sender) => {
+                    // Since tokio's mpsc is FIFO, it allows reald to be sure all commits
+                    // have been treated.
+                    // 
+                    // Same as the previous one, fine to ignore the error on the send.
+                    let _e = sender.send(Ok(()));
+                }
             };
         }
     }
@@ -526,7 +535,10 @@ impl Database {
     /// Reload the database so that a search reflects the state of the last
     /// commit. Note that this happens automatically and this method should be
     /// used only in unit tests.
-    pub fn reload(&mut self) -> Result<()> {
+    pub fn reload(&self) -> Result<()> {
+        let (sender, receiver) = channel();
+        self.send_message_to_writer(ThreadMessage::Reload(sender));
+        receiver.recv().unwrap()?;
         self.index.reload()?;
         Ok(())
     }

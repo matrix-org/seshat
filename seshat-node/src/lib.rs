@@ -267,8 +267,8 @@ impl Seshat {
         };
 
         let receiver = {
-            let db = &mut this.borrow_mut().database;
-            db.as_mut().map_or_else(
+            let db = &this.borrow().database;
+            db.as_ref().map_or_else(
                 || Err(CLOSED_ERROR),
                 |db| {
                     if force {
@@ -491,10 +491,10 @@ impl Seshat {
         };
 
         let ret = {
-            let db = &mut this.borrow_mut().database;
+            let db = &this.borrow().database;
 
             if wait {
-                db.as_mut().map_or_else(
+                db.as_ref().map_or_else(
                     || Err(CLOSED_ERROR),
                     |db| {
                         if force {
@@ -505,7 +505,7 @@ impl Seshat {
                     },
                 )
             } else {
-                db.as_mut().map_or_else(
+                db.as_ref().map_or_else(
                     || Err(CLOSED_ERROR),
                     |db| {
                         db.commit_no_wait();
