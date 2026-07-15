@@ -154,7 +154,7 @@ fn fake_event() -> Event {
         EventType::Message,
         "Hello world",
         Some("m.text"),
-        &format!("${}:{}", (0..10).fake::<u8>(), &domain),
+        &format!("${}:{}", (0..10).fake::<u8>(), domain),
         &format!(
             "@{}:{}",
             Username(EN).fake::<String>(),
