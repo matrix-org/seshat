@@ -212,10 +212,7 @@ pub(crate) fn deserialize_event<'a, C: Context<'a>>(
     let source: serde_json::Value = match source {
         Ok(s) => s,
         Err(e) => {
-            return cx.throw_type_error(format!(
-                "Couldn't load the event from the store: {}",
-                e.to_string()
-            ))
+            return cx.throw_type_error(format!("Couldn't load the event from the store: {}", e))
         }
     };
 
@@ -372,7 +369,7 @@ pub(crate) fn parse_event(
         "m.room.message" => EventType::Message,
         "m.room.name" => EventType::Name,
         "m.room.topic" => EventType::Topic,
-        e => return cx.throw_type_error(format!("Unsupported event type {e}")),
+        e => return cx.throw_type_error(format!("Unsupported event type {}", e)),
     };
 
     let key = match event_type {
