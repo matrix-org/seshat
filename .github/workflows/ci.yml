@@ -63,6 +63,7 @@ jobs:
           - linux / stable
           - linux / beta
           - macOS / stable
+          - windows / stable
 
         include:
           - name: linux / stable
@@ -72,6 +73,9 @@ jobs:
 
           - name: macOS / stable
             os: macOS-latest
+
+          - name: windows / stable
+            os: windows-latest
 
     steps:
       - name: Checkout
