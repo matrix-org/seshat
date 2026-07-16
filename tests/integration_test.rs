@@ -352,6 +352,7 @@ fn search_with_specific_key() {
 }
 
 #[test]
+#[cfg(not(windows))] // Fails with "The process cannot access the file because it is being used by another process."
 fn delete() {
     let tmpdir = tempdir().unwrap();
     let path: &Path = tmpdir.path();
