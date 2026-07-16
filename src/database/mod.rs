@@ -433,9 +433,9 @@ impl Database {
                     return;
                 }
                 ThreadMessage::Reload(sender) => {
-                    // Since tokio's mpsc is FIFO, it allows reald to be sure all commits
-                    // have been treated.
-                    // 
+                    // Since Tokio's mpsc is FIFO, receiving this message ensures all
+                    // previous write operations have been processed.
+                    //
                     // Same as the previous one, fine to ignore the error on the send.
                     let _e = sender.send(Ok(()));
                 }
@@ -754,7 +754,7 @@ fn commit_a_write() {
 #[test]
 fn save_the_event_multithreaded() {
     let tmpdir = tempdir().unwrap();
-    let mut db = Database::new(tmpdir.path()).unwrap();
+    let db = Database::new(tmpdir.path()).unwrap();
     let profile = Profile::new("Alice", "");
 
     db.add_event(EVENT.clone(), profile);
@@ -1030,7 +1030,7 @@ fn change_passphrase() {
 #[test]
 fn resume_committing() {
     let tmpdir = tempdir().unwrap();
-    let mut db = Database::new(tmpdir.path()).unwrap();
+    let db = Database::new(tmpdir.path()).unwrap();
     let profile = Profile::new("Alice", "");
 
     // Check that we don't have any uncommitted events.
@@ -1076,7 +1076,7 @@ fn resume_committing() {
         db = Database::new(tmpdir.path())
     }
 
-    let mut db = db.unwrap();
+    let db = db.unwrap();
 
     // We still have uncommitted events.
     assert_eq!(
@@ -1343,7 +1343,7 @@ fn edit_event_removes_original() {
     use crate::config::SearchConfig;
 
     let tmpdir = tempdir().unwrap();
-    let mut db = Database::new(tmpdir.path()).unwrap();
+    let db = Database::new(tmpdir.path()).unwrap();
     let profile = Profile::new("Alice", "");
 
     // Add an original message
@@ -1400,7 +1400,7 @@ fn original_event_skipped_if_edit_comes_first() {
     use crate::config::SearchConfig;
 
     let tmpdir = tempdir().unwrap();
-    let mut db = Database::new(tmpdir.path()).unwrap();
+    let db = Database::new(tmpdir.path()).unwrap();
     let profile = Profile::new("Alice", "");
 
     // Add an edit event FIRST (before the original)

@@ -175,7 +175,7 @@ fn create_db() {
 #[test]
 fn save_and_search() {
     let tmpdir = tempdir().unwrap();
-    let mut db = Database::new(tmpdir.path()).unwrap();
+    let db = Database::new(tmpdir.path()).unwrap();
     let profile = Profile::new("Alice", "");
 
     db.add_event(EVENT.clone(), profile);
@@ -190,7 +190,7 @@ fn save_and_search() {
 #[test]
 fn search_with_room() {
     let tmpdir = tempdir().unwrap();
-    let mut db = Database::new(tmpdir.path()).unwrap();
+    let db = Database::new(tmpdir.path()).unwrap();
     let profile = Profile::new("Alice", "");
 
     db.add_event(EVENT.clone(), profile);
@@ -228,7 +228,7 @@ fn search_with_room() {
 #[test]
 fn duplicate_events() {
     let tmpdir = tempdir().unwrap();
-    let mut db = Database::new(tmpdir.path()).unwrap();
+    let db = Database::new(tmpdir.path()).unwrap();
     let profile = Profile::new("Alice", "");
 
     db.add_event(EVENT.clone(), profile.clone());
@@ -305,7 +305,7 @@ fn get_size() {
 #[test]
 fn add_differing_events() {
     let tmpdir = tempdir().unwrap();
-    let mut db = Database::new(tmpdir.path()).unwrap();
+    let db = Database::new(tmpdir.path()).unwrap();
     let profile = Profile::new("Alice", "");
 
     db.add_event(EVENT.clone(), profile.clone());
@@ -324,7 +324,7 @@ fn add_differing_events() {
 #[test]
 fn search_with_specific_key() {
     let tmpdir = tempdir().unwrap();
-    let mut db = Database::new(tmpdir.path()).unwrap();
+    let db = Database::new(tmpdir.path()).unwrap();
     let profile = Profile::new("Alice", "");
     let searcher = db.get_searcher();
 
@@ -370,7 +370,7 @@ fn delete() {
 fn encrypted_save_and_search() {
     let tmpdir = tempdir().unwrap();
     let db_config = Config::new().set_passphrase("wordpass");
-    let mut db = Database::new_with_config(tmpdir.path(), &db_config).unwrap();
+    let db = Database::new_with_config(tmpdir.path(), &db_config).unwrap();
     let profile = Profile::new("Alice", "");
 
     db.add_event(EVENT.clone(), profile);
@@ -385,7 +385,7 @@ fn encrypted_save_and_search() {
 #[test]
 fn load_file_events() {
     let tmpdir = tempdir().unwrap();
-    let mut db = Database::new(tmpdir.path()).unwrap();
+    let db = Database::new(tmpdir.path()).unwrap();
     let profile = Profile::new("Alice", "");
 
     db.add_event(EVENT.clone(), profile.clone());
@@ -430,7 +430,7 @@ fn load_file_events() {
 #[test]
 fn load_file_events_directions() {
     let tmpdir = tempdir().unwrap();
-    let mut db = Database::new(tmpdir.path()).unwrap();
+    let db = Database::new(tmpdir.path()).unwrap();
     let profile = Profile::new("Alice", "");
 
     db.add_event(EVENT.clone(), profile.clone());
@@ -472,7 +472,7 @@ fn load_file_events_directions() {
 #[test]
 fn delete_events() {
     let tmpdir = tempdir().unwrap();
-    let mut db = Database::new(tmpdir.path()).unwrap();
+    let db = Database::new(tmpdir.path()).unwrap();
     let profile = Profile::new("Alice", "");
 
     db.add_event(EVENT.clone(), profile.clone());

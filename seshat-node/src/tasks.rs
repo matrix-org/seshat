@@ -106,7 +106,7 @@ impl Task for CommitTask {
     ) -> JsResult<'a, Self::JsEvent> {
         match result {
             Ok(_) => Ok(cx.undefined()),
-            Err(e) => cx.throw_error(format!("Error writing to database: {}", e.to_string())),
+            Err(e) => cx.throw_error(format!("Error writing to database: {}", e)),
         }
     }
 }
@@ -503,7 +503,7 @@ impl Task for DeleteEventTask {
     ) -> JsResult<'a, Self::JsEvent> {
         match result {
             Ok(b) => Ok(cx.boolean(b)),
-            Err(e) => cx.throw_error(format!("Error deleting an event: {}", e.to_string())),
+            Err(e) => cx.throw_error(format!("Error deleting an event: {}", e)),
         }
     }
 }
@@ -535,10 +535,7 @@ impl Task for ChangePassphraseTask {
     ) -> JsResult<'a, Self::JsEvent> {
         match result {
             Ok(_) => Ok(cx.undefined()),
-            Err(e) => cx.throw_error(format!(
-                "Error while changing the passphrase: {}",
-                e.to_string()
-            )),
+            Err(e) => cx.throw_error(format!("Error while changing the passphrase: {}", e)),
         }
     }
 }
@@ -566,10 +563,7 @@ impl Task for GetUserVersionTask {
                 let version = cx.number(version as f64);
                 Ok(version)
             }
-            Err(e) => cx.throw_error(format!(
-                "Error while getting the user version: {}",
-                e.to_string()
-            )),
+            Err(e) => cx.throw_error(format!("Error while getting the user version: {}", e)),
         }
     }
 }
@@ -595,10 +589,7 @@ impl Task for SetUserVersionTask {
     ) -> JsResult<'a, Self::JsEvent> {
         match result {
             Ok(_) => Ok(cx.undefined()),
-            Err(e) => cx.throw_error(format!(
-                "Error while setting the user version: {}",
-                e.to_string()
-            )),
+            Err(e) => cx.throw_error(format!("Error while setting the user version: {}", e)),
         }
     }
 }
