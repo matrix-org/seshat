@@ -10,9 +10,16 @@ use seshat::{
 use seshat::Config;
 
 use std::path::Path;
+use std::sync::mpsc::RecvTimeoutError;
+use std::sync::{mpsc, Once};
+use std::time::Duration;
+use std::{fs, iter, thread};
 use tempfile::tempdir;
 
 use fake::{faker::internet::raw::*, locales::*, Fake};
+use log::{info, warn};
+use rand::Rng;
+use serde_json::json;
 
 pub static EVENT_SOURCE: &str = "{
     content: {
@@ -276,6 +283,147 @@ fn save_and_search_historic_events() {
     assert!(checkpoints.contains(&checkpoint));
 }
 
+fn make_random_string(length: usize) -> String {
+    const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    let mut rng = rand::thread_rng();
+    let one_char = || CHARSET[rng.gen_range(0..CHARSET.len())] as char;
+    iter::repeat_with(one_char).take(length).collect()
+}
+
+/// A test which adds some events (including replacesments) to the database, and meanwhile
+/// messes with the access permissions on the database files to try to simulate Windows Defender
+/// or similar.
+///
+/// Regression test for https://github.com/matrix-org/seshat/issues/173.
+#[test]
+fn race_indexer_and_virus_scanner() {
+    init_logging();
+
+    let tmpdir = tempdir().unwrap();
+    let indexdir = tmpdir.path().to_owned();
+    let mut db = Database::new(&indexdir).unwrap();
+
+    // A thread which runs every few milliseconds, and removes write access to all the '.idx' and
+    // '.pos' files.
+    //
+    // The thread automatically exits when the test completes.
+    let (_tx, rx) = mpsc::channel::<()>();
+    thread::spawn(move || loop {
+        // Sleep for a while, but if the test thread disconnects, abort immediately and terminate
+        // the thread.
+        if let Err(RecvTimeoutError::Disconnected) = rx.recv_timeout(Duration::from_millis(50)) {
+            break;
+        }
+
+        // Find all the .pos and .idx files, and mark them as readonly.
+        for path in fs::read_dir(&indexdir)
+            .expect("unable to open index directory")
+            .map(|f| f.expect("unable to read index directory entry").path())
+            .filter(|p| {
+                p.extension()
+                    .is_some_and(|e| e.to_string_lossy() == "pos" || e.to_string_lossy() == "idx")
+            })
+        {
+            if let Err(e) = set_readonly(&path, true) {
+                // Likely the file moved under us
+                warn!(
+                    "failed to set file {} readonly: {}",
+                    path.to_string_lossy(),
+                    e
+                );
+            }
+        }
+    });
+
+    let profile = Profile::new("Alice", "");
+    let sender = format!(
+        "@{}:{}",
+        Username(EN).fake::<String>(),
+        FreeEmailProvider(EN).fake::<String>()
+    );
+
+    for cycle in 0..10 {
+        let mut events = Vec::new();
+
+        for ev in 0..10 {
+            // A unique event id, because duplicates are ignored
+            let event_id = format!("${}_{}:domain", cycle, ev);
+
+            // A reasonably unique string for the body
+            let body = make_random_string(8);
+
+            let mut event_source = json!({ "event_id": event_id });
+
+            // Some events replace earlier ones
+            if cycle > 0 && rand::random::<u8>() > 200 {
+                let original_event_id = format!("${}_{}:domain", cycle - 1, ev);
+                info!("{} replaces {}", event_id, original_event_id);
+                event_source.as_object_mut().unwrap().insert(
+                    "content".to_owned(),
+                    json!({ "m.relates_to": { "rel_type": "m.replace", "event_id": original_event_id }}),
+                );
+            }
+
+            let event = Event::new(
+                EventType::Message,
+                &body,
+                Some("m.text"),
+                &event_id,
+                &sender,
+                1516362244026,
+                &format!("!test_room_{}:localhost", cycle % 10),
+                &event_source.to_string(),
+            );
+
+            db.add_event(event.clone(), profile.clone());
+            events.push(event);
+        }
+
+        db.force_commit()
+            .unwrap_or_else(|e| warn!("Failed to commit event batch: {}", e));
+    }
+}
+
+/// Set readonly status of the given file.
+///
+/// On Windows, uses the `icacls` command to deny our user access to the files.
+#[cfg(windows)]
+fn set_readonly(path: &std::path::PathBuf, readonly: bool) -> std::io::Result<()> {
+    use std::io::ErrorKind;
+    use std::process::Command;
+
+    let user = std::env::var("USERNAME").unwrap();
+    let mut args = Vec::new();
+    args.push(path.to_str().unwrap().to_owned());
+    if readonly {
+        args.extend_from_slice(&["/deny".to_owned(), format!("{user}:(W)")])
+    } else {
+        args.extend_from_slice(&["/remove:d".to_owned(), user])
+    }
+    let status = Command::new("icacls").args(args).status()?;
+    if !status.success() {
+        return Err(std::io::Error::new(ErrorKind::Other, "icacls failed"));
+    }
+
+    Ok(())
+}
+
+/// Set readonly status of the given file.
+///
+/// On unix-like OSes, just does chmod a-w.
+#[cfg(not(windows))]
+fn set_readonly(path: &std::path::PathBuf, readonly: bool) -> std::io::Result<()> {
+    let mut perms = fs::metadata(path)?.permissions();
+
+    if perms.readonly() != readonly {
+        info!("Setting {} readonly {}", path.to_string_lossy(), readonly);
+        perms.set_readonly(readonly);
+        fs::set_permissions(path, perms)?;
+    }
+
+    Ok(())
+}
+
 #[test]
 fn get_size() {
     let tmpdir = tempdir().unwrap();
@@ -499,4 +647,11 @@ fn delete_events() {
         .results;
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].event_source, TOPIC_EVENT.source);
+}
+
+fn init_logging() {
+    static INIT: Once = Once::new();
+    INIT.call_once(|| {
+        let _ = env_logger::try_init_from_env(env_logger::Env::default().default_filter_or("warn"));
+    });
 }
