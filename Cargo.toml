@@ -57,6 +57,8 @@ thiserror = "1.0.26"
 tempfile = "3.2.0"
 lazy_static = "1.4.0"
 fake = "2.4.3"
+env_logger = "0.10.0"
+log = "0.4.33"
 
 [patch.crates-io]
 # Ensure that seshat-node uses the local seshat version.
