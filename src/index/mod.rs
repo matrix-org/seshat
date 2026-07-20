@@ -119,7 +119,10 @@ pub(crate) struct Writer {
     event_id_field: tv::schema::Field,
     sender_field: tv::schema::Field,
     date_field: tv::schema::Field,
-    added_events: usize,
+
+    /// Number of events added or deleted since the last commit
+    events_pending_commit: usize,
+
     commit_timestamp: std::time::Instant,
     room_id_field: tv::schema::Field,
 }
@@ -130,13 +133,13 @@ impl Writer {
     }
 
     fn commit_helper(&mut self, force: bool) -> Result<bool, tv::TantivyError> {
-        if self.added_events > 0
+        if self.events_pending_commit > 0
             && (force
-                || self.added_events >= COMMIT_RATE
+                || self.events_pending_commit >= COMMIT_RATE
                 || self.commit_timestamp.elapsed() >= COMMIT_TIME)
         {
             self.inner.commit()?;
-            self.added_events = 0;
+            self.events_pending_commit = 0;
             self.commit_timestamp = std::time::Instant::now();
             Ok(true)
         } else {
@@ -164,14 +167,14 @@ impl Writer {
         doc.add_u64(self.date_field, event.server_ts as u64);
 
         self.inner.add_document(doc);
-        self.added_events += 1;
+        self.events_pending_commit += 1;
     }
 
     /// Delete the event with the given event id from the index.
     pub fn delete_event(&mut self, event_id: &str) {
         let term = Term::from_field_text(self.event_id_field, event_id);
         self.inner.delete_term(term);
-        self.inner.commit().unwrap();
+        self.events_pending_commit += 1;
     }
 
     pub fn wait_merging_threads(self) -> Result<(), tv::TantivyError> {
@@ -536,7 +539,7 @@ impl Index {
             room_id_field: self.room_id_field,
             sender_field: self.sender_field,
             date_field: self.date_field,
-            added_events: 0,
+            events_pending_commit: 0,
             commit_timestamp: std::time::Instant::now(),
         })
     }
@@ -639,12 +642,12 @@ fn event_count() {
 
     let mut writer = index.get_writer().unwrap();
 
-    assert_eq!(writer.added_events, 0);
+    assert_eq!(writer.events_pending_commit, 0);
     writer.add_event(&EVENT);
-    assert_eq!(writer.added_events, 1);
+    assert_eq!(writer.events_pending_commit, 1);
 
     writer.force_commit().unwrap();
-    assert_eq!(writer.added_events, 0);
+    assert_eq!(writer.events_pending_commit, 0);
 }
 
 #[test]
