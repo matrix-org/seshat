@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+- Fix panic that could occur in the writer thread when deleting or replacing events.
+  [[#195](https://github.com/matrix-org/seshat/pull/195)]
+
 ## 4.3.0 - 2026-05-18
 
 ### Changed
