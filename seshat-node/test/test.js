@@ -152,6 +152,18 @@ function createDb() {
     return db;
 }
 
+async function withTempDir(fixturePath, testCallback) {
+    const testDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'seshat-test-'));
+    try {
+        if (fixturePath) {
+            await fs.promises.cp(path.resolve(fixturePath), testDir, { recursive: true });
+        }
+        await testCallback(testDir);
+    } finally {
+        await fs.promises.rm(testDir, { recursive: true, force: true });
+    }
+}
+
 const exampleEvents = [
   {event: matrixEvent, profile: matrixProfileOnlyDisplayName}
 ]
@@ -628,16 +640,19 @@ describe('Database', function() {
         expect(() => db.addEvent(badEvent, matrixProfile)).toThrow(TypeError('Event doesn\'t contain a valid timestamp'));
     });
 
-    it('should allow us to reindex a database', async function() {
-        const dir = '../data/database/v2';
-        expect(() => new Seshat(dir)).toThrow(ReindexError);
+    it('should allow us to reindex a database', () => 
+        withTempDir('../data/database/v2', async (testDir) => {
+            expect(() => new Seshat(testDir)).toThrow(ReindexError);
 
-        const recovery = new SeshatRecovery(dir);
-        expect(await recovery.getUserVersion()).toEqual(0);
-        await recovery.reindex();
+            const recovery = new SeshatRecovery(testDir);
+            expect(await recovery.getUserVersion()).toEqual(0);
+            await recovery.reindex();
+            await recovery.shutdown();
 
-        const db = new Seshat(dir);
-        const results = await db.search({search_term: 'Hello'});
-        expect(results.count).not.toBe(0);
-    });
+            const db = new Seshat(testDir);
+            const results = await db.search({ search_term: 'Hello' });
+            expect(results.count).not.toBe(0);
+            await db.shutdown();
+        })
+    );
 });
