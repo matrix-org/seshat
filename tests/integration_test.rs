@@ -301,7 +301,7 @@ fn race_indexer_and_virus_scanner() {
 
     let tmpdir = tempdir().unwrap();
     let indexdir = tmpdir.path().to_owned();
-    let mut db = Database::new(&indexdir).unwrap();
+    let db = Database::new(&indexdir).unwrap();
 
     // A thread which runs every few milliseconds, and removes write access to all the '.idx' and
     // '.pos' files.
