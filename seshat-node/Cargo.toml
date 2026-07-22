@@ -1,6 +1,6 @@
 [package]
 name = "matrix-seshat"
-version = "4.2.0"
+version = "5.0.0"
 authors = ["Damir Jelić <poljar@termina.org.uk>"]
 edition = "2018"
 license = "Apache-2.0"

@@ -5,7 +5,7 @@ Seshat is released manually using `cargo publish` and `pnpm pack/publish`.
 1. Create a release branch
 
 ```bash
-git switch -c release-4.x.x
+git switch -c release-5.x.x
 ```
 
 2. Bump the version in the following files:

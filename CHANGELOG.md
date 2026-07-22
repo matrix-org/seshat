@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## 5.0.0 - 2026-07-22
+
+- **BREAKING**: Change some methods on `Database` to take `&self` instead of
+  `&mut self`.
+  [[#190](https://github.com/matrix-org/seshat/pull/190)]
+
 - Fix panic that could occur in the writer thread when deleting or replacing events.
   [[#195](https://github.com/matrix-org/seshat/pull/195)]
 
