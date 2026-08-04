@@ -89,7 +89,7 @@ jobs:
         # installed and we need to match them to avoid the test
         # taking 6 minutes to run...
       - name: Install Strawberry Perl (Windows x64)
-        if: runner.os == 'Windows'
+        if: matrix.os == 'windows-latest'
         # bundled-sqlcipher needs a full perl (Git's minimal one lacks
         # modules openssl-src's Configure needs). `upgrade` is idempotent
         # regardless of preinstalled state; version pinned to what's
