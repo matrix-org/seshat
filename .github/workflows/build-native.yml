@@ -99,14 +99,14 @@ jobs:
         if: runner.os == 'Windows'
         # bundled-sqlcipher pulls in openssl-src, which shells out to `perl`
         # to run OpenSSL's Configure. Git for Windows ships its own minimal
-        # perl earlier on PATH, missing modules openssl-src's Configure
-        # needs (e.g. Locale::Maketext::Simple). Strawberry Perl used to be
-        # preinstalled on the runner for this, but GitHub removed it from
-        # the Windows image, so install it explicitly and put it ahead of
-        # Git's perl on PATH.
-        run: |
-          choco install strawberryperl --no-progress -y
-          echo "C:\Strawberry\perl\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        # perl, missing modules openssl-src's Configure needs (e.g.
+        # Locale::Maketext::Simple). Strawberry Perl is preinstalled on the
+        # runner image, but GITHUB_PATH prepends don't reliably win against
+        # Git's perl inside a `shell: bash` step, so the Build step below
+        # exports PATH directly instead of relying on this ordering.
+        # `upgrade` (rather than `install`) is idempotent whether or not
+        # the package is already present on the runner image.
+        run: choco upgrade strawberryperl --no-progress -y
 
       - name: Install Node.js
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
@@ -124,6 +124,9 @@ jobs:
         working-directory: seshat-node
         shell: bash
         run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            export PATH="/c/Strawberry/perl/bin:$PATH"
+          fi
           if [ "${{ matrix.sqlcipher }}" = "bundled" ]; then
             yarn run build-bundled --target ${{ matrix.target }}
           else
