@@ -103,7 +103,8 @@ jobs:
 
       - name: Install node dependencies
         working-directory: seshat-node
-        run: yarn install
+        # --ignore-scripts here because we do not want to build on install.
+        run: yarn install --ignore-scripts
 
       - name: Build (native)
         if: matrix.use-cross == false
