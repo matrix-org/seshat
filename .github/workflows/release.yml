@@ -9,14 +9,21 @@ on:
 
 jobs:
   build:
-    name: Build
+    name: Build (Linux / MacOS)
     permissions:
       contents: read
     uses: ./.github/workflows/build-native.yml
 
+  # Windows has complex needs and thus needs it's own workflow.
+  build-windows:
+    name: Build (Windows)
+    permissions:
+      contents: read
+    uses: ./.github/workflows/build-native-windows.yml
+
   release:
     name: Create GitHub Release
-    needs: [build]
+    needs: [build, build-windows]
     runs-on: ubuntu-latest
     permissions:
       contents: write
