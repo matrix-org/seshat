@@ -20,22 +20,29 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
+          # Pinned to 22.04 (rather than ubuntu-latest) to keep the glibc
+          # version these binaries link against as low as practical, so
+          # they stay loadable on older distros. cross's own docker image
+          # sets the real floor for the aarch64 targets below, but we pin
+          # the host here too for reproducibility.
+          # We support both statically compiling in sqlcipher and
+          # dynamically importing it for Linux targets.
+          - os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
             artifact-name: matrix-seshat-linux-x64.node
             use-cross: false
             sqlcipher: bundled
-          - os: ubuntu-latest
+          - os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
             artifact-name: matrix-seshat-linux-x64-dynamic.node
             use-cross: false
             sqlcipher: dynamic
-          - os: ubuntu-latest
+          - os: ubuntu-22.04
             target: aarch64-unknown-linux-gnu
             artifact-name: matrix-seshat-linux-arm64.node
             use-cross: true
             sqlcipher: bundled
-          - os: ubuntu-latest
+          - os: ubuntu-22.04
             target: aarch64-unknown-linux-gnu
             artifact-name: matrix-seshat-linux-arm64-dynamic.node
             use-cross: true
