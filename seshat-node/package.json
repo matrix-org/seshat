@@ -16,6 +16,7 @@
     "Cargo.toml",
     "Cargo.lock",
     "src/",
+    "scripts/",
     "index.js",
     "README.md"
   ],
