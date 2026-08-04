@@ -53,6 +53,13 @@ jobs:
         run: |
           cargo clippy --all-targets -- -D warnings
 
+  build-native:
+    name: Build native module (all targets)
+    needs: [clippy]
+    permissions:
+      contents: read
+    uses: ./.github/workflows/build-native.yml
+
   build-test:
     name: ${{ matrix.name }}
     needs: [clippy]
