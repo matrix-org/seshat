@@ -79,19 +79,31 @@ jobs:
           sudo apt-get update
           sudo apt-get install --assume-yes libsqlcipher-dev
 
-      - name: Install NASM (Windows)
-        if: runner.os == 'Windows'
+      - name: Install NASM (Windows x64)
+        if: matrix.os == 'windows-latest'
         run: |
           choco install nasm --no-progress -y
           echo "C:\Program Files\NASM" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
-      - name: Install Strawberry Perl (Windows)
+        # The Windows images have different Strawberry Perls
+        # installed and we need to match them to avoid the test
+        # taking 6 minutes to run...
+      - name: Install Strawberry Perl (Windows x64)
         if: runner.os == 'Windows'
         # bundled-sqlcipher needs a full perl (Git's minimal one lacks
         # modules openssl-src's Configure needs). `upgrade` is idempotent
         # regardless of preinstalled state; version pinned to what's
         # already on the image so this is a fast no-op.
         run: choco upgrade strawberryperl --no-progress -y --version=5.42.0.1
+
+      - name: Install Strawberry Perl (Windows ARM)
+        if: matrix.os == 'windows-11-arm'
+        # bundled-sqlcipher needs a full perl (Git's minimal one lacks
+        # modules openssl-src's Configure needs). `upgrade` is idempotent
+        # regardless of preinstalled state; version pinned to what's
+        # already on the image so this is a fast no-op.
+        run: choco upgrade strawberryperl --no-progress -y --version=5.42.0.1
+
 
       - name: Install Node.js
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
