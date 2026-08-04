@@ -122,17 +122,20 @@ jobs:
         working-directory: seshat-node
         env:
           PKG_CONFIG_ALLOW_CROSS: "1"
+        # Not using cargo-cp-artifact here: it copies straight from the
+        # path in cargo's JSON build messages, but under `cross` that path
+        # is the container-internal CARGO_TARGET_DIR, which
+        # doesn't exist on the host.
         run: |
           FEATURES=""
           if [ "${{ matrix.sqlcipher }}" = "bundled" ]; then
             FEATURES="--features=bundled-sqlcipher"
           fi
-          npx cargo-cp-artifact -nc index.node -- \
-            cross build \
-              --message-format=json-render-diagnostics \
-              --release \
-              --target ${{ matrix.target }} \
-              $FEATURES
+          cross build \
+            --release \
+            --target ${{ matrix.target }} \
+            $FEATURES
+          cp ../target/${{ matrix.target }}/release/libmatrix_seshat.so index.node
 
       - name: Rename artifact
         working-directory: seshat-node
