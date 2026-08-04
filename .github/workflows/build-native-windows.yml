@@ -23,12 +23,8 @@ jobs:
       matrix:
         include:
           # x64 is native; arm64 is cross-compiled from this same x64 host.
-          # rustc/cc-rs do their own MSVC cross-toolchain discovery (locating
-          # the arm64 cl.exe/link.exe and INCLUDE/LIB paths for whatever
-          # --target is requested), so this doesn't need a pre-activated
-          # vcvarsall/MSVC dev shell the way a raw nmake/Makefile.msc build
-          # would — rusqlite's bundled-sqlcipher compiles sqlite3.c directly
-          # via the `cc` crate, not Makefile.msc.
+          # We choose to do this because the only target for ARM on GitHub
+          # is Windows 11 and we target Windows 10.
           - target: x86_64-pc-windows-msvc
             artifact-name: matrix-seshat-win32-x64.node
           - target: aarch64-pc-windows-msvc
