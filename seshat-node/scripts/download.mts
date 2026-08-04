@@ -8,25 +8,52 @@
 // defaults to the host running the install), but can also be invoked
 // directly with an explicit --platform/--arch/--dest, e.g. by a downstream
 // build system cross-compiling for a different target than the host.
-'use strict';
 
-const crypto = require('crypto');
-const fs = require('fs');
-const path = require('path');
-const {execSync} = require('child_process');
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
+import {execSync} from 'node:child_process';
+import {fileURLToPath} from 'node:url';
+import {createRequire} from 'node:module';
 
+const require = createRequire(import.meta.url);
 const pkg = require('../package.json');
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
 const REPO = 'matrix-org/seshat';
-const TAG = pkg.version;
+const TAG: string = pkg.version;
+
+type SqlcipherVariant = 'static' | 'dynamic';
+
+interface CliOptions {
+    fallback: boolean;
+    variant: SqlcipherVariant;
+    platform?: string;
+    arch?: string;
+    dest?: string;
+}
+
+interface DownloadOptions {
+    platform: string;
+    arch: string;
+    dest: string;
+    fallback: boolean;
+    variant: SqlcipherVariant;
+}
+
+interface GithubAsset {
+    name: string;
+    browser_download_url: string;
+}
 
 /**
  * Parses --key=value / --flag style arguments.
- * @param {string[]} argv Arguments to parse, excluding node/script path.
- * @return {object} Parsed options.
+ * @param argv Arguments to parse, excluding node/script path.
+ * @return Parsed options.
  */
-function parseArgs(argv) {
-    const opts = {fallback: true, variant: 'static'};
+function parseArgs(argv: string[]): CliOptions {
+    const opts: CliOptions = {fallback: true, variant: 'static'};
     for (const arg of argv) {
         if (arg === '--no-fallback') {
             opts.fallback = false;
@@ -37,7 +64,7 @@ function parseArgs(argv) {
         } else if (arg.startsWith('--dest=')) {
             opts.dest = arg.slice('--dest='.length);
         } else if (arg.startsWith('--sqlcipher=')) {
-            opts.variant = arg.slice('--sqlcipher='.length);
+            opts.variant = arg.slice('--sqlcipher='.length) as SqlcipherVariant;
         }
     }
     if (opts.variant !== 'static' && opts.variant !== 'dynamic') {
@@ -50,10 +77,10 @@ function parseArgs(argv) {
 
 /**
  * Fetches a buffer from a URL.
- * @param {string} url The URL to fetch from.
- * @return {Buffer} The buffer fetched.
+ * @param url The URL to fetch from.
+ * @return The buffer fetched.
  */
-async function fetchBuffer(url) {
+async function fetchBuffer(url: string): Promise<Buffer> {
     const res = await fetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status} fetching ${url}`);
     return Buffer.from(await res.arrayBuffer());
@@ -61,11 +88,11 @@ async function fetchBuffer(url) {
 
 /**
  * Builds the module from source in the given directory.
- * @param {string} dir The package directory to build in.
- * @param {string} variant Either "static" (bundled sqlcipher) or "dynamic"
+ * @param dir The package directory to build in.
+ * @param variant Either "static" (bundled sqlcipher) or "dynamic"
  *   (link against the system sqlcipher).
  */
-function buildFromSource(dir, variant) {
+function buildFromSource(dir: string, variant: SqlcipherVariant): void {
     const script = variant === 'dynamic' ? 'build' : 'build-bundled';
     console.log(
         `Building matrix-seshat from source (${variant} sqlcipher)...`,
@@ -82,17 +109,19 @@ function buildFromSource(dir, variant) {
  * Downloads and verifies the prebuilt native module for a target
  * platform/arch, writing it to `dest`. Optionally falls back to building
  * from source in the destination's directory on any failure.
- * @param {object} opts Options.
- * @param {string} opts.platform Target platform (e.g. process.platform).
- * @param {string} opts.arch Target arch (e.g. process.arch).
- * @param {string} opts.dest Path to write the downloaded module to.
- * @param {boolean} opts.fallback Whether to build from source on failure.
- * @param {string} opts.variant Either "static" (bundled sqlcipher, the
+ * @param opts Options.
+ * @param opts.platform Target platform (e.g. process.platform).
+ * @param opts.arch Target arch (e.g. process.arch).
+ * @param opts.dest Path to write the downloaded module to.
+ * @param opts.fallback Whether to build from source on failure.
+ * @param opts.variant Either "static" (bundled sqlcipher, the
  *   default) or "dynamic" (link against the system sqlcipher). Only linux
  *   and freebsd prebuilts are published in the "dynamic" variant.
- * @return {Promise<boolean>} Whether index.node now exists at `dest`.
+ * @return Whether index.node now exists at `dest`.
  */
-async function downloadPrebuilt({platform, arch, dest, fallback, variant}) {
+async function downloadPrebuilt(
+    {platform, arch, dest, fallback, variant}: DownloadOptions,
+): Promise<boolean> {
     const dir = path.dirname(dest);
     const suffix = variant === 'dynamic' ? '-dynamic' : '';
     const artifactName = `matrix-seshat-${platform}-${arch}${suffix}.node`;
@@ -103,7 +132,7 @@ async function downloadPrebuilt({platform, arch, dest, fallback, variant}) {
     }
 
     // Fetch release asset list from the GitHub API.
-    let assets;
+    let assets: GithubAsset[];
     try {
         console.log(`Fetching release ${TAG} from ${REPO}...`);
         const res = await fetch(
@@ -117,7 +146,7 @@ async function downloadPrebuilt({platform, arch, dest, fallback, variant}) {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         assets = (await res.json()).assets;
     } catch (e) {
-        console.warn(`Could not fetch release metadata: ${e.message}`);
+        console.warn(`Could not fetch release metadata: ${(e as Error).message}`);
         if (!fallback) return false;
         buildFromSource(dir, variant);
         return true;
@@ -135,7 +164,7 @@ async function downloadPrebuilt({platform, arch, dest, fallback, variant}) {
     }
 
     // Download the checksums file and find the expected hash for our artifact.
-    let expectedSha;
+    let expectedSha: string | undefined;
     const checksumsAsset = assets.find((a) => a.name === 'checksums.txt');
     if (checksumsAsset) {
         try {
@@ -150,7 +179,7 @@ async function downloadPrebuilt({platform, arch, dest, fallback, variant}) {
                 console.warn(`No entry for ${artifactName} in checksums.txt.`);
             }
         } catch (e) {
-            console.warn(`Could not fetch checksums: ${e.message}`);
+            console.warn(`Could not fetch checksums: ${(e as Error).message}`);
         }
     } else {
         console.warn(
@@ -160,11 +189,11 @@ async function downloadPrebuilt({platform, arch, dest, fallback, variant}) {
 
     // Download the native module.
     console.log(`Downloading ${artifactName}...`);
-    let data;
+    let data: Buffer;
     try {
         data = await fetchBuffer(nodeAsset.browser_download_url);
     } catch (e) {
-        console.warn(`Download failed: ${e.message}`);
+        console.warn(`Download failed: ${(e as Error).message}`);
         if (!fallback) return false;
         buildFromSource(dir, variant);
         return true;
@@ -191,7 +220,7 @@ got      ${actual}`,
 /**
  * CLI entry point.
  */
-async function main() {
+async function main(): Promise<void> {
     const opts = parseArgs(process.argv.slice(2));
     const platform = opts.platform || process.platform;
     const arch = opts.arch || process.arch;
@@ -208,11 +237,11 @@ async function main() {
     if (!ok) process.exit(1);
 }
 
-if (require.main === module) {
+if (import.meta.url === `file://${process.argv[1]}`) {
     main().catch((e) => {
-        console.error(e.message);
+        console.error((e as Error).message);
         process.exit(1);
     });
 }
 
-module.exports = {downloadPrebuilt};
+export {downloadPrebuilt};
