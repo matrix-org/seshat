@@ -95,6 +95,15 @@ jobs:
           choco install nasm --no-progress -y
           echo "C:\Program Files\NASM" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
+      - name: Prefer Strawberry Perl (Windows)
+        if: runner.os == 'Windows'
+        # bundled-sqlcipher pulls in openssl-src, which shells out to `perl`
+        # to run OpenSSL's Configure. Git for Windows ships its own minimal
+        # perl earlier on PATH, missing modules openssl-src's Configure
+        # needs (e.g. Locale::Maketext::Simple) — prepend the runner's
+        # preinstalled Strawberry Perl so it's found first instead.
+        run: echo "C:\Strawberry\perl\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
       - name: Install Node.js
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         with:
