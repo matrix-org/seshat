@@ -97,16 +97,11 @@ jobs:
 
       - name: Install Strawberry Perl (Windows)
         if: runner.os == 'Windows'
-        # bundled-sqlcipher pulls in openssl-src, which shells out to `perl`
-        # to run OpenSSL's Configure. Git for Windows ships its own minimal
-        # perl, missing modules openssl-src's Configure needs (e.g.
-        # Locale::Maketext::Simple). Strawberry Perl is preinstalled on the
-        # runner image, but GITHUB_PATH prepends don't reliably win against
-        # Git's perl inside a `shell: bash` step, so the Build step below
-        # exports PATH directly instead of relying on this ordering.
-        # `upgrade` (rather than `install`) is idempotent whether or not
-        # the package is already present on the runner image.
-        run: choco upgrade strawberryperl --no-progress -y
+        # bundled-sqlcipher needs a full perl (Git's minimal one lacks
+        # modules openssl-src's Configure needs). `upgrade` is idempotent
+        # regardless of preinstalled state; version pinned to what's
+        # already on the image so this is a fast no-op.
+        run: choco upgrade strawberryperl --no-progress -y --version=5.42.0.1
 
       - name: Install Node.js
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
