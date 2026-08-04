@@ -24,22 +24,37 @@ jobs:
             target: x86_64-unknown-linux-gnu
             artifact-name: matrix-seshat-linux-x64.node
             use-cross: false
+            sqlcipher: bundled
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact-name: matrix-seshat-linux-x64-dynamic.node
+            use-cross: false
+            sqlcipher: dynamic
           - os: ubuntu-latest
             target: aarch64-unknown-linux-gnu
             artifact-name: matrix-seshat-linux-arm64.node
             use-cross: true
+            sqlcipher: bundled
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            artifact-name: matrix-seshat-linux-arm64-dynamic.node
+            use-cross: true
+            sqlcipher: dynamic
           - os: macos-13
             target: x86_64-apple-darwin
             artifact-name: matrix-seshat-darwin-x64.node
             use-cross: false
+            sqlcipher: bundled
           - os: macos-latest
             target: aarch64-apple-darwin
             artifact-name: matrix-seshat-darwin-arm64.node
             use-cross: false
+            sqlcipher: bundled
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             artifact-name: matrix-seshat-win32-x64.node
             use-cross: false
+            sqlcipher: bundled
 
     steps:
       - name: Checkout
@@ -58,6 +73,12 @@ jobs:
         uses: taiki-e/install-action@85b24a67ef0c632dfefad70b9d5ce8fddb040754 # v2.75.10
         with:
           tool: cross
+
+      - name: Install libsqlcipher-dev (Linux, dynamic)
+        if: runner.os == 'Linux' && matrix.sqlcipher == 'dynamic' && matrix.use-cross == false
+        run: |
+          sudo apt-get update
+          sudo apt-get install --assume-yes libsqlcipher-dev
 
       - name: Install NASM (Windows)
         if: runner.os == 'Windows'
@@ -78,18 +99,30 @@ jobs:
       - name: Build (native)
         if: matrix.use-cross == false
         working-directory: seshat-node
-        run: yarn run build-bundled --target ${{ matrix.target }}
+        shell: bash
+        run: |
+          if [ "${{ matrix.sqlcipher }}" = "bundled" ]; then
+            yarn run build-bundled --target ${{ matrix.target }}
+          else
+            yarn run build --target ${{ matrix.target }}
+          fi
 
       - name: Build (cross — Linux ARM64)
         if: matrix.use-cross == true
         working-directory: seshat-node
+        env:
+          PKG_CONFIG_ALLOW_CROSS: "1"
         run: |
+          FEATURES=""
+          if [ "${{ matrix.sqlcipher }}" = "bundled" ]; then
+            FEATURES="--features=bundled-sqlcipher"
+          fi
           npx cargo-cp-artifact -nc index.node -- \
             cross build \
               --message-format=json-render-diagnostics \
               --release \
               --target ${{ matrix.target }} \
-              --features=bundled-sqlcipher
+              $FEATURES
 
       - name: Rename artifact
         working-directory: seshat-node
