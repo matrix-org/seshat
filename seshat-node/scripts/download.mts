@@ -32,14 +32,34 @@ interface CliOptions {
     platform?: string;
     arch?: string;
     dest?: string;
+    token?: string;
 }
 
 interface DownloadOptions {
+    /**
+     * Target platform (e.g. process.platform)
+     */
     platform: string;
+    /**
+     * Target arch (e.g. process.arch).
+     */
     arch: string;
+    /**
+     *  Path to write the downloaded module to.
+     */
     dest: string;
+    /**
+     * Whether to build from source on failure.
+     */
     fallback: boolean;
+    /**
+     * Either "static" (bundled sqlcipher, the default) or "dynamic" (link against the system sqlcipher).
+     */
     variant: SqlcipherVariant;
+    /**
+     * Optional GitHub bearer token to fetch the binary with.
+     */
+    token?: string;
 }
 
 interface GithubAsset {
@@ -65,6 +85,8 @@ function parseArgs(argv: string[]): CliOptions {
             opts.dest = arg.slice('--dest='.length);
         } else if (arg.startsWith('--sqlcipher=')) {
             opts.variant = arg.slice('--sqlcipher='.length) as SqlcipherVariant;
+        } else if (arg.startsWith('--token=')) {
+            opts.token = arg.slice('--token='.length);
         }
     }
     if (opts.variant !== 'static' && opts.variant !== 'dynamic') {
@@ -109,18 +131,10 @@ function buildFromSource(dir: string, variant: SqlcipherVariant): void {
  * Downloads and verifies the prebuilt native module for a target
  * platform/arch, writing it to `dest`. Optionally falls back to building
  * from source in the destination's directory on any failure.
- * @param opts Options.
- * @param opts.platform Target platform (e.g. process.platform).
- * @param opts.arch Target arch (e.g. process.arch).
- * @param opts.dest Path to write the downloaded module to.
- * @param opts.fallback Whether to build from source on failure.
- * @param opts.variant Either "static" (bundled sqlcipher, the
- *   default) or "dynamic" (link against the system sqlcipher). Only linux
- *   and freebsd prebuilts are published in the "dynamic" variant.
  * @return Whether index.node now exists at `dest`.
  */
 async function downloadPrebuilt(
-    {platform, arch, dest, fallback, variant}: DownloadOptions,
+    {platform, arch, dest, fallback, variant, token}: DownloadOptions,
 ): Promise<boolean> {
     const dir = path.dirname(dest);
     const suffix = variant === 'dynamic' ? '-dynamic' : '';
@@ -140,6 +154,7 @@ async function downloadPrebuilt(
             {
                 headers: {
                     Accept: 'application/vnd.github.v3+json',
+                    ...(token ? {Authorization: `Bearer ${token}`} : {}),
                 },
             },
         );
@@ -232,6 +247,7 @@ async function main(): Promise<void> {
         dest,
         fallback: opts.fallback,
         variant: opts.variant,
+        token: opts.token,
     });
 
     if (!ok) process.exit(1);
