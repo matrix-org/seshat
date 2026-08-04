@@ -79,7 +79,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install --assume-yes libsqlcipher-dev
 
-      - name: Install NASM (Windows x64)
+      - name: Install NASM (Windows)
         if: matrix.os == 'windows-latest'
         run: |
           choco install nasm --no-progress -y
@@ -102,7 +102,7 @@ jobs:
         # modules openssl-src's Configure needs). `upgrade` is idempotent
         # regardless of preinstalled state; version pinned to what's
         # already on the image so this is a fast no-op.
-        run: choco upgrade strawberryperl --no-progress -y --version=5.42.0.1
+        run: choco upgrade strawberryperl --no-progress -y --version=5.32.1.1
 
 
       - name: Install Node.js
