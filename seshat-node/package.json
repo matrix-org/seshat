@@ -20,14 +20,6 @@
       "url": "git+https://github.com/matrix-org/seshat.git",
       "directory": "seshat-node"
   },
-  "optionalDependencies": {
-    "@matrix-org/seshat-linux-x64": "5.0.0",
-    "@matrix-org/seshat-linux-arm64": "5.0.0",
-    "@matrix-org/seshat-darwin-x64": "5.0.0",
-    "@matrix-org/seshat-darwin-arm64": "5.0.0",
-    "@matrix-org/seshat-win32-x64": "5.0.0",
-    "@matrix-org/seshat-win32-arm64": "5.0.0"
-  },
   "files": [
     "Cargo.toml",
     "Cargo.lock",
