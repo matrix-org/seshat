@@ -4,6 +4,12 @@ permissions: {}
 
 on:
   workflow_call:
+    outputs:
+      targets:
+        description: >-
+          JSON array of {artifact-name, package-name, pkg-os, pkg-cpu} for
+          each target this workflow built, for downstream publish steps.
+        value: ${{ jobs.targets.outputs.targets }}
 
 concurrency:
   group: build-native-${{ github.ref }}
@@ -11,47 +17,92 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  # Set of targets to build for. This will be output back to the `release` job
+  # so that it may build the correct packages.
+  #
+  # Pinned to 22.04 (rather than ubuntu-latest) to keep the glibc version
+  # these binaries link against as low as practical, so they stay loadable
+  # on older distros. We also bias to using native runners over cross
+  # compiling to avoid issues like https://github.com/matrix-org/seshat/issues/135.
+  TARGETS: |
+    [
+      {
+        "os": "ubuntu-22.04",
+        "target": "x86_64-unknown-linux-gnu",
+        "artifact-name": "matrix-seshat-linux-x64.node",
+        "package-name": "@matrix-org/seshat-linux-x64",
+        "pkg-os": "linux",
+        "pkg-cpu": "x64"
+      },
+      {
+        "os": "ubuntu-22.04",
+        "target": "x86_64-unknown-linux-gnu",
+        "artifact-name": "matrix-seshat-linux-x64-dynamic.node",
+        "sqlcipher": "dynamic",
+        "package-name": "@matrix-org/seshat-linux-x64-dynamic",
+        "pkg-os": "linux",
+        "pkg-cpu": "x64"
+      },
+      {
+        "os": "ubuntu-22.04-arm",
+        "target": "aarch64-unknown-linux-gnu",
+        "artifact-name": "matrix-seshat-linux-arm64.node",
+        "package-name": "@matrix-org/seshat-linux-arm64",
+        "pkg-os": "linux",
+        "pkg-cpu": "arm64"
+      },
+      {
+        "os": "ubuntu-22.04-arm",
+        "target": "aarch64-unknown-linux-gnu",
+        "artifact-name": "matrix-seshat-linux-arm64-dynamic.node",
+        "sqlcipher": "dynamic",
+        "package-name": "@matrix-org/seshat-linux-arm64-dynamic",
+        "pkg-os": "linux",
+        "pkg-cpu": "arm64"
+      },
+      {
+        "os": "macos-13",
+        "target": "x86_64-apple-darwin",
+        "artifact-name": "matrix-seshat-darwin-x64.node",
+        "package-name": "@matrix-org/seshat-darwin-x64",
+        "pkg-os": "darwin",
+        "pkg-cpu": "x64"
+      },
+      {
+        "os": "macos-latest",
+        "target": "aarch64-apple-darwin",
+        "artifact-name": "matrix-seshat-darwin-arm64.node",
+        "package-name": "@matrix-org/seshat-darwin-arm64",
+        "pkg-os": "darwin",
+        "pkg-cpu": "arm64"
+      }
+    ]
 
 jobs:
+  targets:
+    name: Expose build targets
+    runs-on: ubuntu-latest
+    outputs:
+      targets: ${{ steps.targets.outputs.targets }}
+    steps:
+      - id: targets
+        run: |
+          {
+            echo 'targets<<TARGETS_EOF'
+            echo "$TARGETS"
+            echo 'TARGETS_EOF'
+          } >> "$GITHUB_OUTPUT"
+
   build:
     name: Build ${{ matrix.artifact-name }}
+    needs: [targets]
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
     strategy:
       fail-fast: false
       matrix:
-        include:
-          # Pinned to 22.04 (rather than ubuntu-latest) to keep the glibc
-          # version these binaries link against as low as practical, so
-          # they stay loadable on older distros.
-          #
-          # We also bias to using native runners over cross compiling to avoid
-          # issues like https://github.com/matrix-org/seshat/issues/135.
-          - os: ubuntu-22.04
-            target: x86_64-unknown-linux-gnu
-            artifact-name: matrix-seshat-linux-x64.node
-            sqlcipher: bundled
-          - os: ubuntu-22.04
-            target: x86_64-unknown-linux-gnu
-            artifact-name: matrix-seshat-linux-x64-dynamic.node
-            sqlcipher: dynamic
-          - os: ubuntu-22.04-arm
-            target: aarch64-unknown-linux-gnu
-            artifact-name: matrix-seshat-linux-arm64.node
-            sqlcipher: bundled
-          - os: ubuntu-22.04-arm
-            target: aarch64-unknown-linux-gnu
-            artifact-name: matrix-seshat-linux-arm64-dynamic.node
-            sqlcipher: dynamic
-          - os: macos-13
-            target: x86_64-apple-darwin
-            artifact-name: matrix-seshat-darwin-x64.node
-            sqlcipher: bundled
-          - os: macos-latest
-            target: aarch64-apple-darwin
-            artifact-name: matrix-seshat-darwin-arm64.node
-            sqlcipher: bundled
+        include: ${{ fromJSON(needs.targets.outputs.targets) }}
 
     steps:
       - name: Checkout
@@ -85,11 +136,13 @@ jobs:
       - name: Build (native)
         working-directory: seshat-node
         shell: bash
+        # sqlcipher defaults to bundled when unset (only the two dynamic
+        # Linux targets set it explicitly).
         run: |
-          if [ "${{ matrix.sqlcipher }}" = "bundled" ]; then
-            yarn run build-bundled --target ${{ matrix.target }}
-          else
+          if [ "${{ matrix.sqlcipher }}" = "dynamic" ]; then
             yarn run build --target ${{ matrix.target }}
+          else
+            yarn run build-bundled --target ${{ matrix.target }}
           fi
 
       - name: Rename artifact

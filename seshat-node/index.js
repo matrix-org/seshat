@@ -13,7 +13,47 @@
 // limitations under the License.
 
 const {promisify} = require('util');
-const seshatNative = require('./index.node');
+
+/**
+ * Loads the native module for the current platform/arch.
+ *
+ * Tries, in order: the dynamic-sqlcipher variant of the platform package
+ * (only published for Linux, and only picked up here if a consumer
+ * explicitly installed it themselves — it's not an automatic dependency of
+ * this package), the static/bundled variant of the platform package (the
+ * normal case, installed automatically via optionalDependencies), then a
+ * local index.node (present if this package was built from source
+ * manually). Throws a clear error if none of those resolve.
+ *
+ * @return {object} The loaded native module.
+ */
+function loadNative() {
+    const platform = process.platform;
+    const arch = process.arch;
+    const platformPkg = `@matrix-org/seshat-${platform}-${arch}`;
+    const candidates = [];
+    if (process.platform === 'linux') {
+        candidates.push(`${platformPkg}-dynamic`);
+    }
+    candidates.push(platformPkg);
+    candidates.push('./index.node');
+
+    for (const candidate of candidates) {
+        try {
+            return require(candidate);
+        } catch (e) {
+            if (e.code !== 'MODULE_NOT_FOUND') throw e;
+        }
+    }
+
+    throw new Error(
+        `Could not find a prebuilt native module for ${platform}-${arch}. ` +
+        `Install the matching ${platformPkg} package, or build from source — ` +
+        'see https://github.com/matrix-org/seshat for instructions.',
+    );
+}
+
+const seshatNative = loadNative();
 
 /**
  * @typedef searchResult

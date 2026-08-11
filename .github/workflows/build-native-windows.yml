@@ -4,6 +4,12 @@ permissions: {}
 
 on:
   workflow_call:
+    outputs:
+      targets:
+        description: >-
+          JSON array of {artifact-name, package-name, pkg-os, pkg-cpu} for
+          each target this workflow built, for downstream publish steps.
+        value: ${{ jobs.targets.outputs.targets }}
 
 concurrency:
   group: build-native-windows-${{ github.ref }}
@@ -11,24 +17,40 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  # Set of targets to build for, output back to release.yml's publish step.
+  # x64 is native; arm64 is cross-compiled from this same x64 host — the
+  # only ARM runner GitHub offers is Windows 11, but we target Windows 10.
+  TARGETS: |
+    [
+      {"target": "x86_64-pc-windows-msvc", "artifact-name": "matrix-seshat-win32-x64.node", "package-name": "@matrix-org/seshat-win32-x64", "pkg-os": "win32", "pkg-cpu": "x64"},
+      {"target": "aarch64-pc-windows-msvc", "artifact-name": "matrix-seshat-win32-arm64.node", "package-name": "@matrix-org/seshat-win32-arm64", "pkg-os": "win32", "pkg-cpu": "arm64"}
+    ]
 
 jobs:
+  targets:
+    name: Expose build targets
+    runs-on: ubuntu-latest
+    outputs:
+      targets: ${{ steps.targets.outputs.targets }}
+    steps:
+      - id: targets
+        run: |
+          {
+            echo 'targets<<TARGETS_EOF'
+            echo "$TARGETS"
+            echo 'TARGETS_EOF'
+          } >> "$GITHUB_OUTPUT"
+
   build:
     name: Build ${{ matrix.artifact-name }}
+    needs: [targets]
     runs-on: windows-latest
     permissions:
       contents: read
     strategy:
       fail-fast: false
       matrix:
-        include:
-          # x64 is native; arm64 is cross-compiled from this same x64 host.
-          # We choose to do this because the only target for ARM on GitHub
-          # is Windows 11 and we target Windows 10.
-          - target: x86_64-pc-windows-msvc
-            artifact-name: matrix-seshat-win32-x64.node
-          - target: aarch64-pc-windows-msvc
-            artifact-name: matrix-seshat-win32-arm64.node
+        include: ${{ fromJSON(needs.targets.outputs.targets) }}
 
     steps:
       - name: Checkout

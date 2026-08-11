@@ -1,0 +1,83 @@
+name: Publish npm package (single target)
+
+permissions: {}
+
+on:
+  workflow_call:
+    inputs:
+      artifact-name:
+        type: string
+        required: true
+        description: "The uploaded build artifact to publish, e.g. matrix-seshat-linux-x64.node"
+      package-name:
+        type: string
+        required: true
+        description: "The npm package name to publish as, e.g. @matrix-org/seshat-linux-x64"
+      pkg-os:
+        type: string
+        required: true
+        description: "The package.json \"os\" value, e.g. linux"
+      pkg-cpu:
+        type: string
+        required: true
+        description: "The package.json \"cpu\" value, e.g. x64"
+
+jobs:
+  publish:
+    name: Publish ${{ inputs.package-name }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Authenticates via npm's Trusted Publisher (OIDC) — no NPM_TOKEN
+      # needed. Requires this package to have a trusted publisher configured
+      # on npmjs.com pointing at this repo/workflow, npm CLI >= 11.5.1, and
+      # Node >= 22.14.0 (our .node-version pin is well past both).
+      id-token: write
+
+    steps:
+      - name: Install Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version-file: ".node-version"
+          registry-url: "https://registry.npmjs.org"
+          package-manager-cache: false # Ignore caching for releases
+
+      - name: Download artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: ${{ inputs.artifact-name }}
+          path: dist/
+
+      # Inputs are passed via env rather than interpolated directly into the
+      # script, so they're treated as data, not shell/template code.
+      #
+      # The registry's own dist.integrity covers checksum verification for
+      # every install — no custom hashing needed the way download.mts used to do.
+      - name: Assemble package
+        run: |
+          set -eu
+          mkdir -p pkg
+          cp "dist/$ARTIFACT_NAME" pkg/index.node
+          cat > pkg/package.json <<EOF
+          {
+            "name": "$PACKAGE_NAME",
+            "version": "$GITHUB_REF_NAME",
+            "description": "Prebuilt matrix-seshat native module for $PKG_OS $PKG_CPU",
+            "license": "Apache-2.0",
+            "repository": {
+              "type": "git",
+              "url": "git+https://github.com/matrix-org/seshat.git"
+            },
+            "os": ["$PKG_OS"],
+            "cpu": ["$PKG_CPU"],
+            "files": ["index.node"]
+          }
+          EOF
+        env:
+          ARTIFACT_NAME: ${{ inputs.artifact-name }}
+          PACKAGE_NAME: ${{ inputs.package-name }}
+          PKG_OS: ${{ inputs.pkg-os }}
+          PKG_CPU: ${{ inputs.pkg-cpu }}
+
+      - name: Publish
+        run: npm publish --access public --provenance --publish-branch main pkg/
