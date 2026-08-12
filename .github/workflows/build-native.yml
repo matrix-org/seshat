@@ -61,7 +61,7 @@ env:
         "pkg-cpu": "arm64"
       },
       {
-        "os": "macos-13",
+        "os": "macos-latest",
         "target": "x86_64-apple-darwin",
         "artifact-name": "matrix-seshat-darwin-x64.node",
         "package-name": "@matrix-org/seshat-darwin-x64",
