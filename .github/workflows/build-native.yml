@@ -132,10 +132,11 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
-        with:
-          toolchain: stable
+      - name: Install Rust (stable)
+        run: |
+          rustup install stable
+          rustup default stable
+          rustup target add ${{ matrix.target }}
 
       - name: Install NASM (Windows)
         if: runner.os == 'Windows'
