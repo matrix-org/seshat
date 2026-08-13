@@ -1,3 +1,6 @@
+# This publishes a single NPM package for a platform, intended to be run
+# by publish.yml
+
 name: Publish npm package (single target)
 
 permissions: {}

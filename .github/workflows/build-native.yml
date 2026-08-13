@@ -132,11 +132,10 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install Rust (stable)
-        run: |
-          rustup install stable
-          rustup default stable
-          rustup target add ${{ matrix.target }}
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
+        with:
+          toolchain: stable
 
       - name: Install NASM (Windows)
         if: runner.os == 'Windows'
@@ -169,8 +168,7 @@ jobs:
 
       - name: Install node dependencies
         working-directory: seshat-node
-        # --ignore-scripts here because we do not want to build on install.
-        run: yarn install --ignore-scripts
+        run: yarn install
 
       - name: Build (Native)
         if: runner.os != 'Windows'
