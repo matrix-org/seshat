@@ -17,15 +17,11 @@ const {promisify} = require('util');
 /**
  * Loads the native module for the current platform/arch.
  *
- * Tries, in order: the dynamic-sqlcipher variant of the platform package
- * (only published for Linux, and only picked up here if a consumer
- * explicitly installed it themselves — it's not an automatic dependency of
- * this package), the static/bundled variant of the platform package (the
- * normal case, installed automatically via optionalDependencies), then a
- * local index.node (present if this package was built from source
- * manually). Throws a clear error if none of those resolve.
+ * We prefer to load the dynamic library version of seshat
+ * over static builds.
  *
  * @return {object} The loaded native module.
+ * @throws If a candidate native module could not be found.
  */
 function loadNative() {
     const platform = process.platform;
@@ -48,8 +44,8 @@ function loadNative() {
 
     throw new Error(
         `Could not find a prebuilt native module for ${platform}-${arch}. ` +
-        `Install the matching ${platformPkg} package, or build from source — ` +
-        'see https://github.com/matrix-org/seshat for instructions.',
+        `Install the matching ${platformPkg} package, or build from source. ` +
+        'See https://github.com/matrix-org/seshat for instructions.',
     );
 }
 

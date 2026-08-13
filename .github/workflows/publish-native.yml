@@ -5,10 +5,14 @@ permissions: {}
 on:
   workflow_call:
     inputs:
+      release-tag:
+        type: string
+        required: true
+        description: "The published GitHub Release tag to pull the built .node asset from, e.g. 5.1.0"
       artifact-name:
         type: string
         required: true
-        description: "The uploaded build artifact to publish, e.g. matrix-seshat-linux-x64.node"
+        description: "The release asset to publish, e.g. matrix-seshat-linux-x64.node"
       package-name:
         type: string
         required: true
@@ -28,10 +32,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      # Authenticates via npm's Trusted Publisher (OIDC) — no NPM_TOKEN
-      # needed. Requires this package to have a trusted publisher configured
-      # on npmjs.com pointing at this repo/workflow, npm CLI >= 11.5.1, and
-      # Node >= 22.14.0 (our .node-version pin is well past both).
       id-token: write
 
     steps:
@@ -42,17 +42,16 @@ jobs:
           registry-url: "https://registry.npmjs.org"
           package-manager-cache: false # Ignore caching for releases
 
-      - name: Download artifact
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          name: ${{ inputs.artifact-name }}
-          path: dist/
+      - name: Download release asset
+        run: gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern "$ARTIFACT_NAME" --dir dist/
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release-tag }}
+          ARTIFACT_NAME: ${{ inputs.artifact-name }}
 
+      # This builds a package.json for a platform package.
       # Inputs are passed via env rather than interpolated directly into the
       # script, so they're treated as data, not shell/template code.
-      #
-      # The registry's own dist.integrity covers checksum verification for
-      # every install — no custom hashing needed the way download.mts used to do.
       - name: Assemble package
         run: |
           set -eu
@@ -61,7 +60,7 @@ jobs:
           cat > pkg/package.json <<EOF
           {
             "name": "$PACKAGE_NAME",
-            "version": "$GITHUB_REF_NAME",
+            "version": "$RELEASE_TAG",
             "description": "Prebuilt matrix-seshat native module for $PKG_OS $PKG_CPU",
             "license": "Apache-2.0",
             "repository": {
@@ -74,6 +73,7 @@ jobs:
           }
           EOF
         env:
+          RELEASE_TAG: ${{ inputs.release-tag }}
           ARTIFACT_NAME: ${{ inputs.artifact-name }}
           PACKAGE_NAME: ${{ inputs.package-name }}
           PKG_OS: ${{ inputs.pkg-os }}

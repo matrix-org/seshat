@@ -1,0 +1,101 @@
+# This publishes NPM packages when a GitHub release is published.
+
+name: Publish
+
+permissions: {}
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  discover-targets:
+    name: Discover release assets
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      targets: ${{ steps.discover.outputs.targets }}
+    steps:
+      # This delightful bit of code discovers all the release artifacts
+      # on a draft GitHub release and figures out what packages we need to
+      # publish from it.
+      # This saves us a good few minutes of rebuilding between draft
+      # and release.
+      - id: discover
+        run: |
+          set -eu
+
+          assets=$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --json assets --jq '.assets[].name' | grep '^matrix-seshat-.*\.node$')
+
+          entries="[]"
+          while IFS= read -r artifact; do
+            stripped="${artifact#matrix-seshat-}"
+            stripped="${stripped%.node}"
+            IFS='-' read -r os cpu variant <<< "$stripped"
+            pkgname="@matrix-org/seshat-$os-$cpu"
+            if [ "${variant:-}" = "dynamic" ]; then
+              pkgname="${pkgname}-dynamic"
+            fi
+            entry=$(jq -n --arg artifact "$artifact" --arg package "$pkgname" --arg os "$os" --arg cpu "$cpu" \
+              '{"artifact-name": $artifact, "package-name": $package, "pkg-os": $os, "pkg-cpu": $cpu}')
+            entries=$(echo "$entries" | jq --argjson e "$entry" '. + [$e]')
+          done <<< "$assets"
+
+          echo "targets=$(echo "$entries" | jq -c .)" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+
+  publish-native-packages:
+    name: Publish ${{ matrix.package-name }}
+    needs: [discover-targets]
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.discover-targets.outputs.targets) }}
+    uses: ./.github/workflows/publish-native.yml
+    permissions:
+      contents: read
+      id-token: write
+    with:
+      release-tag: ${{ github.event.release.tag_name }}
+      artifact-name: ${{ matrix.artifact-name }}
+      package-name: ${{ matrix.package-name }}
+      pkg-os: ${{ matrix.pkg-os }}
+      pkg-cpu: ${{ matrix.pkg-cpu }}
+
+  publish-main:
+    name: Publish main package
+    needs: [publish-native-packages]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.event.release.tag_name }}
+          persist-credentials: false
+
+      - name: Install Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version-file: ".node-version"
+          registry-url: "https://registry.npmjs.org"
+          package-manager-cache: false # Ignore caching for releases
+
+        # Pin optionalDependencies to this exact release before publishing the
+        # main package, so the JS wrapper and native binaries never drift.
+      - name: Publish
+        working-directory: seshat-node
+        run: |
+          npm pkg set version="$RELEASE_TAG"
+          for pkg in linux-x64 linux-arm64 darwin-x64 darwin-arm64 win32-x64 win32-arm64; do
+            npm pkg set "optionalDependencies.@matrix-org/seshat-$pkg=$RELEASE_TAG"
+          done
+          npm publish --access public --provenance --publish-branch main
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}

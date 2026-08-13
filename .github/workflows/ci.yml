@@ -54,19 +54,11 @@ jobs:
           cargo clippy --all-targets -- -D warnings
 
   build-native:
-    name: Build native module (Linux / MacOS)
+    name: Build native modules
     needs: [clippy]
     permissions:
       contents: read
     uses: ./.github/workflows/build-native.yml
-
-  # Windows has complex needs and thus needs it's own workflow.
-  build-native-windows:
-    name: Build native module (Windows)
-    needs: [clippy]
-    permissions:
-      contents: read
-    uses: ./.github/workflows/build-native-windows.yml
 
   build-test:
     name: ${{ matrix.name }}

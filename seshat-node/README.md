@@ -17,7 +17,7 @@ are published for:
 | Windows  | x64, arm64     | static                       |
 
 Static links SQLCipher and OpenSSL into the module; dynamic links the
-system's SQLCipher instead. Dynamic is not installed by default — to use it,
+system's SQLCipher instead. Dynamic is not installed by default. To use it,
 install the matching package explicitly alongside the main one:
 
     $ yarn add @matrix-org/seshat @matrix-org/seshat-linux-x64-dynamic

@@ -1,4 +1,7 @@
+# This creates a draft GitHub release when a release tag is pushed.
+
 name: Release
+
 
 permissions: {}
 
@@ -9,91 +12,14 @@ on:
 
 jobs:
   build:
-    name: Build (Linux / MacOS)
+    name: Build
     permissions:
       contents: read
     uses: ./.github/workflows/build-native.yml
 
-  # Windows has complex needs and thus needs it's own workflow.
-  build-windows:
-    name: Build (Windows)
-    permissions:
-      contents: read
-    uses: ./.github/workflows/build-native-windows.yml
-
-  # build/build-windows each expose their own target list (see the `targets`
-  # job in build-native.yml/build-native-windows.yml) — just merge the two.
-  merge-targets:
-    name: Merge build targets
-    needs: [build, build-windows]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    outputs:
-      targets: ${{ steps.merge.outputs.targets }}
-    steps:
-      - id: merge
-        run: |
-          {
-            echo 'targets<<TARGETS_EOF'
-            jq -c -n --argjson a "$BUILD_TARGETS" --argjson b "$BUILD_WINDOWS_TARGETS" '$a + $b'
-            echo 'TARGETS_EOF'
-          } >> "$GITHUB_OUTPUT"
-        env:
-          BUILD_TARGETS: ${{ needs.build.outputs.targets }}
-          BUILD_WINDOWS_TARGETS: ${{ needs.build-windows.outputs.targets }}
-
-  publish-packages:
-    name: Publish ${{ matrix.package-name }}
-    needs: [merge-targets]
-    strategy:
-      fail-fast: false
-      matrix:
-        include: ${{ fromJSON(needs.merge-targets.outputs.targets) }}
-    uses: ./.github/workflows/publish-native.yml
-    permissions:
-      contents: read
-      id-token: write
-    with:
-      artifact-name: ${{ matrix.artifact-name }}
-      package-name: ${{ matrix.package-name }}
-      pkg-os: ${{ matrix.pkg-os }}
-      pkg-cpu: ${{ matrix.pkg-cpu }}
-
-  # Pin optionalDependencies to this exact release before publishing the
-  # main package, so the JS wrapper and native binaries never drift.
-  publish-main:
-    name: Publish main package
-    needs: [publish-packages]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          persist-credentials: false
-
-      - name: Install Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
-        with:
-          node-version-file: ".node-version"
-          registry-url: "https://registry.npmjs.org"
-          package-manager-cache: false # Ignore caching for releases
-
-      - name: Publish
-        working-directory: seshat-node
-        run: |
-          npm pkg set version="$GITHUB_REF_NAME"
-          for pkg in linux-x64 linux-arm64 darwin-x64 darwin-arm64 win32-x64 win32-arm64; do
-            npm pkg set "optionalDependencies.@matrix-org/seshat-$pkg=$GITHUB_REF_NAME"
-          done
-          npm publish --access public --provenance --publish-branch main
-
-  release:
-    name: Create GitHub Release
-    needs: [publish-main]
+  draft-release:
+    name: Create draft GitHub Release
+    needs: [build]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -104,11 +30,22 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Download all artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          path: artifacts/
+
+      - name: Collect .node files
+        run: |
+          mkdir -p dist
+          find artifacts/ -name "*.node" -exec mv {} dist/ \;
+
       - name: Create draft GitHub Release
         run: |
           gh release create "${GITHUB_REF_NAME}" \
             --draft \
             --generate-notes \
-            --title "${GITHUB_REF_NAME}"
+            --title "${GITHUB_REF_NAME}" \
+            dist/*.node
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

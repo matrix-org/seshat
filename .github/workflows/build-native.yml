@@ -8,7 +8,7 @@ on:
       targets:
         description: >-
           JSON array of {artifact-name, package-name, pkg-os, pkg-cpu} for
-          each target this workflow built, for downstream publish steps.
+          each target this workflow built.
         value: ${{ jobs.targets.outputs.targets }}
 
 concurrency:
@@ -20,10 +20,15 @@ env:
   # Set of targets to build for. This will be output back to the `release` job
   # so that it may build the correct packages.
   #
+  # ## Linux
   # Pinned to 22.04 (rather than ubuntu-latest) to keep the glibc version
   # these binaries link against as low as practical, so they stay loadable
   # on older distros. We also bias to using native runners over cross
   # compiling to avoid issues like https://github.com/matrix-org/seshat/issues/135.
+  #
+  # ## Windows
+  # Set of targets to build for, output back to release.yml's publish step.
+  # x64 is native; arm64 is cross-compiled from this same x64 host.
   TARGETS: |
     [
       {
@@ -75,6 +80,23 @@ env:
         "package-name": "@matrix-org/seshat-darwin-arm64",
         "pkg-os": "darwin",
         "pkg-cpu": "arm64"
+      },
+      {
+        "os": "windows-latest",
+        "target": "x86_64-pc-windows-msvc",
+        "artifact-name": "matrix-seshat-win32-x64.node",
+        "package-name": "@
+        matrix-org/seshat-win32-x64",
+        "pkg-os": "win32",
+        "pkg-cpu": "x64"
+      },
+      {
+        "os": "windows-latest",
+        "target": "aarch64-pc-windows-msvc",
+        "artifact-name": "matrix-seshat-win32-arm64.node",
+        "package-name": "@matrix-org/seshat-win32-arm64",
+        "pkg-os": "win32",
+        "pkg-cpu": "arm64"
       }
     ]
 
@@ -116,6 +138,23 @@ jobs:
           rustup default stable
           rustup target add ${{ matrix.target }}
 
+      - name: Install NASM (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          choco install nasm --no-progress -y
+          echo "C:\Program Files\NASM" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+
+      - name: Install Strawberry Perl (Windows)
+        if: runner.os == 'Windows'
+        # bundled-sqlcipher pulls in openssl-src, which shells out to `perl`
+        # to run OpenSSL's Configure. Git for Windows ships its own minimal
+        # perl, missing modules openssl-src's Configure needs (e.g.
+        # Locale::Maketext::Simple). `upgrade` is idempotent regardless of
+        # preinstalled state; version pinned to what's already on the image
+        # so this is a fast no-op.
+        run: choco upgrade strawberryperl --no-progress -y --version=5.42.0.1
+
       - name: Install libsqlcipher-dev (Linux, dynamic)
         if: runner.os == 'Linux' && matrix.sqlcipher == 'dynamic'
         run: |
@@ -133,7 +172,8 @@ jobs:
         # --ignore-scripts here because we do not want to build on install.
         run: yarn install --ignore-scripts
 
-      - name: Build (native)
+      - name: Build (Native)
+        if: runner.os != 'Windows'
         working-directory: seshat-node
         shell: bash
         # sqlcipher defaults to bundled when unset (only the two dynamic
@@ -144,6 +184,14 @@ jobs:
           else
             yarn run build-bundled --target ${{ matrix.target }}
           fi
+
+      - name: Build (Windows)
+        if: runner.os == 'Windows'
+        working-directory: seshat-node
+        shell: bash
+        run: |
+          export PATH="/c/Strawberry/perl/bin:$PATH"
+          yarn run build-bundled --target ${{ matrix.target }}
 
       - name: Rename artifact
         working-directory: seshat-node
