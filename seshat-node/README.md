@@ -22,6 +22,8 @@ install the matching package explicitly alongside the main one:
 
     $ yarn add @matrix-org/seshat @matrix-org/seshat-linux-x64-dynamic
 
+If both static and dynamic packages are installed, dynamic is preferred.
+
 ### Building from source
 
 For unsupported platforms, or to link the system SQLCipher yourself:
