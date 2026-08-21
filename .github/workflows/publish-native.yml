@@ -1,5 +1,8 @@
-# This publishes a single NPM package for a platform, intended to be run
-# by publish.yml
+# Publishes a single npm package for one platform/arch. Downloads a
+# prebuilt .node asset from a GitHub Release (built earlier by
+# build-native.yml) and wraps it into a scoped platform package; this
+# workflow does not build anything itself. Intended to be called once per
+# target by publish.yml.
 
 name: Publish npm package (single target)
 
@@ -23,11 +26,11 @@ on:
       pkg-os:
         type: string
         required: true
-        description: "The package.json \"os\" value, e.g. linux"
+        description: "Written into the generated package.json's \"os\" array, e.g. linux. npm/yarn use this to decide whether to install this package on a given platform."
       pkg-cpu:
         type: string
         required: true
-        description: "The package.json \"cpu\" value, e.g. x64"
+        description: "Written into the generated package.json's \"cpu\" array, e.g. x64. npm/yarn use this to decide whether to install this package on a given architecture."
 
 jobs:
   publish:
