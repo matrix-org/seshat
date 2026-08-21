@@ -92,8 +92,7 @@ env:
         "os": "windows-latest",
         "target": "x86_64-pc-windows-msvc",
         "artifact-name": "matrix-seshat-win32-x64.node",
-        "package-name": "@
-        matrix-org/seshat-win32-x64",
+        "package-name": "@matrix-org/seshat-win32-x64",
         "pkg-os": "win32",
         "pkg-cpu": "x64"
       },
