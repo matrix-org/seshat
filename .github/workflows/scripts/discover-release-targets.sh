@@ -19,6 +19,7 @@ assets=$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
 
 entries="[]"
 while IFS= read -r artifact; do
+  # For each build .node artifact, determine the package it is intended for.
   stripped="${artifact#matrix-seshat-}"
   stripped="${stripped%.node}"
   IFS='-' read -r os cpu variant <<< "$stripped"
