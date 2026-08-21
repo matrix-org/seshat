@@ -20,15 +20,22 @@ env:
   # Set of targets to build for. This will be output back to the `release` job
   # so that it may build the correct packages.
   #
+  # "os": Runner used to build the image
+  # "target": Target used by rustup
+  # "artifact-name": Resulting artifact name fro the build
+  # "pkg-os": Platform OS used in the package name
+  # "pkg-cpu": Platform architecture used in the package name
+  # "sqlcipher": "static" (default) or "dynamic" depending on whether we bake in sqlcipher.
+  #
   # ## Linux
   # Pinned to 22.04 (rather than ubuntu-latest) to keep the glibc version
-  # these binaries link against as low as practical, so they stay loadable
-  # on older distros. We also bias to using native runners over cross
-  # compiling to avoid issues like https://github.com/matrix-org/seshat/issues/135.
+  # these binaries link against as low as practical.
+  # We also bias to using native runners over cross compiling to avoid issues
+  # like https://github.com/matrix-org/seshat/issues/135.
   #
-  # ## Windows
-  # Set of targets to build for, output back to release.yml's publish step.
+  # ## MacOS / Windows
   # x64 is native; arm64 is cross-compiled from this same x64 host.
+  #
   TARGETS: |
     [
       {
