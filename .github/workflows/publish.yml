@@ -1,4 +1,5 @@
-# This publishes NPM packages when a GitHub release is published.
+# This workflow runs automatically when a GitHub release is published.
+# It publishes both the native packages and `@matrix-org/seshat`.
 
 name: Publish
 
@@ -17,33 +18,13 @@ jobs:
     outputs:
       targets: ${{ steps.discover.outputs.targets }}
     steps:
-      # This delightful bit of code discovers all the release artifacts
-      # on a draft GitHub release and figures out what packages we need to
-      # publish from it.
-      # This saves us a good few minutes of rebuilding between draft
-      # and release.
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
       - id: discover
-        run: |
-          set -eu
-
-          assets=$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
-            --json assets --jq '.assets[].name' | grep '^matrix-seshat-.*\.node$')
-
-          entries="[]"
-          while IFS= read -r artifact; do
-            stripped="${artifact#matrix-seshat-}"
-            stripped="${stripped%.node}"
-            IFS='-' read -r os cpu variant <<< "$stripped"
-            pkgname="@matrix-org/seshat-$os-$cpu"
-            if [ "${variant:-}" = "dynamic" ]; then
-              pkgname="${pkgname}-dynamic"
-            fi
-            entry=$(jq -n --arg artifact "$artifact" --arg package "$pkgname" --arg os "$os" --arg cpu "$cpu" \
-              '{"artifact-name": $artifact, "package-name": $package, "pkg-os": $os, "pkg-cpu": $cpu}')
-            entries=$(echo "$entries" | jq --argjson e "$entry" '. + [$e]')
-          done <<< "$assets"
-
-          echo "targets=$(echo "$entries" | jq -c .)" >> "$GITHUB_OUTPUT"
+        run: bash .github/workflows/scripts/discover-release-targets.sh
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.event.release.tag_name }}
