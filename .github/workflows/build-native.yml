@@ -156,7 +156,7 @@ jobs:
           choco install nasm --no-progress -y
           choco upgrade strawberryperl --no-progress -y --version=5.42.0.1
           echo "C:\Program Files\NASM" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-          echo "C:\Strawberry\perl\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          "OPENSSL_SRC_PERL=C:\Strawberry\perl\bin\perl.exe" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Install libsqlcipher-dev (Linux, dynamic)
         if: runner.os == 'Linux' && matrix.sqlcipher == 'dynamic'
