@@ -20,9 +20,9 @@ env:
   # Set of targets to build for. This will be output back to the `release` job
   # so that it may build the correct packages.
   #
-  # "os": Runner used to build the image
+  # "runner": Runner used to build the image
   # "target": Target used by rustup
-  # "artifact-name": Resulting artifact name fro the build
+  # "artifact-name": Resulting artifact name for the build
   # "pkg-os": Platform OS used in the package name
   # "pkg-cpu": Platform architecture used in the package name
   # "sqlcipher": "static" (default) or "dynamic" depending on whether we bake in sqlcipher.
@@ -30,7 +30,7 @@ env:
   # ## Linux
   # Pinned to 22.04 (rather than ubuntu-latest) to keep the glibc version
   # these binaries link against as low as practical.
-  # We also bias to using native runners over cross compiling to avoid issues
+  # We also bias to using native runners over cross-compiling to avoid issues
   # like https://github.com/matrix-org/seshat/issues/135.
   #
   # ## MacOS / Windows
@@ -39,7 +39,7 @@ env:
   TARGETS: |
     [
       {
-        "os": "ubuntu-22.04",
+        "runner": "ubuntu-22.04",
         "target": "x86_64-unknown-linux-gnu",
         "artifact-name": "matrix-seshat-linux-x64.node",
         "package-name": "@matrix-org/seshat-linux-x64",
@@ -47,7 +47,7 @@ env:
         "pkg-cpu": "x64"
       },
       {
-        "os": "ubuntu-22.04",
+        "runner": "ubuntu-22.04",
         "target": "x86_64-unknown-linux-gnu",
         "artifact-name": "matrix-seshat-linux-x64-dynamic.node",
         "sqlcipher": "dynamic",
@@ -56,7 +56,7 @@ env:
         "pkg-cpu": "x64"
       },
       {
-        "os": "ubuntu-22.04-arm",
+        "runner": "ubuntu-22.04-arm",
         "target": "aarch64-unknown-linux-gnu",
         "artifact-name": "matrix-seshat-linux-arm64.node",
         "package-name": "@matrix-org/seshat-linux-arm64",
@@ -64,7 +64,7 @@ env:
         "pkg-cpu": "arm64"
       },
       {
-        "os": "ubuntu-22.04-arm",
+        "runner": "ubuntu-22.04-arm",
         "target": "aarch64-unknown-linux-gnu",
         "artifact-name": "matrix-seshat-linux-arm64-dynamic.node",
         "sqlcipher": "dynamic",
@@ -73,7 +73,7 @@ env:
         "pkg-cpu": "arm64"
       },
       {
-        "os": "macos-latest",
+        "runner": "macos-latest",
         "target": "x86_64-apple-darwin",
         "artifact-name": "matrix-seshat-darwin-x64.node",
         "package-name": "@matrix-org/seshat-darwin-x64",
@@ -81,7 +81,7 @@ env:
         "pkg-cpu": "x64"
       },
       {
-        "os": "macos-latest",
+        "runner": "macos-latest",
         "target": "aarch64-apple-darwin",
         "artifact-name": "matrix-seshat-darwin-arm64.node",
         "package-name": "@matrix-org/seshat-darwin-arm64",
@@ -89,7 +89,7 @@ env:
         "pkg-cpu": "arm64"
       },
       {
-        "os": "windows-latest",
+        "runner": "windows-latest",
         "target": "x86_64-pc-windows-msvc",
         "artifact-name": "matrix-seshat-win32-x64.node",
         "package-name": "@matrix-org/seshat-win32-x64",
@@ -97,7 +97,7 @@ env:
         "pkg-cpu": "x64"
       },
       {
-        "os": "windows-latest",
+        "runner": "windows-latest",
         "target": "aarch64-pc-windows-msvc",
         "artifact-name": "matrix-seshat-win32-arm64.node",
         "package-name": "@matrix-org/seshat-win32-arm64",
@@ -124,7 +124,7 @@ jobs:
   build:
     name: Build ${{ matrix.artifact-name }}
     needs: [targets]
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
     strategy:
@@ -156,6 +156,7 @@ jobs:
           choco install nasm --no-progress -y
           choco upgrade strawberryperl --no-progress -y --version=5.42.0.1
           echo "C:\Program Files\NASM" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          echo "C:\Strawberry\perl\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
       - name: Install libsqlcipher-dev (Linux, dynamic)
         if: runner.os == 'Linux' && matrix.sqlcipher == 'dynamic'
@@ -173,8 +174,7 @@ jobs:
         working-directory: seshat-node
         run: yarn install
 
-      - name: Build (Native)
-        if: runner.os != 'Windows'
+      - name: Build
         working-directory: seshat-node
         shell: bash
         # sqlcipher defaults to bundled when unset (only the two dynamic
@@ -185,14 +185,6 @@ jobs:
           else
             yarn run build-bundled --target ${{ matrix.target }}
           fi
-
-      - name: Build (Windows)
-        if: runner.os == 'Windows'
-        working-directory: seshat-node
-        shell: bash
-        run: |
-          export PATH="/c/Strawberry/perl/bin:$PATH"
-          yarn run build-bundled --target ${{ matrix.target }}
 
       - name: Rename artifact
         working-directory: seshat-node

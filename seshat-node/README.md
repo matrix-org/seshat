@@ -22,7 +22,7 @@ install the matching package explicitly alongside the main one:
 
     $ yarn add @matrix-org/seshat @matrix-org/seshat-linux-x64-dynamic
 
-If both static and dynamic packages are installed, dynamic is preferred.
+The dynamic build, if installed, takes precedence over the static one.
 
 ### Building from source
 

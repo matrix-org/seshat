@@ -17,9 +17,10 @@ set -eu
 assets=$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
   --json assets --jq '.assets[].name' | grep '^matrix-seshat-.*\.node$')
 
-entries="[]"
+entries=()
 while IFS= read -r artifact; do
-  # For each build .node artifact, determine the package it is intended for.
+  # For each .node artifact attached to the Github release, determine the
+  # package it is intended for...
   stripped="${artifact#matrix-seshat-}"
   stripped="${stripped%.node}"
   IFS='-' read -r os cpu variant <<< "$stripped"
@@ -27,9 +28,11 @@ while IFS= read -r artifact; do
   if [ "${variant:-}" = "dynamic" ]; then
     pkgname="${pkgname}-dynamic"
   fi
-  entry=$(jq -n --arg artifact "$artifact" --arg package "$pkgname" --arg os "$os" --arg cpu "$cpu" \
+
+  # ... and generate a suitably-formatted entry for `targets`
+  entry=$(jq -nc --arg artifact "$artifact" --arg package "$pkgname" --arg os "$os" --arg cpu "$cpu" \
     '{"artifact-name": $artifact, "package-name": $package, "pkg-os": $os, "pkg-cpu": $cpu}')
-  entries=$(echo "$entries" | jq --argjson e "$entry" '. + [$e]')
+  entries+=("$entry")
 done <<< "$assets"
 
-echo "targets=$(echo "$entries" | jq -c .)" >> "$GITHUB_OUTPUT"
+echo "targets=$(printf '%s\n' "${entries[@]}" | jq -cs .)" >> "$GITHUB_OUTPUT"
