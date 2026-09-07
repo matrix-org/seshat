@@ -1,5 +1,5 @@
 {
-  "name": "matrix-seshat",
+  "name": "@matrix-org/seshat",
   "version": "5.0.0",
   "description": "A matrix message logger with full text search support",
   "main": "index.js",
@@ -12,6 +12,11 @@
     "jest": "^27.4.0",
     "jsdoc": "^3.6.3"
   },
+  "repository": {
+      "type": "git",
+      "url": "git+https://github.com/matrix-org/seshat.git",
+      "directory": "seshat-node"
+  },
   "files": [
     "Cargo.toml",
     "Cargo.lock",
@@ -20,7 +25,7 @@
     "README.md"
   ],
   "scripts": {
-    "build": "cargo-cp-artifact -nc index.node -- cargo build --message-format=json-render-diagnostics --release",
+    "build": "cargo-cp-artifact -a cdylib matrix-seshat index.node -- cargo build --message-format=json-render-diagnostics --release",
     "build-bundled": "yarn run build --features=bundled-sqlcipher",
     "test": "jest",
     "lint": "eslint lib/index.js"

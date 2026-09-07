@@ -13,7 +13,43 @@
 // limitations under the License.
 
 const {promisify} = require('util');
-const seshatNative = require('./index.node');
+
+/**
+ * Loads the native module for the current platform/arch.
+ *
+ * We prefer to load the dynamic library version of seshat
+ * over static builds.
+ *
+ * @return {object} The loaded native module.
+ * @throws If a candidate native module could not be found.
+ */
+function loadNative() {
+    const platform = process.platform;
+    const arch = process.arch;
+    const platformPkg = `@matrix-org/seshat-${platform}-${arch}`;
+    const candidates = [];
+    if (process.platform === 'linux') {
+        candidates.push(`${platformPkg}-dynamic`);
+    }
+    candidates.push(platformPkg);
+    candidates.push('./index.node');
+
+    for (const candidate of candidates) {
+        try {
+            return require(candidate);
+        } catch (e) {
+            if (e.code !== 'MODULE_NOT_FOUND') throw e;
+        }
+    }
+
+    throw new Error(
+        `Could not find a prebuilt native module for ${platform}-${arch}. ` +
+        `Install the matching ${platformPkg} package, or build from source. ` +
+        'See https://github.com/matrix-org/seshat for instructions.',
+    );
+}
+
+const seshatNative = loadNative();
 
 /**
  * @typedef searchResult

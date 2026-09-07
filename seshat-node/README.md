@@ -4,19 +4,39 @@ Node.js bindings for the Matrix message database/indexer Seshat.
 
 ## Installation
 
-To install the bindings rust and yarn are needed:
+    $ yarn add @matrix-org/seshat
 
-    $ yarn && yarn run build-bundled
+Prebuilt native modules are published as per-platform `optionalDependencies`;
+your package manager installs only the one matching your machine. Prebuilts
+are published for:
 
-The above command will compile all the necessary rust libraries, install
-javascript dependencies and build a node module.
+| Platform | Architectures | SQLCipher                    |
+| -------- | -------------- | ---------------------------- |
+| Linux    | x64, arm64     | static (default) or dynamic  |
+| macOS    | x64, arm64     | static                       |
+| Windows  | x64, arm64     | static                       |
 
-This will build a fully static version, with SQLCipher and OpenSSL statically
-built and linked by cargo.
+Static links SQLCipher and OpenSSL into the module; dynamic links the
+system's SQLCipher instead. Dynamic is not installed by default. To use it,
+install the matching package explicitly alongside the main one:
 
-If you'd rather use SQLCipher from the system you can use `build` instead.
+    $ yarn add @matrix-org/seshat @matrix-org/seshat-linux-x64-dynamic
 
-After the command is done building the library can be used inside of node as usual:
+The dynamic build, if installed, takes precedence over the static one.
+
+### Building from source
+
+For unsupported platforms, or to link the system SQLCipher yourself:
+
+    $ git clone https://github.com/matrix-org/seshat
+    $ cd seshat/seshat-node
+    $ yarn install
+    $ yarn run build            # links the system SQLCipher
+    $ yarn run build-bundled    # statically links SQLCipher + OpenSSL
+
+Requires a Rust toolchain (and the system SQLCipher headers, for `build`).
+
+Once installed, the library can be used inside of node as usual:
 
 ```javascript
 const Seshat = require(".")

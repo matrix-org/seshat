@@ -1,0 +1,89 @@
+# Publishes a single npm package for one platform/arch. Downloads a
+# prebuilt .node asset from a GitHub Release (built earlier by
+# build-native.yml) and wraps it into a scoped platform package; this
+# workflow does not build anything itself. Intended to be called once per
+# target by publish.yml.
+
+name: Publish npm package (single target)
+
+permissions: {}
+
+on:
+  workflow_call:
+    inputs:
+      release-tag:
+        type: string
+        required: true
+        description: "The published GitHub Release tag to pull the built .node asset from, e.g. 5.1.0"
+      artifact-name:
+        type: string
+        required: true
+        description: "The release asset to publish, e.g. matrix-seshat-linux-x64.node"
+      package-name:
+        type: string
+        required: true
+        description: "The npm package name to publish as, e.g. @matrix-org/seshat-linux-x64"
+      pkg-os:
+        type: string
+        required: true
+        description: "Written into the generated package.json's \"os\" array, e.g. linux. npm/yarn use this to decide whether to install this package on a given platform."
+      pkg-cpu:
+        type: string
+        required: true
+        description: "Written into the generated package.json's \"cpu\" array, e.g. x64. npm/yarn use this to decide whether to install this package on a given architecture."
+
+jobs:
+  publish:
+    name: Publish ${{ inputs.package-name }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Install Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version-file: ".node-version"
+          registry-url: "https://registry.npmjs.org"
+          package-manager-cache: false # Ignore caching for releases
+
+      - name: Download release asset
+        run: gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern "$ARTIFACT_NAME" --dir dist/
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release-tag }}
+          ARTIFACT_NAME: ${{ inputs.artifact-name }}
+
+      # This builds a package.json for a platform package.
+      # Inputs are passed via env rather than interpolated directly into the
+      # script, so they're treated as data, not shell/template code.
+      - name: Assemble package
+        run: |
+          set -eu
+          mkdir -p pkg
+          cp "dist/$ARTIFACT_NAME" pkg/index.node
+          cat > pkg/package.json <<EOF
+          {
+            "name": "$PACKAGE_NAME",
+            "version": "$RELEASE_TAG",
+            "description": "Prebuilt matrix-seshat native module for $PKG_OS $PKG_CPU",
+            "license": "Apache-2.0",
+            "repository": {
+              "type": "git",
+              "url": "git+https://github.com/matrix-org/seshat.git"
+            },
+            "os": ["$PKG_OS"],
+            "cpu": ["$PKG_CPU"],
+            "files": ["index.node"]
+          }
+          EOF
+        env:
+          RELEASE_TAG: ${{ inputs.release-tag }}
+          ARTIFACT_NAME: ${{ inputs.artifact-name }}
+          PACKAGE_NAME: ${{ inputs.package-name }}
+          PKG_OS: ${{ inputs.pkg-os }}
+          PKG_CPU: ${{ inputs.pkg-cpu }}
+
+      - name: Publish
+        run: npm publish --access public --provenance --publish-branch main pkg/

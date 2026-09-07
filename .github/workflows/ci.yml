@@ -53,6 +53,13 @@ jobs:
         run: |
           cargo clippy --all-targets -- -D warnings
 
+  build-native:
+    name: Build native modules
+    needs: [clippy]
+    permissions:
+      contents: read
+    uses: ./.github/workflows/build-native.yml
+
   build-test:
     name: ${{ matrix.name }}
     needs: [clippy]
@@ -111,7 +118,7 @@ jobs:
       - name: Install node
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         with:
-          node-version: "18"
+          node-version-file: ".node-version"
 
       - name: Install node build dependencies
         run: cd seshat-node && yarn install
