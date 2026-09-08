@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## 6.0.0 - 2026-07-22
+
+- **BREAKING**: The NPM package for the node bindings renamed from `matrix-seshat` to `@matrix-org/seshat`,
+  which now includes per-platform binary packages. As a result, there is no longer a post-install script.
+  [[#190](https://github.com/matrix-org/seshat/pull/184)]
+
 ## 5.0.0 - 2026-07-22
 
 - **BREAKING**: Change some methods on `Database` to take `&self` instead of
