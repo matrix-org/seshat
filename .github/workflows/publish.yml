@@ -81,6 +81,6 @@ jobs:
           for pkg in linux-x64 linux-arm64 darwin-x64 darwin-arm64 win32-x64 win32-arm64; do
             npm pkg set "optionalDependencies.@matrix-org/seshat-$pkg=$RELEASE_TAG"
           done
-          npm publish --access public --provenance --publish-branch main
+          npm publish --access public --provenance
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
