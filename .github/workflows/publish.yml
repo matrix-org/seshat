@@ -68,6 +68,10 @@ jobs:
           registry-url: "https://registry.npmjs.org"
           package-manager-cache: false # Ignore caching for releases
 
+      # NPM trusted publishing needs npm >= 11.5.1.
+      - name: Install npm 11
+        run: npm install --global npm@11
+
         # Pin optionalDependencies to this exact release before publishing the
         # main package, so the JS wrapper and native binaries never drift.
       - name: Publish

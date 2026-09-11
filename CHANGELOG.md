@@ -7,7 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## 6.0.1 - 2026-09-11
+
+- Fix the npm publish jobs failing to find `.node-version`.
+  [[#206](https://github.com/matrix-org/seshat/pull/206)]
+
 ## 6.0.0 - 2026-07-22
+
+*This release does not have an associated NPM/Cargo release as it was never published.*
 
 - **BREAKING**: The NPM package for the node bindings renamed from `matrix-seshat` to `@matrix-org/seshat`,
   which now includes per-platform binary packages. As a result, there is no longer a post-install script.
