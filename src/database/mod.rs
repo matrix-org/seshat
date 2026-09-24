@@ -854,6 +854,49 @@ fn load_event_context() {
 }
 
 #[test]
+fn load_event_context_with_different_limits() {
+    let tmpdir = tempdir().unwrap();
+    let db = Database::new(tmpdir.path()).unwrap();
+    let profile = Profile::new("Alice", "");
+
+    db.add_event(EVENT.clone(), profile.clone());
+
+    for i in 1..6 {
+        let mut event: Event = Faker.fake();
+        event.room_id = EVENT.room_id.clone();
+        event.server_ts = EVENT.server_ts - i;
+        event.source = format!("before {}", i);
+        db.add_event(event, profile.clone());
+
+        let mut event: Event = Faker.fake();
+        event.room_id = EVENT.room_id.clone();
+        event.server_ts = EVENT.server_ts + i;
+        event.source = format!("after {}", i);
+        db.add_event(event, profile.clone());
+    }
+
+    db.force_commit().unwrap();
+
+    // Each side gets the number of events that was asked for it, and the
+    // closest event comes first.
+    let (before, after, _) =
+        Database::load_event_context(&db.connection.lock().unwrap(), &EVENT, 3, 1).unwrap();
+
+    assert_eq!(before.len(), 3);
+    assert_eq!(before[0], "before 1");
+    assert_eq!(before[2], "before 3");
+    assert_eq!(after.len(), 1);
+    assert_eq!(after[0], "after 1");
+
+    let (before, after, _) =
+        Database::load_event_context(&db.connection.lock().unwrap(), &EVENT, 1, 4).unwrap();
+
+    assert_eq!(before.len(), 1);
+    assert_eq!(after.len(), 4);
+    assert_eq!(after[3], "after 4");
+}
+
+#[test]
 fn save_and_load_checkpoints() {
     let tmpdir = tempdir().unwrap();
     let db = Database::new(tmpdir.path()).unwrap();

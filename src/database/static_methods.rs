@@ -808,22 +808,17 @@ impl Database {
         } else {
             let mut stmt = connection.prepare(
                 "
-                WITH room_events AS (
-                    SELECT *
-                    FROM events
-                    WHERE room_id == ?2
-                )
                 SELECT source, sender, displayname, avatar_url
-                FROM room_events
-                INNER JOIN profile on profile.id = room_events.profile_id
-                WHERE (
-                    (event_id != ?1) &
-                    (server_ts <= ?3)
-                ) ORDER BY server_ts DESC LIMIT ?4
+                FROM events
+                INNER JOIN profile on profile.id = events.profile_id
+                WHERE room_id == ?2
+                  AND event_id != ?1
+                  AND server_ts <= ?3
+                ORDER BY server_ts DESC LIMIT ?4
                 ",
             )?;
             let context = stmt.query_map(
-                params![&event.event_id, &room_id, &event.server_ts, &after_limit,],
+                params![&event.event_id, &room_id, &event.server_ts, &before_limit,],
                 |row| {
                     Ok((
                         row.get(0),
@@ -851,18 +846,13 @@ impl Database {
         } else {
             let mut stmt = connection.prepare(
                 "
-                WITH room_events AS (
-                    SELECT *
-                    FROM events
-                    WHERE room_id == ?2
-                )
                 SELECT source, sender, displayname, avatar_url
-                FROM room_events
-                INNER JOIN profile on profile.id = room_events.profile_id
-                WHERE (
-                    (event_id != ?1) &
-                    (server_ts >= ?3)
-                ) ORDER BY server_ts ASC LIMIT ?4
+                FROM events
+                INNER JOIN profile on profile.id = events.profile_id
+                WHERE room_id == ?2
+                  AND event_id != ?1
+                  AND server_ts >= ?3
+                ORDER BY server_ts ASC LIMIT ?4
                 ",
             )?;
             let context = stmt.query_map(
