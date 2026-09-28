@@ -690,11 +690,10 @@ impl Database {
             Some(event) => {
                 let mut stmt = connection.prepare(
                     "SELECT source FROM events
-                     WHERE (
-                         (type == 'm.room.message') &
-                         (event_id != ?1) &
-                         (server_ts <= ?2)
-                     ) ORDER BY server_ts DESC LIMIT ?3
+                     WHERE type == 'm.room.message'
+                       AND event_id != ?1
+                       AND server_ts <= ?2
+                     ORDER BY server_ts DESC LIMIT ?3
                      ",
                 )?;
 
@@ -738,13 +737,12 @@ impl Database {
                     "SELECT source, displayname, avatar_url
                      FROM events
                      INNER JOIN profile on profile.id = events.profile_id
-                     WHERE (
-                         (events.room_id == ?1) &
-                         (type == 'm.room.message') &
-                         (msgtype in ({})) &
-                         (event_id != ?2) &
-                         (server_ts {} ?3)
-                     ) ORDER BY server_ts {} LIMIT ?4
+                     WHERE events.room_id == ?1
+                       AND type == 'm.room.message'
+                       AND msgtype in ({})
+                       AND event_id != ?2
+                       AND server_ts {} ?3
+                     ORDER BY server_ts {} LIMIT ?4
                      ",
                     FILE_EVENT_TYPES, direction, sort
                 ))?;
@@ -769,11 +767,10 @@ impl Database {
                     "SELECT source, displayname, avatar_url
                      FROM events
                      INNER JOIN profile on profile.id = events.profile_id
-                     WHERE (
-                         (events.room_id == ?1) &
-                         (type == 'm.room.message') &
-                         (msgtype in ({}))
-                     ) ORDER BY server_ts DESC LIMIT ?2
+                     WHERE events.room_id == ?1
+                       AND type == 'm.room.message'
+                       AND msgtype in ({})
+                     ORDER BY server_ts DESC LIMIT ?2
                      ",
                     FILE_EVENT_TYPES
                 ))?;
@@ -808,22 +805,17 @@ impl Database {
         } else {
             let mut stmt = connection.prepare(
                 "
-                WITH room_events AS (
-                    SELECT *
-                    FROM events
-                    WHERE room_id == ?2
-                )
                 SELECT source, sender, displayname, avatar_url
-                FROM room_events
-                INNER JOIN profile on profile.id = room_events.profile_id
-                WHERE (
-                    (event_id != ?1) &
-                    (server_ts <= ?3)
-                ) ORDER BY server_ts DESC LIMIT ?4
+                FROM events
+                INNER JOIN profile on profile.id = events.profile_id
+                WHERE room_id == ?2
+                  AND event_id != ?1
+                  AND server_ts <= ?3
+                ORDER BY server_ts DESC LIMIT ?4
                 ",
             )?;
             let context = stmt.query_map(
-                params![&event.event_id, &room_id, &event.server_ts, &after_limit,],
+                params![&event.event_id, &room_id, &event.server_ts, &before_limit,],
                 |row| {
                     Ok((
                         row.get(0),
@@ -851,18 +843,13 @@ impl Database {
         } else {
             let mut stmt = connection.prepare(
                 "
-                WITH room_events AS (
-                    SELECT *
-                    FROM events
-                    WHERE room_id == ?2
-                )
                 SELECT source, sender, displayname, avatar_url
-                FROM room_events
-                INNER JOIN profile on profile.id = room_events.profile_id
-                WHERE (
-                    (event_id != ?1) &
-                    (server_ts >= ?3)
-                ) ORDER BY server_ts ASC LIMIT ?4
+                FROM events
+                INNER JOIN profile on profile.id = events.profile_id
+                WHERE room_id == ?2
+                  AND event_id != ?1
+                  AND server_ts >= ?3
+                ORDER BY server_ts ASC LIMIT ?4
                 ",
             )?;
             let context = stmt.query_map(
@@ -905,7 +892,7 @@ impl Database {
              server_ts, rooms.room_id, source
              FROM events
              INNER JOIN rooms on rooms.id = events.room_id
-             WHERE (events.room_id == ?1) & (event_id == ?2)",
+             WHERE events.room_id == ?1 AND event_id == ?2",
             [&room_id as &dyn ToSql, &event_id],
             |row| {
                 Ok(Event {
