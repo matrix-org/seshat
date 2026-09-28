@@ -96,4 +96,4 @@ jobs:
           PKG_CPU: ${{ inputs.pkg-cpu }}
 
       - name: Publish
-        run: npm publish --access public --provenance --publish-branch main pkg/
+        run: npm publish --access public --provenance pkg/
