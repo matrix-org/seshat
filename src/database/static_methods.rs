@@ -26,8 +26,8 @@ use crate::{
     database::{SearchResult, DATABASE_VERSION},
     error::Result,
     events::{
-        get_replaced_event_id, CrawlerCheckpoint, Event, EventContext, EventId, Profile,
-        SerializedEvent,
+        get_replaced_event_id, CrawlerCheckpoint, Event, EventContext, EventId, IndexedEvent,
+        Profile, SerializedEvent,
     },
     index::Writer as IndexWriter,
     Database,
@@ -715,6 +715,44 @@ impl Database {
                 events.collect()
             }
         }
+    }
+
+    pub(crate) fn load_event_ids(
+        connection: &rusqlite::Connection,
+        room_id: &str,
+        limit: usize,
+        from_event: Option<&str>,
+        direction: &LoadDirection,
+    ) -> rusqlite::Result<Vec<IndexedEvent>> {
+        let (comparison, sort, start) = match direction {
+            LoadDirection::Backwards => ("<", "DESC", i64::MAX),
+            LoadDirection::Forwards => (">", "ASC", i64::MIN),
+        };
+        let (server_ts, id) = match from_event {
+            Some(event_id) => connection.query_row(
+                "SELECT server_ts, events.id FROM events
+                 INNER JOIN rooms on rooms.id = events.room_id
+                 WHERE rooms.room_id == ?1 AND event_id == ?2",
+                params![room_id, event_id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )?,
+            None => (start, start),
+        };
+        let mut stmt = connection.prepare(&format!(
+            "SELECT event_id, type, server_ts FROM events
+             INNER JOIN rooms on rooms.id = events.room_id
+             WHERE rooms.room_id == ?1 AND (server_ts, events.id) {} (?2, ?3)
+             ORDER BY server_ts {}, events.id {} LIMIT ?4",
+            comparison, sort, sort
+        ))?;
+        let events = stmt.query_map(params![room_id, server_ts, id, limit], |row| {
+            Ok(IndexedEvent {
+                event_id: row.get(0)?,
+                event_type: row.get(1)?,
+                server_ts: row.get(2)?,
+            })
+        })?;
+        events.collect()
     }
 
     pub(crate) fn load_file_events(

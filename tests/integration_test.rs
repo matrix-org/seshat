@@ -2,8 +2,8 @@
 extern crate lazy_static;
 
 use seshat::{
-    CheckpointDirection, CrawlerCheckpoint, Database, Event, EventType, LoadConfig, LoadDirection,
-    Profile, SearchConfig,
+    CheckpointDirection, CrawlerCheckpoint, Database, Event, EventType, IndexedEvent, LoadConfig,
+    LoadDirection, Profile, SearchConfig,
 };
 
 #[cfg(feature = "encryption")]
@@ -615,6 +615,85 @@ fn load_file_events_directions() {
     assert_eq!(result.len(), 2);
     assert_eq!(result[0].0, IMAGE_EVENT.source);
     assert_eq!(result[1].0, VIDEO_EVENT.source);
+}
+
+#[test]
+fn load_event_ids_order_and_pagination() {
+    let tmpdir = tempdir().unwrap();
+    let db = Database::new(tmpdir.path()).unwrap();
+    let mut expected = Vec::new();
+
+    for (event_id, server_ts, event_type) in [
+        ("$z", 20, EventType::Message),
+        ("$y", 10, EventType::Name),
+        ("$x", 20, EventType::Topic),
+        ("$w", 30, EventType::Message),
+        ("$v", 20, EventType::Message),
+        ("$u", 20, EventType::Name),
+    ] {
+        let mut event = EVENT.clone();
+        event.event_id = event_id.to_owned();
+        event.server_ts = server_ts;
+        event.event_type = event_type.clone();
+        db.add_event(event, Profile::new("Alice", ""));
+        expected.push(IndexedEvent {
+            event_id: event_id.to_owned(),
+            event_type,
+            server_ts,
+        });
+    }
+    db.force_commit().unwrap();
+    expected.sort_by_key(|event| event.server_ts);
+    let connection = db.get_connection().unwrap();
+
+    for direction in [LoadDirection::Forwards, LoadDirection::Backwards] {
+        let mut ordered = expected.clone();
+        if matches!(direction, LoadDirection::Backwards) {
+            ordered.reverse();
+        }
+        let config = LoadConfig::new(&EVENT.room_id).direction(direction);
+        assert_eq!(connection.load_event_ids(&config).unwrap(), ordered);
+        let mut config = config.limit(2);
+        for expected_page in ordered.chunks(2) {
+            let page = connection.load_event_ids(&config).unwrap();
+            assert_eq!(page, expected_page);
+            config = config.from_event(&page.last().unwrap().event_id);
+        }
+        assert!(connection.load_event_ids(&config).unwrap().is_empty());
+    }
+}
+
+#[test]
+fn load_event_ids_room_isolation_and_cursor() {
+    let tmpdir = tempdir().unwrap();
+    let db = Database::new(tmpdir.path()).unwrap();
+    db.add_event(EVENT.clone(), Profile::new("Alice", ""));
+    let mut other_event = TOPIC_EVENT.clone();
+    other_event.room_id = "!other:localhost".to_owned();
+    db.add_event(other_event.clone(), Profile::new("Alice", ""));
+    db.force_commit().unwrap();
+    let connection = db.get_connection().unwrap();
+    let config = LoadConfig::new(&EVENT.room_id);
+    assert_eq!(
+        connection.load_event_ids(&config).unwrap(),
+        vec![IndexedEvent {
+            event_id: EVENT.event_id.clone(),
+            event_type: EVENT.event_type.clone(),
+            server_ts: EVENT.server_ts,
+        }]
+    );
+    assert!(connection
+        .load_event_ids(&LoadConfig::new("!unknown:localhost"))
+        .unwrap()
+        .is_empty());
+    assert!(connection
+        .load_event_ids(&config.clone().from_event(&other_event.event_id))
+        .is_err());
+    db.delete_event(&EVENT.event_id).recv().unwrap().unwrap();
+    assert!(connection
+        .load_event_ids(&config.clone().from_event(&EVENT.event_id))
+        .is_err());
+    assert!(connection.load_event_ids(&config).unwrap().is_empty());
 }
 
 #[test]

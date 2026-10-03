@@ -86,6 +86,14 @@ impl FromSql for EventType {
     }
 }
 
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+#[allow(missing_docs)]
+pub struct IndexedEvent {
+    pub event_id: String,
+    pub event_type: EventType,
+    pub server_ts: i64,
+}
+
 /// Matrix event that can be added to the database.
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct Event {
