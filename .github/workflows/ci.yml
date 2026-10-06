@@ -53,6 +53,9 @@ jobs:
       - name: Lint and check formatting
         run: cd seshat-node && yarn run lint
 
+      - name: Type check
+        run: cd seshat-node && yarn run build:ts --noEmit
+
   clippy:
     name: Run clippy
     needs: [style]
