@@ -550,6 +550,28 @@ describe('Database', function() {
         expect(events[1].event).toEqual(videoEvent);
     });
 
+    it('should load stored event metadata in timestamp order for one room', async function() {
+        const db = createDb();
+        for (const event of [nameEvent, matrixEvent, topicEvent, matrixEventRoom2]) {
+            db.addEvent(event, matrixProfileOnlyDisplayName);
+        }
+        await db.commit(true);
+
+        const metadata = event => ({
+            eventId: event.event_id,
+            type: event.type,
+            serverTs: event.origin_server_ts,
+        });
+        const args = {roomId: matrixEvent.room_id, limit: 10};
+        expect(await db.loadEventIds(args)).toEqual(
+            [nameEvent, topicEvent, matrixEvent].map(metadata));
+        expect(await db.loadEventIds({...args, direction: "forwards"})).toEqual(
+            [matrixEvent, topicEvent, nameEvent].map(metadata));
+        expect(await db.loadEventIds({...args, roomId: matrixEventRoom2.room_id})).toEqual(
+            [metadata(matrixEventRoom2)]);
+        expect(await db.loadEventIds({...args, roomId: "!unknown:example.org"})).toEqual([]);
+    });
+
     it('should allow us query the database for statistics', async function() {
         const db = createDb();
 

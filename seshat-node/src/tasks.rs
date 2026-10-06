@@ -19,8 +19,8 @@ use std::sync::Mutex;
 use crate::utils::*;
 use neon::prelude::*;
 use seshat::{
-    CheckpointDirection, Connection, CrawlerCheckpoint, DatabaseStats, LoadConfig, Profile,
-    Receiver, RecoveryDatabase, SearchBatch, SearchConfig, Searcher,
+    CheckpointDirection, Connection, CrawlerCheckpoint, DatabaseStats, IndexedEvent, LoadConfig,
+    Profile, Receiver, RecoveryDatabase, SearchBatch, SearchConfig, Searcher,
 };
 
 pub trait Task: Send + Sized + 'static {
@@ -430,6 +430,49 @@ impl Task for LoadFileEventsTask {
             let profile = profile_to_js(&mut cx, profile)?;
             result.set(&mut cx, "event", event)?;
             result.set(&mut cx, "profile", profile)?;
+
+            results.set(&mut cx, i as u32, result)?;
+        }
+
+        Ok(results)
+    }
+}
+
+pub(crate) struct LoadEventIdsTask {
+    pub(crate) inner: Connection,
+    pub(crate) config: LoadConfig,
+}
+
+impl Task for LoadEventIdsTask {
+    type Output = Vec<IndexedEvent>;
+    type Error = seshat::Error;
+    type JsEvent = JsArray;
+
+    fn perform(&self) -> Result<Self::Output, Self::Error> {
+        self.inner.load_event_ids(&self.config)
+    }
+
+    fn complete<'a, 'b>(
+        self,
+        mut cx: ComputeContext<'a, 'b>,
+        result: Result<Self::Output, Self::Error>,
+    ) -> JsResult<'a, Self::JsEvent> {
+        let ret = match result {
+            Ok(r) => r,
+            Err(e) => return cx.throw_type_error(e.to_string()),
+        };
+
+        let results = JsArray::new(&mut cx, ret.len() as u32);
+
+        for (i, event) in ret.into_iter().enumerate() {
+            let result = cx.empty_object();
+
+            let event_id = cx.string(&event.event_id);
+            let event_type = cx.string(event.event_type.to_string());
+            let server_ts = cx.number(event.server_ts as f64);
+            result.set(&mut cx, "eventId", event_id)?;
+            result.set(&mut cx, "type", event_type)?;
+            result.set(&mut cx, "serverTs", server_ts)?;
 
             results.set(&mut cx, i as u32, result)?;
         }
