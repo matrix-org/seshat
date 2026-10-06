@@ -17,19 +17,19 @@ const matrixEvent = {
 };
 
 const nulByteEvent = {
-  "type": "m.room.message",
-  "sender": "@alice:example.org",
-  "content": {
-    "body": "\u00000",
-    "msgtype": "m.text"
-  },
-  "event_id": "$150966230487Ugkmt:example.org",
-  "origin_server_ts": 1509662304373,
-  "unsigned": {
-    "age": 74377655314
-  },
-  "room_id": "!test:example.org"
-}
+    type: 'm.room.message',
+    sender: '@alice:example.org',
+    content: {
+        body: '\u00000',
+        msgtype: 'm.text',
+    },
+    event_id: '$150966230487Ugkmt:example.org',
+    origin_server_ts: 1509662304373,
+    unsigned: {
+        age: 74377655314,
+    },
+    room_id: '!test:example.org',
+};
 
 const fileEvent = {
     type: 'm.room.message',
@@ -153,49 +153,53 @@ function createDb() {
 }
 
 async function withTempDir(fixturePath, testCallback) {
-    const testDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'seshat-test-'));
+    const testDir = await fs.promises.mkdtemp(
+        path.join(os.tmpdir(), 'seshat-test-'),
+    );
     try {
         if (fixturePath) {
-            await fs.promises.cp(path.resolve(fixturePath), testDir, { recursive: true });
+            await fs.promises.cp(path.resolve(fixturePath), testDir, {
+                recursive: true,
+            });
         }
         await testCallback(testDir);
     } finally {
-        await fs.promises.rm(testDir, { recursive: true, force: true });
+        await fs.promises.rm(testDir, {recursive: true, force: true});
     }
 }
 
 const exampleEvents = [
-  {event: matrixEvent, profile: matrixProfileOnlyDisplayName}
-]
+    {event: matrixEvent, profile: matrixProfileOnlyDisplayName},
+];
 
 const checkPoint = {
     roomId: '!TESTROOM',
     token: '1234',
     fullCrawl: false,
-    direction: "f",
-}
+    direction: 'f',
+};
 
-describe('Database', function() {
-    it('should be created successfully.', function() {
+describe('Database', function () {
+    it('should be created successfully.', function () {
         const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'seshat-'));
-        const db = new Seshat(tempDir);
+        expect(new Seshat(tempDir)).toBeInstanceOf(Seshat);
     });
 
     const db = createDb();
 
-    it('should allow the addition of events.', function() {
+    it('should allow the addition of events.', function () {
         db.addEvent(matrixEvent, matrixProfile);
     });
 
-    it('should allow the addition of an event without a profile.', function() {
+    it('should allow the addition of an event without a profile.', function () {
         db.addEvent(matrixEvent);
     });
 
-    it('should allow the addition of an event with a profile that only contains a display name.', function() {
+    it('should allow the addition of an event with a profile that only contains a display name.', function () {
         db.addEvent(matrixEvent, matrixProfileOnlyDisplayName);
     });
 
-    it('should allow events to be committed', function() {
+    it('should allow events to be committed', function () {
         const db = createDb();
         db.commitSync(true, true);
 
@@ -206,24 +210,24 @@ describe('Database', function() {
         expect(ret).toBeUndefined();
     });
 
-    it('should allow events to be committed using a promise', async function() {
+    it('should allow events to be committed using a promise', async function () {
         const db = createDb();
         await db.commit(true);
     });
 
-    it('should return a search result for the stored event', async function() {
+    it('should return a search result for the stored event', async function () {
         const db = createDb();
         db.addEvent(matrixEvent);
 
         await db.commit(true);
         db.reload();
 
-        const results = db.searchSync({search_term:'Test'});
+        const results = db.searchSync({search_term: 'Test'});
         expect(results.count).not.toBe(0);
         expect(results.results[0].result).toEqual(matrixEvent);
     });
 
-    it('should return a search result for the stored event using promises', async function() {
+    it('should return a search result for the stored event using promises', async function () {
         const db = createDb();
         db.addEvent(matrixEvent, matrixProfileOnlyDisplayName);
 
@@ -238,28 +242,28 @@ describe('Database', function() {
         expect(results.results[0].result).toEqual(matrixEvent);
     });
 
-    it('should allow messages from the backlog to be added in a batched way', async function() {
+    it('should allow messages from the backlog to be added in a batched way', async function () {
         const db = createDb();
-        let ret = db.addHistoricEventsSync(exampleEvents, checkPoint);
+        const ret = db.addHistoricEventsSync(exampleEvents, checkPoint);
         expect(ret).toBeFalsy();
 
         db.reload();
         const results = await db.search({search_term: 'Test'});
         expect(Object.entries(results).length).not.toBe(0);
 
-        let ret2 = db.addHistoricEventsSync(exampleEvents, checkPoint);
+        const ret2 = db.addHistoricEventsSync(exampleEvents, checkPoint);
         expect(ret2).toBeTruthy();
     });
 
-    it('shouldn\'t tell us that all events are added if none were given', async function() {
+    it("shouldn't tell us that all events are added if none were given", async function () {
         const db = createDb();
-        let ret = db.addHistoricEventsSync([], checkPoint);
+        const ret = db.addHistoricEventsSync([], checkPoint);
         expect(ret).toBeFalsy();
     });
 
-    it('should add messages to an encrypted db and correctly report if they are already added', async function() {
+    it('should add messages to an encrypted db and correctly report if they are already added', async function () {
         const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'seshat-'));
-        const db = new Seshat(tempDir, {passphrase: "wordpass"});
+        const db = new Seshat(tempDir, {passphrase: 'wordpass'});
         expect(await db.isEmpty()).toBeTruthy();
 
         const messageEvent = {
@@ -275,8 +279,8 @@ describe('Database', function() {
         };
 
         const events = [
-          {event: messageEvent, profile: matrixProfileOnlyDisplayName}
-        ]
+            {event: messageEvent, profile: matrixProfileOnlyDisplayName},
+        ];
 
         let ret = db.addHistoricEventsSync(events, checkPoint);
         expect(ret).toBeFalsy();
@@ -285,9 +289,9 @@ describe('Database', function() {
         expect(ret).toBeTruthy();
     });
 
-    it('should allow messages from the backlog to be added using a promise', async function() {
+    it('should allow messages from the backlog to be added using a promise', async function () {
         const db = createDb();
-        let ret = await db.addHistoricEvents(exampleEvents, checkPoint)
+        const ret = await db.addHistoricEvents(exampleEvents, checkPoint);
         expect(ret).toBeFalsy();
         db.reload();
 
@@ -297,11 +301,11 @@ describe('Database', function() {
         const checkpoints = await db.loadCheckpoints();
         expect(checkpoints[0]).toEqual(checkPoint);
 
-        let ret2 = await db.addHistoricEvents(exampleEvents, checkPoint)
+        const ret2 = await db.addHistoricEvents(exampleEvents, checkPoint);
         expect(ret2).toBeTruthy();
     });
 
-    it('should allow to search events in a specific room', async function() {
+    it('should allow to search events in a specific room', async function () {
         const db = createDb();
         db.addEvent(matrixEvent, matrixProfileOnlyDisplayName);
         db.addEvent(matrixEventRoom2, matrixProfileOnlyDisplayName);
@@ -317,7 +321,7 @@ describe('Database', function() {
         expect(results.results[0].result).toEqual(matrixEvent);
     });
 
-    it('should allow us to sort the search results by recency', async function() {
+    it('should allow us to sort the search results by recency', async function () {
         const db = createDb();
         db.addEvent(matrixEvent, matrixProfileOnlyDisplayName);
         db.addEvent(laterMatrixEvent, matrixProfileOnlyDisplayName);
@@ -328,7 +332,7 @@ describe('Database', function() {
 
         const results = await db.search({
             search_term: 'Test',
-            order_by_recency: true
+            order_by_recency: true,
         });
         expect(results.count).toBe(3);
         expect(results.results[0].result).toEqual(laterMatrixEvent);
@@ -336,7 +340,7 @@ describe('Database', function() {
         expect(results.results[2].result).toEqual(beforeMatrixEvent);
     });
 
-    it('should sort the search results by rank by default', async function() {
+    it('should sort the search results by rank by default', async function () {
         const db = createDb();
         db.addEvent(matrixEvent, matrixProfileOnlyDisplayName);
         db.addEvent(laterMatrixEvent, matrixProfileOnlyDisplayName);
@@ -348,21 +352,25 @@ describe('Database', function() {
         const results = await db.search({search_term: 'Test'});
 
         expect(results.count).toBe(3);
-        expect(results.results[0].rank).toBeLessThanOrEqual(results.results[1].rank);
-        expect(results.results[1].rank).toBeLessThanOrEqual(results.results[2].rank);
+        expect(results.results[0].rank).toBeLessThanOrEqual(
+            results.results[1].rank,
+        );
+        expect(results.results[1].rank).toBeLessThanOrEqual(
+            results.results[2].rank,
+        );
     });
 
-    it('should allow us to get the size of the database', async function() {
+    it('should allow us to get the size of the database', async function () {
         const db = createDb();
         db.addEvent(matrixEvent, matrixProfileOnlyDisplayName);
         db.addEvent(matrixEventRoom2, matrixProfileOnlyDisplayName);
 
         await db.commit(true);
-        let size = await db.getSize();
-        expect(size).toBeGreaterThan(0)
+        const size = await db.getSize();
+        expect(size).toBeGreaterThan(0);
     });
 
-    it('should allow us to add different event types', async function() {
+    it('should allow us to add different event types', async function () {
         const db = createDb();
         db.addEvent(matrixEvent, matrixProfileOnlyDisplayName);
         db.addEvent(topicEvent, matrixProfileOnlyDisplayName);
@@ -372,15 +380,17 @@ describe('Database', function() {
         db.reload();
     });
 
-    it('should not barf on nul bytes in the event', async function() {
+    it('should not barf on nul bytes in the event', async function () {
         const db = createDb();
-        const events = [{event: nulByteEvent, profile: matrixProfileOnlyDisplayName}];
+        const events = [
+            {event: nulByteEvent, profile: matrixProfileOnlyDisplayName},
+        ];
         await db.addHistoricEvents(events);
         await db.commit(true);
         db.reload();
     });
 
-    it('should allow us to search with a specific key', async function() {
+    it('should allow us to search with a specific key', async function () {
         const db = createDb();
         db.addEvent(matrixEvent, matrixProfileOnlyDisplayName);
 
@@ -389,7 +399,7 @@ describe('Database', function() {
 
         let results = await db.search({
             search_term: 'Test',
-            keys: ["content.topic"]
+            keys: ['content.topic'],
         });
         expect(results.count).toBe(0);
 
@@ -399,7 +409,7 @@ describe('Database', function() {
 
         results = await db.search({
             search_term: 'Test',
-            keys: ["content.topic"]
+            keys: ['content.topic'],
         });
         expect(results.count).toBe(1);
         expect(results.results[0].result).toEqual(topicEvent);
@@ -410,11 +420,13 @@ describe('Database', function() {
         expect(results.count).toBe(2);
     });
 
-    it('should allow us to create a db with a specific language', async function() {
+    it('should allow us to create a db with a specific language', async function () {
         const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'seshat-'));
-        expect(() => new Seshat(tempDir, {language: "unknown"})).toThrow('Unsupported language: unknown');
+        expect(() => new Seshat(tempDir, {language: 'unknown'})).toThrow(
+            'Unsupported language: unknown',
+        );
 
-        const db = new Seshat(tempDir, {language: "german"});
+        const db = new Seshat(tempDir, {language: 'german'});
 
         db.addEvent(matrixEvent, matrixProfileOnlyDisplayName);
         await db.commit(true);
@@ -426,7 +438,7 @@ describe('Database', function() {
         expect(results.count).toBe(1);
     });
 
-    it('should allow us to delete the db', async function() {
+    it('should allow us to delete the db', async function () {
         const db = createDb();
         db.addEvent(matrixEvent, matrixProfileOnlyDisplayName);
 
@@ -434,14 +446,14 @@ describe('Database', function() {
         await db.commit(true);
         db.reload();
 
-        await db.delete()
+        await db.delete();
 
-        expect(() => db
-            .addEvent(matrixEvent, matrixProfileOnlyDisplayName))
-            .toThrow(TypeError('Database has been closed or deleted'));
+        expect(() =>
+            db.addEvent(matrixEvent, matrixProfileOnlyDisplayName),
+        ).toThrow(new TypeError('Database has been closed or deleted'));
     });
 
-    it('should allow us to check if the db is empty', async function() {
+    it('should allow us to check if the db is empty', async function () {
         const db = createDb();
         expect(await db.isEmpty()).toBeTruthy();
 
@@ -451,7 +463,7 @@ describe('Database', function() {
         expect(await db.isEmpty()).toBeFalsy();
     });
 
-    it('should allow us to check if a room is already indexed', async function() {
+    it('should allow us to check if a room is already indexed', async function () {
         const db = createDb();
         expect(await db.isEmpty()).toBeTruthy();
         expect(await db.isRoomIndexed(matrixEvent.room_id)).toBeFalsy();
@@ -461,10 +473,10 @@ describe('Database', function() {
 
         expect(await db.isEmpty()).toBeFalsy();
         expect(await db.isRoomIndexed(matrixEvent.room_id)).toBeTruthy();
-        expect(await db.isRoomIndexed("!fakeRoom:localhost")).toBeFalsy();
+        expect(await db.isRoomIndexed('!fakeRoom:localhost')).toBeFalsy();
     });
 
-    it('should allow us to store a user specified version in the db', async function() {
+    it('should allow us to store a user specified version in the db', async function () {
         const db = createDb();
         expect(await db.getUserVersion()).toEqual(0);
 
@@ -473,54 +485,63 @@ describe('Database', function() {
         expect(await db.getUserVersion()).toEqual(10);
     });
 
-    it('should allow us to create an encrypted db', async function() {
+    it('should allow us to create an encrypted db', async function () {
         const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'seshat-'));
-        let db = new Seshat(tempDir, {passphrase: "wordpass"});
+        let db = new Seshat(tempDir, {passphrase: 'wordpass'});
 
         expect(await db.isEmpty()).toBeTruthy();
         db.addEvent(matrixEvent, matrixProfileOnlyDisplayName);
         await db.commit(true);
         expect(await db.isEmpty()).toBeFalsy();
 
-        expect(() => db = new Seshat(tempDir)).toThrow('');
+        expect(() => (db = new Seshat(tempDir))).toThrow('');
     });
 
-    it('should allow us to create an change the passphrase of the encrypted db', async function() {
+    it('should allow us to create an change the passphrase of the encrypted db', async function () {
         const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'seshat-'));
-        let db = new Seshat(tempDir, {passphrase: "wordpass"});
+        let db = new Seshat(tempDir, {passphrase: 'wordpass'});
 
         expect(await db.isEmpty()).toBeTruthy();
         db.addEvent(matrixEvent, matrixProfileOnlyDisplayName);
         await db.commit(true);
         expect(await db.isEmpty()).toBeFalsy();
 
-        await db.changePassphrase("password");
-        expect(() => db = new Seshat(tempDir, {passphrase: "wordpass"})).toThrow('');
+        await db.changePassphrase('password');
+        expect(
+            () => (db = new Seshat(tempDir, {passphrase: 'wordpass'})),
+        ).toThrow('');
 
-        db = new Seshat(tempDir, {passphrase: "password"});
+        db = new Seshat(tempDir, {passphrase: 'password'});
         expect(await db.isEmpty()).toBeFalsy();
     });
 
-    it('should allow us to load events that contain files from the db', async function() {
+    it('should allow us to load events that contain files from the db', async function () {
         const db = createDb();
         db.addEvent(matrixEvent, matrixProfileOnlyDisplayName);
         db.addEvent(fileEvent, matrixProfileOnlyDisplayName);
         db.addEvent(imageEvent, matrixProfileOnlyDisplayName);
 
         await db.commit(true);
-        let events = await db.loadFileEvents({roomId: fileEvent.room_id, limit: 10})
+        let events = await db.loadFileEvents({
+            roomId: fileEvent.room_id,
+            limit: 10,
+        });
         expect(events.length).toBe(2);
 
-        events = await db.loadFileEvents({roomId: fileEvent.room_id, limit: 1})
+        events = await db.loadFileEvents({roomId: fileEvent.room_id, limit: 1});
         expect(events.length).toBe(1);
         expect(events[0].event).toEqual(imageEvent);
 
-        events = await db.loadFileEvents({roomId: fileEvent.room_id, limit: 10, fromEvent: imageEvent.event_id})
+        events = await db.loadFileEvents({
+            roomId: fileEvent.room_id,
+            limit: 10,
+            fromEvent: imageEvent.event_id,
+        });
         expect(events.length).toBe(1);
         expect(events[0].event).toEqual(fileEvent);
     });
 
-    it('should allow us to continue loading file events in both directions', async function() {
+    it('should allow us to continue loading file events in both directions', async function () {
         const db = createDb();
         db.addEvent(matrixEvent, matrixProfileOnlyDisplayName);
         db.addEvent(fileEvent, matrixProfileOnlyDisplayName);
@@ -530,27 +551,44 @@ describe('Database', function() {
         await db.commit(true);
 
         // Get the first event.
-        let events = await db.loadFileEvents({roomId: fileEvent.room_id, limit: 1})
+        let events = await db.loadFileEvents({
+            roomId: fileEvent.room_id,
+            limit: 1,
+        });
         expect(events.length).toBe(1);
 
         // Get the next two.
-        events = await db.loadFileEvents({roomId: fileEvent.room_id, limit: 10, fromEvent: videoEvent.event_id})
+        events = await db.loadFileEvents({
+            roomId: fileEvent.room_id,
+            limit: 10,
+            fromEvent: videoEvent.event_id,
+        });
         expect(events.length).toBe(2);
         expect(events[0].event).toEqual(imageEvent);
         expect(events[1].event).toEqual(fileEvent);
 
         // Try to get a newer one than the last one.
-        events = await db.loadFileEvents({roomId: fileEvent.room_id, limit: 10, fromEvent: videoEvent.event_id, direction: "forwards"})
+        events = await db.loadFileEvents({
+            roomId: fileEvent.room_id,
+            limit: 10,
+            fromEvent: videoEvent.event_id,
+            direction: 'forwards',
+        });
         expect(events.length).toBe(0);
 
         // Get the two newer events than the last one.
-        events = await db.loadFileEvents({roomId: fileEvent.room_id, limit: 10, fromEvent: fileEvent.event_id, direction: "forwards"})
+        events = await db.loadFileEvents({
+            roomId: fileEvent.room_id,
+            limit: 10,
+            fromEvent: fileEvent.event_id,
+            direction: 'forwards',
+        });
         expect(events.length).toBe(2);
         expect(events[0].event).toEqual(imageEvent);
         expect(events[1].event).toEqual(videoEvent);
     });
 
-    it('should allow us query the database for statistics', async function() {
+    it('should allow us query the database for statistics', async function () {
         const db = createDb();
 
         let stats = await db.getStats(true);
@@ -569,7 +607,7 @@ describe('Database', function() {
         expect(stats.size).toBeGreaterThan(0);
     });
 
-    it('should allow us to delete events from the database/index', async function() {
+    it('should allow us to delete events from the database/index', async function () {
         const db = createDb();
         db.addEvent(matrixEvent, matrixProfileOnlyDisplayName);
 
@@ -587,7 +625,6 @@ describe('Database', function() {
 
         results = await db.search({search_term: 'Test'});
         expect(results.count).toBe(0);
-
 
         db.addEvent(matrixEvent, matrixProfileOnlyDisplayName);
         db.addEvent(fileEvent, matrixProfileOnlyDisplayName);
@@ -608,7 +645,7 @@ describe('Database', function() {
         expect(results.results[0].result).toEqual(fileEvent);
     });
 
-    it('should accept events if the avatar URL is null.', function() {
+    it('should accept events if the avatar URL is null.', function () {
         const badProfile = {
             displayname: 'Alice (from wonderland)',
             avatar_url: null,
@@ -617,30 +654,42 @@ describe('Database', function() {
         db.addEvent(matrixEvent, badProfile);
     });
 
-    it('should throw an error when adding events with missing fields.', function() {
+    it('should throw an error when adding events with missing fields.', function () {
         delete matrixEvent.content;
-        expect(() => db.addEvent(matrixEvent, matrixProfile)).toThrow(TypeError('Event doesn\'t contain any content'));
+        expect(() => db.addEvent(matrixEvent, matrixProfile)).toThrow(
+            new TypeError("Event doesn't contain any content"),
+        );
 
         delete matrixEvent.room_id;
-        expect(() => db.addEvent(matrixEvent, matrixProfile)).toThrow(TypeError('Event doesn\'t contain a valid room id'));
+        expect(() => db.addEvent(matrixEvent, matrixProfile)).toThrow(
+            new TypeError("Event doesn't contain a valid room id"),
+        );
 
         delete matrixEvent.origin_server_ts;
-        expect(() => db.addEvent(matrixEvent, matrixProfile)).toThrow(TypeError('Event doesn\'t contain a valid timestamp'));
+        expect(() => db.addEvent(matrixEvent, matrixProfile)).toThrow(
+            new TypeError("Event doesn't contain a valid timestamp"),
+        );
 
         delete matrixEvent.event_id;
-        expect(() => db.addEvent(matrixEvent, matrixProfile)).toThrow(TypeError('Event doesn\'t contain a valid event id'));
+        expect(() => db.addEvent(matrixEvent, matrixProfile)).toThrow(
+            new TypeError("Event doesn't contain a valid event id"),
+        );
 
         delete matrixEvent.sender;
-        expect(() => db.addEvent(matrixEvent, matrixProfile)).toThrow(TypeError('Event doesn\'t contain a valid sender'));
+        expect(() => db.addEvent(matrixEvent, matrixProfile)).toThrow(
+            new TypeError("Event doesn't contain a valid sender"),
+        );
     });
 
-    it('should throw an error when adding events with fields that don\'t typecheck.', function() {
+    it("should throw an error when adding events with fields that don't typecheck.", function () {
         const db = createDb();
 
-        expect(() => db.addEvent(badEvent, matrixProfile)).toThrow(TypeError('Event doesn\'t contain a valid timestamp'));
+        expect(() => db.addEvent(badEvent, matrixProfile)).toThrow(
+            new TypeError("Event doesn't contain a valid timestamp"),
+        );
     });
 
-    it('should allow us to reindex a database', () => 
+    it('should allow us to reindex a database', () =>
         withTempDir('../data/database/v2', async (testDir) => {
             expect(() => new Seshat(testDir)).toThrow(ReindexError);
 
@@ -650,9 +699,8 @@ describe('Database', function() {
             await recovery.shutdown();
 
             const db = new Seshat(testDir);
-            const results = await db.search({ search_term: 'Hello' });
+            const results = await db.search({search_term: 'Hello'});
             expect(results.count).not.toBe(0);
             await db.shutdown();
-        })
-    );
+        }));
 });

@@ -10,11 +10,11 @@ Prebuilt native modules are published as per-platform `optionalDependencies`;
 your package manager installs only the one matching your machine. Prebuilts
 are published for:
 
-| Platform | Architectures | SQLCipher                    |
-| -------- | -------------- | ---------------------------- |
-| Linux    | x64, arm64     | static (default) or dynamic  |
-| macOS    | x64, arm64     | static                       |
-| Windows  | x64, arm64     | static                       |
+| Platform | Architectures | SQLCipher                   |
+| -------- | ------------- | --------------------------- |
+| Linux    | x64, arm64    | static (default) or dynamic |
+| macOS    | x64, arm64    | static                      |
+| Windows  | x64, arm64    | static                      |
 
 Static links SQLCipher and OpenSSL into the module; dynamic links the
 system's SQLCipher instead. Dynamic is not installed by default. To use it,
@@ -39,19 +39,17 @@ Requires a Rust toolchain (and the system SQLCipher headers, for `build`).
 Once installed, the library can be used inside of node as usual:
 
 ```javascript
-const Seshat = require(".")
+const Seshat = require('.');
 ```
 
 ## Usage
 
 ```javascript
-
-let db = new Seshat("/home/example/database_dir");
+let db = new Seshat('/home/example/database_dir');
 // Add a Matrix event to the database.
 db.addEvent(textEvent, profile);
 // Commit events waiting in the queue to the database.
 await db.commit();
 // Search the database for messages containing the word 'Test'
 let results = await db.search({search_term: 'Test'});
-
 ```

@@ -44,8 +44,8 @@ function loadNative() {
 
     throw new Error(
         `Could not find a prebuilt native module for ${platform}-${arch}. ` +
-        `Install the matching ${platformPkg} package, or build from source. ` +
-        'See https://github.com/matrix-org/seshat for instructions.',
+            `Install the matching ${platformPkg} package, or build from source. ` +
+            'See https://github.com/matrix-org/seshat for instructions.',
     );
 }
 
@@ -92,14 +92,12 @@ const seshatNative = loadNative();
  * have either a body, topic or name key.
  */
 
-
 /**
  * @typedef matrixProfile
  * @type {Object}
  * @property {string} displayname The users display name, if one is set.
  * @property {string} avatar_url The users avatar url, if one is set.
  */
-
 
 /**
  * @typedef checkpoint
@@ -238,7 +236,7 @@ class Seshat {
      */
     addEvent(matrixEvent, profile = {}) {
         return seshatNative.addEvent(this.inner, matrixEvent, profile);
-    };
+    }
 
     /**
      * Delete an event from the database.
@@ -255,7 +253,7 @@ class Seshat {
     async deleteEvent(eventId) {
         const deleteEvent = promisify(seshatNative.deleteEvent);
         return deleteEvent(this.inner, eventId);
-    };
+    }
 
     /**
      * Commit the queued up events to the database.
@@ -300,7 +298,7 @@ class Seshat {
      */
     reload() {
         seshatNative.reload(this.inner);
-    };
+    }
 
     /**
      * Search the database for events using the given search term.
@@ -345,10 +343,21 @@ class Seshat {
      * @return {searchResult} The array of events that matched the
      * search term.
      */
-    searchSync(term, limit = 10, before_limit = 0, after_limit = 0,
-        order_by_recency = false) {
-        return seshatNative.searchSync(this.inner, term, limit, before_limit,
-            after_limit, order_by_recency);
+    searchSync(
+        term,
+        limit = 10,
+        before_limit = 0,
+        after_limit = 0,
+        order_by_recency = false,
+    ) {
+        return seshatNative.searchSync(
+            this.inner,
+            term,
+            limit,
+            before_limit,
+            after_limit,
+            order_by_recency,
+        );
     }
 
     /**
@@ -363,8 +372,12 @@ class Seshat {
      * false otherwise.
      */
     addHistoricEventsSync(events, newCheckpoint = null, oldCheckPoint = null) {
-        return seshatNative.addHistoricEventsSync(this.inner, events,
-            newCheckpoint, oldCheckPoint);
+        return seshatNative.addHistoricEventsSync(
+            this.inner,
+            events,
+            newCheckpoint,
+            oldCheckPoint,
+        );
     }
 
     /**
@@ -378,7 +391,11 @@ class Seshat {
      * @return {Promise<boolean>} A promise that will resolve to true if all
      * the events have already been added to the database, false otherwise.
      */
-    async addHistoricEvents(events, newCheckpoint = null, oldCheckPoint = null) {
+    async addHistoricEvents(
+        events,
+        newCheckpoint = null,
+        oldCheckPoint = null,
+    ) {
         const addHistoricEvents = promisify(seshatNative.addHistoricEvents);
 
         return addHistoricEvents(
