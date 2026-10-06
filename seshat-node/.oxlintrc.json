@@ -1,6 +1,14 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["eslint", "oxc", "unicorn", "jsdoc", "node", "promise"],
+  "plugins": [
+    "eslint",
+    "oxc",
+    "typescript",
+    "unicorn",
+    "jsdoc",
+    "node",
+    "promise"
+  ],
   "categories": {
     "correctness": "error",
     "suspicious": "warn"
@@ -31,7 +39,7 @@
       }
     }
   ],
-  "ignorePatterns": ["target/", "coverage/"],
+  "ignorePatterns": ["target/", "coverage/", "dist/"],
   "settings": {
     "jsdoc": {
       "tagNamePreference": {

@@ -10,7 +10,8 @@
     "Cargo.lock",
     "yarn.lock",
     "target/",
-    "coverage/"
+    "coverage/",
+    "dist/"
   ],
   "overrides": [
     {

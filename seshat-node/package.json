@@ -13,24 +13,28 @@
     "Cargo.toml",
     "Cargo.lock",
     "src/",
-    "index.js",
+    "dist/",
     "README.md"
   ],
-  "main": "index.js",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "scripts": {
-    "build": "cargo-cp-artifact -a cdylib matrix-seshat index.node -- cargo build --message-format=json-render-diagnostics --release",
+    "build": "yarn run build:ts && cargo-cp-artifact -a cdylib matrix-seshat index.node -- cargo build --message-format=json-render-diagnostics --release",
     "build-bundled": "yarn run build --features=bundled-sqlcipher",
     "test": "jest",
     "lint": "yarn run lint:js && yarn run lint:format",
     "lint:js": "oxlint --deny-warnings",
     "lint:format": "oxfmt --check",
-    "format": "oxfmt"
+    "format": "oxfmt",
+    "build:ts": "tsc"
   },
   "devDependencies": {
+    "@types/node": "^26.2.0",
     "cargo-cp-artifact": "^0.1",
     "jest": "^27.4.0",
     "jsdoc": "^3.6.3",
     "oxfmt": "^0.72.0",
-    "oxlint": "^1.87.0"
+    "oxlint": "^1.87.0",
+    "typescript": "^7.0.2"
   }
 }
