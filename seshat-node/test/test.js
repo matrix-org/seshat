@@ -182,7 +182,7 @@ const checkPoint = {
 describe('Database', function () {
     it('should be created successfully.', function () {
         const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'seshat-'));
-        const db = new Seshat(tempDir);
+        expect(new Seshat(tempDir)).toBeInstanceOf(Seshat);
     });
 
     const db = createDb();
@@ -244,20 +244,20 @@ describe('Database', function () {
 
     it('should allow messages from the backlog to be added in a batched way', async function () {
         const db = createDb();
-        let ret = db.addHistoricEventsSync(exampleEvents, checkPoint);
+        const ret = db.addHistoricEventsSync(exampleEvents, checkPoint);
         expect(ret).toBeFalsy();
 
         db.reload();
         const results = await db.search({search_term: 'Test'});
         expect(Object.entries(results).length).not.toBe(0);
 
-        let ret2 = db.addHistoricEventsSync(exampleEvents, checkPoint);
+        const ret2 = db.addHistoricEventsSync(exampleEvents, checkPoint);
         expect(ret2).toBeTruthy();
     });
 
     it("shouldn't tell us that all events are added if none were given", async function () {
         const db = createDb();
-        let ret = db.addHistoricEventsSync([], checkPoint);
+        const ret = db.addHistoricEventsSync([], checkPoint);
         expect(ret).toBeFalsy();
     });
 
@@ -291,7 +291,7 @@ describe('Database', function () {
 
     it('should allow messages from the backlog to be added using a promise', async function () {
         const db = createDb();
-        let ret = await db.addHistoricEvents(exampleEvents, checkPoint);
+        const ret = await db.addHistoricEvents(exampleEvents, checkPoint);
         expect(ret).toBeFalsy();
         db.reload();
 
@@ -301,7 +301,7 @@ describe('Database', function () {
         const checkpoints = await db.loadCheckpoints();
         expect(checkpoints[0]).toEqual(checkPoint);
 
-        let ret2 = await db.addHistoricEvents(exampleEvents, checkPoint);
+        const ret2 = await db.addHistoricEvents(exampleEvents, checkPoint);
         expect(ret2).toBeTruthy();
     });
 
@@ -366,7 +366,7 @@ describe('Database', function () {
         db.addEvent(matrixEventRoom2, matrixProfileOnlyDisplayName);
 
         await db.commit(true);
-        let size = await db.getSize();
+        const size = await db.getSize();
         expect(size).toBeGreaterThan(0);
     });
 
@@ -450,7 +450,7 @@ describe('Database', function () {
 
         expect(() =>
             db.addEvent(matrixEvent, matrixProfileOnlyDisplayName),
-        ).toThrow(TypeError('Database has been closed or deleted'));
+        ).toThrow(new TypeError('Database has been closed or deleted'));
     });
 
     it('should allow us to check if the db is empty', async function () {
@@ -657,27 +657,27 @@ describe('Database', function () {
     it('should throw an error when adding events with missing fields.', function () {
         delete matrixEvent.content;
         expect(() => db.addEvent(matrixEvent, matrixProfile)).toThrow(
-            TypeError("Event doesn't contain any content"),
+            new TypeError("Event doesn't contain any content"),
         );
 
         delete matrixEvent.room_id;
         expect(() => db.addEvent(matrixEvent, matrixProfile)).toThrow(
-            TypeError("Event doesn't contain a valid room id"),
+            new TypeError("Event doesn't contain a valid room id"),
         );
 
         delete matrixEvent.origin_server_ts;
         expect(() => db.addEvent(matrixEvent, matrixProfile)).toThrow(
-            TypeError("Event doesn't contain a valid timestamp"),
+            new TypeError("Event doesn't contain a valid timestamp"),
         );
 
         delete matrixEvent.event_id;
         expect(() => db.addEvent(matrixEvent, matrixProfile)).toThrow(
-            TypeError("Event doesn't contain a valid event id"),
+            new TypeError("Event doesn't contain a valid event id"),
         );
 
         delete matrixEvent.sender;
         expect(() => db.addEvent(matrixEvent, matrixProfile)).toThrow(
-            TypeError("Event doesn't contain a valid sender"),
+            new TypeError("Event doesn't contain a valid sender"),
         );
     });
 
@@ -685,7 +685,7 @@ describe('Database', function () {
         const db = createDb();
 
         expect(() => db.addEvent(badEvent, matrixProfile)).toThrow(
-            TypeError("Event doesn't contain a valid timestamp"),
+            new TypeError("Event doesn't contain a valid timestamp"),
         );
     });
 
