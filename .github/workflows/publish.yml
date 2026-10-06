@@ -72,6 +72,12 @@ jobs:
       - name: Install npm 11
         run: npm install --global npm@11
 
+      - name: Build TypeScript
+        working-directory: seshat-node
+        run: |
+          yarn install --frozen-lockfile
+          yarn run build:ts
+
         # Pin optionalDependencies to this exact release before publishing the
         # main package, so the JS wrapper and native binaries never drift.
       - name: Publish
