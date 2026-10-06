@@ -2,20 +2,12 @@
   "name": "@matrix-org/seshat",
   "version": "6.0.1",
   "description": "A matrix message logger with full text search support",
-  "main": "index.js",
-  "author": "Damir Jelić <poljar@termina.org.uk>",
   "license": "Apache-2.0",
-  "devDependencies": {
-    "cargo-cp-artifact": "^0.1",
-    "eslint": "^8.7.0",
-    "eslint-config-google": "^0.14.0",
-    "jest": "^27.4.0",
-    "jsdoc": "^3.6.3"
-  },
+  "author": "Damir Jelić <poljar@termina.org.uk>",
   "repository": {
-      "type": "git",
-      "url": "git+https://github.com/matrix-org/seshat.git",
-      "directory": "seshat-node"
+    "type": "git",
+    "url": "git+https://github.com/matrix-org/seshat.git",
+    "directory": "seshat-node"
   },
   "files": [
     "Cargo.toml",
@@ -24,10 +16,21 @@
     "index.js",
     "README.md"
   ],
+  "main": "index.js",
   "scripts": {
     "build": "cargo-cp-artifact -a cdylib matrix-seshat index.node -- cargo build --message-format=json-render-diagnostics --release",
     "build-bundled": "yarn run build --features=bundled-sqlcipher",
     "test": "jest",
-    "lint": "eslint lib/index.js"
+    "lint": "yarn run lint:js && yarn run lint:format",
+    "lint:js": "oxlint --deny-warnings",
+    "lint:format": "oxfmt --check",
+    "format": "oxfmt"
+  },
+  "devDependencies": {
+    "cargo-cp-artifact": "^0.1",
+    "jest": "^27.4.0",
+    "jsdoc": "^3.6.3",
+    "oxfmt": "^0.72.0",
+    "oxlint": "^1.87.0"
   }
 }

@@ -1,0 +1,23 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "printWidth": 80,
+  "tabWidth": 4,
+  "singleQuote": true,
+  "bracketSpacing": false,
+  "trailingComma": "all",
+  "ignorePatterns": [
+    "index.node",
+    "Cargo.lock",
+    "yarn.lock",
+    "target/",
+    "coverage/"
+  ],
+  "overrides": [
+    {
+      "files": ["*.json", "*.md", "*.yml", "*.yaml"],
+      "options": {
+        "tabWidth": 2
+      }
+    }
+  ]
+}

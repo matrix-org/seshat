@@ -1,0 +1,43 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["eslint", "oxc", "unicorn", "jsdoc", "node", "promise"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn"
+  },
+  "env": {
+    "builtin": true,
+    "commonjs": true,
+    "node": true,
+    "es2022": true
+  },
+  "rules": {
+    "eslint/no-var": "error",
+    "eslint/prefer-const": "error",
+    "eslint/new-cap": "error",
+    "eslint/prefer-rest-params": "error",
+    "eslint/prefer-spread": "error"
+  },
+  "overrides": [
+    {
+      "files": ["test/**/*.js"],
+      "plugins": ["jest"],
+      "env": {
+        "jest": true
+      },
+      "rules": {
+        "eslint/no-shadow": "off",
+        "jest/expect-expect": "off"
+      }
+    }
+  ],
+  "ignorePatterns": ["target/", "coverage/"],
+  "settings": {
+    "jsdoc": {
+      "tagNamePreference": {
+        "returns": "return",
+        "class": "constructor"
+      }
+    }
+  }
+}
