@@ -8,4 +8,3 @@ seshat-node/coverage
 seshat-node/index.node
 .gdb_history
 target
-/Cargo.lock
