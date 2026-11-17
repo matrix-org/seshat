@@ -51,7 +51,7 @@ jobs:
 
       - name: Clippy
         run: |
-          cargo clippy --all-targets -- -D warnings
+          cargo clippy --locked --all-targets -- -D warnings
 
   build-native:
     name: Build native modules
@@ -103,11 +103,11 @@ jobs:
 
       - name: Build Rust
         run: |
-          cargo build --features=bundled-sqlcipher
+          cargo build --locked --features=bundled-sqlcipher
 
       - name: Test Rust
         run: |
-          cargo nextest run --features=bundled-sqlcipher
+          cargo nextest run --locked --features=bundled-sqlcipher
 
       # Checkout again to reset the test DB state
       - name: Checkout
@@ -124,7 +124,7 @@ jobs:
         run: cd seshat-node && yarn install
 
       - name: Build node module
-        run: cd seshat-node && yarn run build-bundled
+        run: cd seshat-node && yarn run build-bundled --locked
 
       - name: Test node module
         run: cd seshat-node && yarn run test

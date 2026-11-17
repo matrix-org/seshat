@@ -181,9 +181,9 @@ jobs:
         # Linux targets set it explicitly).
         run: |
           if [ "${{ matrix.sqlcipher }}" = "dynamic" ]; then
-            yarn run build --target ${{ matrix.target }}
+            yarn run build --locked --target ${{ matrix.target }}
           else
-            yarn run build-bundled --target ${{ matrix.target }}
+            yarn run build-bundled --locked --target ${{ matrix.target }}
           fi
 
       - name: Rename artifact
