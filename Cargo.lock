@@ -1820,6 +1820,7 @@ dependencies = [
  "hkdf",
  "hmac",
  "lazy_static",
+ "libc",
  "log",
  "lru-cache",
  "pbkdf2",

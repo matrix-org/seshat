@@ -53,6 +53,11 @@ serde_json = "=1.0.61"
 serde = { version = "=1.0.118", default-features = false, features = ["derive"] }
 thiserror = "1.0.26"
 
+# Transitive dependency of `tantivy` 0.12 -> `atomicwrites` 0.2.5 -> `nix` 0.14.1 -> libc. If unpinned,
+# resolves to versions >=0.2.190, which removed some Apple-only symbols `nix` 0.14.1 requires. Once
+# we migrate off of `tantivy` 0.12, we can remove this.
+libc = { version = ">=0.2.95, <0.2.190", default-features = false }
+
 [dev-dependencies]
 tempfile = "3.2.0"
 lazy_static = "1.4.0"
