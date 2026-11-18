@@ -8,3 +8,6 @@ seshat-node/coverage
 seshat-node/index.node
 .gdb_history
 target
+
+# Generated at publish time by `cargo package`
+/seshat-node/Cargo.lock

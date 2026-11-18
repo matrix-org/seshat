@@ -19,6 +19,7 @@
   },
   "files": [
     "Cargo.toml",
+    "Cargo.lock",
     "src/",
     "index.js",
     "README.md"
