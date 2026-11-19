@@ -15,8 +15,8 @@
 use crate::Seshat;
 use neon::prelude::*;
 use seshat::{
-    CheckpointDirection, Config, CrawlerCheckpoint, Event, EventType, Language, Profile, Receiver,
-    SearchConfig, SearchResult,
+    CheckpointDirection, Config, CrawlerCheckpoint, Event, EventType, Language, LoadConfig,
+    LoadDirection, Profile, Receiver, SearchConfig, SearchResult,
 };
 use std::cell::RefCell;
 use uuid::Uuid;
@@ -138,6 +138,33 @@ pub(crate) fn parse_search_object(
     }
 
     Ok((term, config))
+}
+
+pub(crate) fn parse_load_config(
+    cx: &mut FunctionContext,
+    args: Handle<JsObject>,
+) -> Result<LoadConfig, neon::result::Throw> {
+    let room_id = args.get::<JsString, _, _>(cx, "roomId")?.value(cx);
+    let limit = args.get::<JsNumber, _, _>(cx, "limit")?.value(cx);
+
+    let mut config = LoadConfig::new(room_id).limit(limit as usize);
+
+    if let Some(e) = args.get_opt::<JsString, _, _>(cx, "fromEvent")? {
+        config = config.from_event(e.value(cx));
+    };
+
+    if let Some(d) = args.get_opt::<JsString, _, _>(cx, "direction")? {
+        let direction = match d.value(cx).to_lowercase().as_ref() {
+            "backwards" | "backward" | "b" => LoadDirection::Backwards,
+            "forwards" | "forward" | "f" => LoadDirection::Forwards,
+            "" => LoadDirection::Backwards,
+            d => return cx.throw_error(format!("Unknown load direction {}", d)),
+        };
+
+        config = config.direction(direction);
+    }
+
+    Ok(config)
 }
 
 pub(crate) fn parse_checkpoint(

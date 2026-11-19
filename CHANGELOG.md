@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+- Add `load_event_ids` / `loadEventIds` to page through stored event IDs, types, and timestamps for a room.
 - The events before and after a search result load through an index now,
   instead of scanning every event of the room. A search that asks for
   context in a room with 30,000 events took 39 ms and takes 0.7 ms. The

@@ -16,7 +16,7 @@ mod tasks;
 mod utils;
 
 use neon::prelude::*;
-use seshat::{Database, Error, LoadConfig, LoadDirection, Profile, RecoveryDatabase, RecoveryInfo};
+use seshat::{Database, Error, Profile, RecoveryDatabase, RecoveryInfo};
 use std::cell::RefCell;
 use std::sync::atomic::Ordering;
 use std::sync::Mutex;
@@ -648,29 +648,7 @@ impl Seshat {
         let this = cx.argument::<JsBox<RefCell<Seshat>>>(0)?;
         let args = cx.argument::<JsObject>(1)?;
 
-        let room_id = args
-            .get::<JsString, _, _>(&mut cx, "roomId")?
-            .value(&mut cx);
-
-        let mut config = LoadConfig::new(room_id);
-        let limit = args.get::<JsNumber, _, _>(&mut cx, "limit")?.value(&mut cx);
-
-        config = config.limit(limit as usize);
-
-        if let Some(e) = args.get_opt::<JsString, _, _>(&mut cx, "fromEvent")? {
-            config = config.from_event(e.value(&mut cx));
-        };
-
-        if let Some(d) = args.get_opt::<JsString, _, _>(&mut cx, "direction")? {
-            let direction = match d.value(&mut cx).to_lowercase().as_ref() {
-                "backwards" | "backward" | "b" => LoadDirection::Backwards,
-                "forwards" | "forward" | "f" => LoadDirection::Forwards,
-                "" => LoadDirection::Backwards,
-                d => return cx.throw_error(format!("Unknown load direction {}", d)),
-            };
-
-            config = config.direction(direction);
-        }
+        let config = parse_load_config(&mut cx, args)?;
 
         let connection = {
             let db = &mut this.borrow_mut().database;
@@ -687,6 +665,34 @@ impl Seshat {
         };
 
         let task = LoadFileEventsTask {
+            inner: connection,
+            config,
+        };
+
+        task.schedule(cx)
+    }
+
+    fn load_event_ids(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+        let this = cx.argument::<JsBox<RefCell<Seshat>>>(0)?;
+        let args = cx.argument::<JsObject>(1)?;
+
+        let config = parse_load_config(&mut cx, args)?;
+
+        let connection = {
+            let db = &mut this.borrow_mut().database;
+            db.as_ref()
+                .map_or_else(|| Err(CLOSED_ERROR), |db| Ok(db.get_connection()))
+        };
+
+        let connection = match connection {
+            Ok(s) => match s {
+                Ok(s) => s,
+                Err(e) => return cx.throw_type_error(e.to_string()),
+            },
+            Err(e) => return cx.throw_type_error(e),
+        };
+
+        let task = LoadEventIdsTask {
             inner: connection,
             config,
         };
@@ -724,6 +730,7 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
     cx.export_function("changePassphrase", Seshat::change_passphrase)?;
     cx.export_function("shutdown", Seshat::shutdown)?;
     cx.export_function("loadFileEvents", Seshat::load_file_events)?;
+    cx.export_function("loadEventIds", Seshat::load_event_ids)?;
 
     Ok(())
 }

@@ -557,6 +557,25 @@ class Seshat {
         const loadFileEvents = promisify(seshatNative.loadFileEvents);
         return loadFileEvents(this.inner, args);
     }
+
+    /**
+     * Load the IDs, types and timestamps of the events stored for a room,
+     * ordered by timestamp.
+     *
+     * @param  {object} args Arguments object for the method.
+     * @param  {string} args.roomId The ID of the room.
+     * @param  {number} args.limit The maximum number of events to return.
+     * @param  {string} args.fromEvent The ID of a previously returned event
+     * that is still stored. Loading continues after it.
+     * @param  {string} args.direction "b" (default) for newest first, "f" for
+     * oldest first.
+     *
+     * @return {Promise<{eventId: string, type: string, serverTs: number}[]>}
+     */
+    async loadEventIds(args) {
+        const loadEventIds = promisify(seshatNative.loadEventIds);
+        return loadEventIds(this.inner, args);
+    }
 }
 
 /**

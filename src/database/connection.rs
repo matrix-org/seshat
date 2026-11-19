@@ -25,7 +25,7 @@ use r2d2_sqlite::SqliteConnectionManager;
 use crate::{
     config::LoadConfig,
     error::Result,
-    events::{CrawlerCheckpoint, Profile, SerializedEvent},
+    events::{CrawlerCheckpoint, IndexedEvent, Profile, SerializedEvent},
     Database,
 };
 
@@ -133,6 +133,18 @@ impl Connection {
         load_config: &LoadConfig,
     ) -> Result<Vec<(SerializedEvent, Profile)>> {
         Ok(Database::load_file_events(
+            self,
+            &load_config.room_id,
+            load_config.limit,
+            load_config.from_event.as_deref(),
+            &load_config.direction,
+        )?)
+    }
+
+    /// Load the ID, type and timestamp of a room's stored events, ordered by
+    /// timestamp. `from_event` must still be stored.
+    pub fn load_event_ids(&self, load_config: &LoadConfig) -> Result<Vec<IndexedEvent>> {
+        Ok(Database::load_event_ids(
             self,
             &load_config.room_id,
             load_config.limit,
