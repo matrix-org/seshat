@@ -72,6 +72,14 @@ jobs:
       - name: Install npm 11
         run: npm install --global npm@11
 
+        # Call `cargo package` to generate a standalone Cargo.lock we can bundle
+        # in the NPM tarball below.
+      - name: Generate standalone Cargo.lock
+        run: |
+          cargo package -p matrix-seshat --no-verify
+          tar xzf target/package/matrix-seshat-*.crate --wildcards \
+            --strip-components=1 -C seshat-node '*/Cargo.lock'
+
         # Pin optionalDependencies to this exact release before publishing the
         # main package, so the JS wrapper and native binaries never drift.
       - name: Publish
